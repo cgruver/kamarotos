@@ -50,7 +50,6 @@ set dhcp.@dnsmasq[0].domain=${DOMAIN}
 set dhcp.@dnsmasq[0].localuse=0
 set dhcp.@dnsmasq[0].cachelocal=0
 set dhcp.@dnsmasq[0].port=0
-set network.wan.dns=${ROUTER_IP}
 commit
 EOF
 
@@ -94,7 +93,6 @@ add_list uhttpd.main.listen_http="${ROUTER}:80"
 add_list uhttpd.main.listen_https="${ROUTER}:443"
 add_list uhttpd.main.listen_http="127.0.0.1:80"
 add_list uhttpd.main.listen_https="127.0.0.1:443"
-set network.wan.dns=${ROUTER}
 set network.lan_lb01=interface
 set network.lan_lb01.ifname="@lan"
 set network.lan_lb01.proto="static"
@@ -462,7 +460,7 @@ then
   setNetVars
   createEdgeDnsConfig
   createUciEdge
-  ${SSH} root@${ROUTER} "opkg update && opkg install ip-full procps-ng-ps bind-server bind-tools sfdisk rsync resize2fs"
+  ${SSH} root@${ROUTER} "opkg update && opkg install ip-full procps-ng-ps bind-server bind-tools sfdisk rsync resize2fs wget"
 else
   ROUTER=$(yq e ".sub-domain-configs.[${INDEX}].router-ip" ${CONFIG_FILE})
   DOMAIN=${SUB_DOMAIN}.${LAB_DOMAIN}
@@ -470,7 +468,7 @@ else
   createDomainDnsConfig
   createLbConfig
   createUciDomain
-  ${SSH} root@${ROUTER} "opkg update && opkg install ip-full procps-ng-ps bind-server bind-tools haproxy bash shadow uhttpd"
+  ${SSH} root@${ROUTER} "opkg update && opkg install ip-full procps-ng-ps bind-server bind-tools haproxy bash shadow uhttpd wget"
   ${SSH} root@${ROUTER} "mv /etc/haproxy.cfg /etc/haproxy.cfg.orig ; /etc/init.d/lighttpd disable ; /etc/init.d/lighttpd stop ; groupadd haproxy ; useradd -d /data/haproxy -g haproxy haproxy ; mkdir -p /data/haproxy ; chown -R haproxy:haproxy /data/haproxy"
   ${SCP} ${WORK_DIR}/haproxy.cfg root@${ROUTER}:/etc/haproxy.cfg
   ${SSH} root@${ROUTER} "cp /etc/haproxy.cfg /etc/haproxy.bootstrap && cat /etc/haproxy.cfg | grep -v bootstrap > /etc/haproxy.no-bootstrap"
@@ -505,18 +503,32 @@ wget http://boot.ipxe.org/ipxe.efi -O ${WORK_DIR}/ipxe.efi
 wget http://mirror.centos.org/centos/8-stream/BaseOS/x86_64/os/isolinux/vmlinuz -O ${WORK_DIR}/vmlinuz
 wget http://mirror.centos.org/centos/8-stream/BaseOS/x86_64/os/isolinux/initrd.img -O ${WORK_DIR}/initrd.img
 
-${SSH} root@${ROUTER} "mkdir -p /data/tftpboot/ipxe ; mkdir /data/tftpboot/networkboot"
-${SCP} ${WORK_DIR}/ipxe.efi root@${ROUTER}:/data/tftpboot/ipxe.efi
-${SCP} ${WORK_DIR}/vmlinuz root@${ROUTER}:/data/tftpboot/networkboot/vmlinuz
-${SCP} ${WORK_DIR}/initrd.img root@${ROUTER}:/data/tftpboot/networkboot/initrd.img
+${SSH} root@${ROUTER} "mkdir -p /data/tftpboot/ipxe ; \
+  mkdir /data/tftpboot/networkboot ; \
+  wget http://boot.ipxe.org/ipxe.efi -O /data/tftpboot/ipxe.efi ; \
+  wget http://mirror.centos.org/centos/8-stream/BaseOS/x86_64/os/isolinux/vmlinuz -O /data/tftpboot/networkboot/vmlinuz ; \
+  wget http://mirror.centos.org/centos/8-stream/BaseOS/x86_64/os/isolinux/initrd.img -O /data/tftpboot/networkboot/initrd.img"
 ${SCP} ${WORK_DIR}/boot.ipxe root@${ROUTER}:/data/tftpboot/boot.ipxe
 ${SSH} root@${ROUTER} "mv /etc/bind/named.conf /etc/bind/named.conf.orig"
-${SCP} -r ${WORK_DIR}/dns/* root@${ROUTER}:/etc/bind
-${SSH} root@${ROUTER} "mkdir -p /data/var/named/dynamic ; mkdir /data/var/named/data ; chown -R bind:bind /data/var/named ; chown -R bind:bind /etc/bind ; /etc/init.d/named enable"
+${SCP} -r ${WORK_DIR}/dns/* root@${ROUTER}:/etc/bind/
+${SSH} root@${ROUTER} "mkdir -p /data/var/named/dynamic ; \
+  mkdir /data/var/named/data ; \
+  chown -R bind:bind /data/var/named ; \
+  chown -R bind:bind /etc/bind ; \
+  /etc/init.d/named enable ; \
+  uci set network.wan.dns=${ROUTER} ; \
+  uci set network.wan.peerdns=0 ; \
+  uci show network.wwan ; \
+  if [[ \$? -eq 0 ]] ; \
+  then uci set network.wwan.dns=${ROUTER} ; \
+    uci set network.wwan.peerdns=0 ; \
+  fi ; \
+  uci commit"
 ${SCP} ${WORK_DIR}/uci.batch root@${ROUTER}:/tmp/uci.batch
-${SSH} root@${ROUTER} "cat /tmp/uci.batch | uci batch  && passwd -l root && reboot"
+${SSH} root@${ROUTER} "cat /tmp/uci.batch | uci batch && reboot"
 
 if [[ ${EDGE} == "false" ]]
 then
   ${SSH} root@${EDGE_ROUTER} "/etc/init.d/named restart"
 fi
+

@@ -38,71 +38,49 @@ do
   esac
 done
 
-function createControlPlaneDNS() {
-cat << EOF > ${WORK_DIR}/dns-work-dir/forward.zone
-${CLUSTER_NAME}-bootstrap.${DOMAIN}.  IN      A      ${NET_PREFIX}.49 ; ${CLUSTER_NAME}-${DOMAIN}-bs
-${CLUSTER_NAME}-lb01.${DOMAIN}.       IN      A      ${NET_PREFIX}.2 ; ${CLUSTER_NAME}-${DOMAIN}-cp
-*.apps.${CLUSTER_NAME}.${DOMAIN}.     IN      A      ${NET_PREFIX}.2 ; ${CLUSTER_NAME}-${DOMAIN}-cp
-api.${CLUSTER_NAME}.${DOMAIN}.        IN      A      ${NET_PREFIX}.2 ; ${CLUSTER_NAME}-${DOMAIN}-cp
-api-int.${CLUSTER_NAME}.${DOMAIN}.    IN      A      ${NET_PREFIX}.2 ; ${CLUSTER_NAME}-${DOMAIN}-cp
-${CLUSTER_NAME}-master-0.${DOMAIN}.   IN      A      ${NET_PREFIX}.60 ; ${CLUSTER_NAME}-${DOMAIN}-cp
-etcd-0.${DOMAIN}.          IN      A      ${NET_PREFIX}.60 ; ${CLUSTER_NAME}-${DOMAIN}-cp
-${CLUSTER_NAME}-master-1.${DOMAIN}.   IN      A      ${NET_PREFIX}.61 ; ${CLUSTER_NAME}-${DOMAIN}-cp
-etcd-1.${DOMAIN}.          IN      A      ${NET_PREFIX}.61 ; ${CLUSTER_NAME}-${DOMAIN}-cp
-${CLUSTER_NAME}-master-2.${DOMAIN}.   IN      A      ${NET_PREFIX}.62 ; ${CLUSTER_NAME}-${DOMAIN}-cp
-etcd-2.${DOMAIN}.          IN      A      ${NET_PREFIX}.62 ; ${CLUSTER_NAME}-${DOMAIN}-cp
-_etcd-server-ssl._tcp.${CLUSTER_NAME}.${DOMAIN}    86400     IN    SRV     0    10    2380    etcd-0.${CLUSTER_NAME}.${DOMAIN}. ; ${CLUSTER_NAME}-${DOMAIN}-cp
-_etcd-server-ssl._tcp.${CLUSTER_NAME}.${DOMAIN}    86400     IN    SRV     0    10    2380    etcd-1.${CLUSTER_NAME}.${DOMAIN}. ; ${CLUSTER_NAME}-${DOMAIN}-cp
-_etcd-server-ssl._tcp.${CLUSTER_NAME}.${DOMAIN}    86400     IN    SRV     0    10    2380    etcd-2.${CLUSTER_NAME}.${DOMAIN}. ; ${CLUSTER_NAME}-${DOMAIN}-cp
-EOF
-
-cat << EOF > ${WORK_DIR}/dns-work-dir/reverse.zone
-2     IN      PTR     ${CLUSTER_NAME}-lb01.${DOMAIN}. ; ${CLUSTER_NAME}-${DOMAIN}-cp
-49    IN      PTR     ${CLUSTER_NAME}-bootstrap.${DOMAIN}.   ; ${CLUSTER_NAME}-${DOMAIN}-bs
-60    IN      PTR     ${CLUSTER_NAME}-master-0.${DOMAIN}.  ; ${CLUSTER_NAME}-${DOMAIN}-cp
-61    IN      PTR     ${CLUSTER_NAME}-master-1.${DOMAIN}.  ; ${CLUSTER_NAME}-${DOMAIN}-cp
-62    IN      PTR     ${CLUSTER_NAME}-master-2.${DOMAIN}.  ; ${CLUSTER_NAME}-${DOMAIN}-cp
-EOF
-
-}
-
-
 function createSnoBipDNS() {
   local host_name=${1}
+  local ip_addr=${2}
 
 cat << EOF > ${WORK_DIR}/dns-work-dir/forward.zone
-*.apps.${CLUSTER_NAME}.${DOMAIN}.     IN      A      ${NET_PREFIX}.${SNO_NODE_IP} ; ${CLUSTER_NAME}-${DOMAIN}-cp
-api.${CLUSTER_NAME}.${DOMAIN}.        IN      A      ${NET_PREFIX}.${SNO_NODE_IP} ; ${CLUSTER_NAME}-${DOMAIN}-cp
-api-int.${CLUSTER_NAME}.${DOMAIN}.    IN      A      ${NET_PREFIX}.${SNO_NODE_IP} ; ${CLUSTER_NAME}-${DOMAIN}-cp
-${host_name}.${DOMAIN}.   IN      A      ${NET_PREFIX}.${SNO_NODE_IP} ; ${CLUSTER_NAME}-${DOMAIN}-cp
-etcd-0.${DOMAIN}.          IN      A      ${NET_PREFIX}.${SNO_NODE_IP} ; ${CLUSTER_NAME}-${DOMAIN}-cp
+*.apps.${CLUSTER_NAME}.${DOMAIN}.     IN      A      ${ip_addr} ; ${CLUSTER_NAME}-${DOMAIN}-cp
+api.${CLUSTER_NAME}.${DOMAIN}.        IN      A      ${ip_addr} ; ${CLUSTER_NAME}-${DOMAIN}-cp
+api-int.${CLUSTER_NAME}.${DOMAIN}.    IN      A      ${ip_addr} ; ${CLUSTER_NAME}-${DOMAIN}-cp
+${host_name}.${DOMAIN}.   IN      A      ${ip_addr} ; ${CLUSTER_NAME}-${DOMAIN}-cp
+etcd-0.${DOMAIN}.          IN      A      ${ip_addr} ; ${CLUSTER_NAME}-${DOMAIN}-cp
 _etcd-server-ssl._tcp.${CLUSTER_NAME}.${DOMAIN}    86400     IN    SRV     0    10    2380    etcd-0.${CLUSTER_NAME}.${DOMAIN}. ; ${CLUSTER_NAME}-${DOMAIN}-cp
 EOF
 
+o4=$(echo ${ip_addr} | cut -d"." -f4)
+
 cat << EOF > ${WORK_DIR}/dns-work-dir/reverse.zone
-${SNO_NODE_IP}    IN      PTR     ${host_name}.${DOMAIN}.  ; ${CLUSTER_NAME}-${DOMAIN}-cp
+${o4}    IN      PTR     ${host_name}.${DOMAIN}.  ; ${CLUSTER_NAME}-${DOMAIN}-cp
 EOF
 
 }
 
 function createSnoDNS() {
   local host_name=${1}
+  local ip_addr=${2}
+  local bs_ip_addr=${3}
 
 cat << EOF > ${WORK_DIR}/dns-work-dir/forward.zone
-${CLUSTER_NAME}-bootstrap.${DOMAIN}.  IN      A      ${NET_PREFIX}.49 ; ${CLUSTER_NAME}-${DOMAIN}-bs
-*.apps.${CLUSTER_NAME}.${DOMAIN}.     IN      A      ${NET_PREFIX}.${SNO_NODE_IP} ; ${CLUSTER_NAME}-${DOMAIN}-cp
-api.${CLUSTER_NAME}.${DOMAIN}.        IN      A      ${NET_PREFIX}.${SNO_NODE_IP} ; ${CLUSTER_NAME}-${DOMAIN}-cp
-api.${CLUSTER_NAME}.${DOMAIN}.        IN      A      ${NET_PREFIX}.49 ; ${CLUSTER_NAME}-${DOMAIN}-bs
-api-int.${CLUSTER_NAME}.${DOMAIN}.    IN      A      ${NET_PREFIX}.${SNO_NODE_IP} ; ${CLUSTER_NAME}-${DOMAIN}-cp
-api-int.${CLUSTER_NAME}.${DOMAIN}.    IN      A      ${NET_PREFIX}.49 ; ${CLUSTER_NAME}-${DOMAIN}-bs
-${host_name}.${DOMAIN}.   IN      A      ${NET_PREFIX}.${SNO_NODE_IP} ; ${CLUSTER_NAME}-${DOMAIN}-cp
-etcd-0.${DOMAIN}.          IN      A      ${NET_PREFIX}.${SNO_NODE_IP} ; ${CLUSTER_NAME}-${DOMAIN}-cp
+${CLUSTER_NAME}-bootstrap.${DOMAIN}.  IN      A      ${bs_ip_addr} ; ${CLUSTER_NAME}-${DOMAIN}-bs
+*.apps.${CLUSTER_NAME}.${DOMAIN}.     IN      A      ${ip_addr} ; ${CLUSTER_NAME}-${DOMAIN}-cp
+api.${CLUSTER_NAME}.${DOMAIN}.        IN      A      ${ip_addr} ; ${CLUSTER_NAME}-${DOMAIN}-cp
+api.${CLUSTER_NAME}.${DOMAIN}.        IN      A      ${bs_ip_addr} ; ${CLUSTER_NAME}-${DOMAIN}-bs
+api-int.${CLUSTER_NAME}.${DOMAIN}.    IN      A      ${ip_addr} ; ${CLUSTER_NAME}-${DOMAIN}-cp
+api-int.${CLUSTER_NAME}.${DOMAIN}.    IN      A      ${bs_ip_addr} ; ${CLUSTER_NAME}-${DOMAIN}-bs
+${host_name}.${DOMAIN}.   IN      A      ${ip_addr} ; ${CLUSTER_NAME}-${DOMAIN}-cp
+etcd-0.${DOMAIN}.          IN      A      ${ip_addr} ; ${CLUSTER_NAME}-${DOMAIN}-cp
 _etcd-server-ssl._tcp.${CLUSTER_NAME}.${DOMAIN}    86400     IN    SRV     0    10    2380    etcd-0.${CLUSTER_NAME}.${DOMAIN}. ; ${CLUSTER_NAME}-${DOMAIN}-cp
 EOF
 
+o4=$(echo ${ip_addr} | cut -d"." -f4)
+bs_o4=$(echo ${bs_ip_addr} | cut -d"." -f4)
 cat << EOF > ${WORK_DIR}/dns-work-dir/reverse.zone
-${SNO_NODE_IP}    IN      PTR     ${host_name}.${DOMAIN}.  ; ${CLUSTER_NAME}-${DOMAIN}-cp
-49    IN      PTR     ${CLUSTER_NAME}-bootstrap.${DOMAIN}.   ; ${CLUSTER_NAME}-${DOMAIN}-bs
+${o4}    IN      PTR     ${host_name}.${DOMAIN}.  ; ${CLUSTER_NAME}-${DOMAIN}-cp
+${bs_o4}    IN      PTR     ${CLUSTER_NAME}-bootstrap.${DOMAIN}.   ; ${CLUSTER_NAME}-${DOMAIN}-bs
 EOF
 
 }
@@ -384,7 +362,7 @@ then
     cp ${WORK_DIR}/okd-install-dir/*.ign ${WORK_DIR}/ipxe-work-dir/
     # Create Bootstrap Node:
     host_name=${CLUSTER_NAME}-bootstrap
-    ip_addr=${NET_PREFIX}.49
+    bs_ip_addr=$(yq e ".bootstrap.ip-addr" ${CLUSTER_CONFIG})
     boot_dev=sda
     platform=qemu
     if [[ $(yq e ".bootstrap.metal" ${CLUSTER_CONFIG}) == "true" ]]
@@ -395,14 +373,14 @@ then
       memory=$(yq e ".bootstrap.node-spec.memory" ${CLUSTER_CONFIG})
       cpu=$(yq e ".bootstrap.node-spec.cpu" ${CLUSTER_CONFIG})
       root_vol=$(yq e ".bootstrap.node-spec.root_vol" ${CLUSTER_CONFIG})
-      createOkdVmNode ${ip_addr} ${host_name} ${kvm_host} bootstrap ${memory} ${cpu} ${root_vol} 0
+      createOkdVmNode ${bs_ip_addr} ${host_name} ${kvm_host} bootstrap ${memory} ${cpu} ${root_vol} 0
       # Get the MAC address for eth0 in the new VM  
       var=$(${SSH} root@${kvm_host}.${DOMAIN} "virsh -q domiflist ${host_name} | grep br0")
       mac_addr=$(echo ${var} | cut -d" " -f5)
       yq e ".bootstrap.mac-addr = \"${mac_addr}\"" -i ${CLUSTER_CONFIG}
     fi
     # Create the ignition and iPXE boot files
-    configOkdNode ${ip_addr} ${host_name}.${DOMAIN} ${mac_addr} bootstrap
+    configOkdNode ${bs_ip_addr} ${host_name}.${DOMAIN} ${mac_addr} bootstrap
     createPxeFile ${mac_addr} ${platform} ${boot_dev}
   fi
 
@@ -417,8 +395,7 @@ then
 
   if [[ ${SNO} == "true" ]]
   then
-    SNO_NODE_IP=$(yq e ".control-plane.okd-hosts.[0].ip-octet" ${CLUSTER_CONFIG})
-    ip_addr=${NET_PREFIX}.${SNO_NODE_IP}
+    ip_addr=$(yq e ".control-plane.okd-hosts.[0].ip-addr" ${CLUSTER_CONFIG})
     host_name=${CLUSTER_NAME}-node
     if [[ ${metal} == "true" ]]
     then
@@ -445,19 +422,26 @@ then
       openshift-install --dir=${WORK_DIR}/okd-install-dir create single-node-ignition-config
       cp ${WORK_DIR}/okd-install-dir/bootstrap-in-place-for-live-iso.ign ${WORK_DIR}/ipxe-work-dir/sno.ign
       configOkdNode ${ip_addr} ${host_name}.${DOMAIN} ${mac_addr} sno
-      createSnoBipDNS ${host_name}
+      createSnoBipDNS ${host_name} ${ip_addr}
     else
       configOkdNode ${ip_addr} ${host_name}.${DOMAIN} ${mac_addr} master
-      createSnoDNS ${host_name} ${NET_PREFIX}.49
+      createSnoDNS ${host_name} ${ip_addr} ${bs_ip_addr}
     fi
     createPxeFile ${mac_addr} ${platform} ${boot_dev}
     # Set the node values in the lab domain configuration file
     yq e ".control-plane.okd-hosts.[0].name = \"${host_name}\"" -i ${CLUSTER_CONFIG}
-    yq e ".control-plane.okd-hosts.[0].ip-addr = \"${ip_addr}\"" -i ${CLUSTER_CONFIG}
-  else  
+  else
+    # Create DNS Entries:
+    ingress_ip=$(yq e ".cluster.ingress-ip-addr" ${CLUSTER_CONFIG})
+    echo "${CLUSTER_NAME}-bootstrap.${DOMAIN}.  IN      A      ${bs_ip_addr} ; ${CLUSTER_NAME}-${DOMAIN}-bs" >> ${WORK_DIR}/dns-work-dir/forward.zone
+    echo "*.apps.${CLUSTER_NAME}.${DOMAIN}.     IN      A      ${ingress_ip} ; ${CLUSTER_NAME}-${DOMAIN}-cp" >> ${WORK_DIR}/dns-work-dir/forward.zone
+    echo "api.${CLUSTER_NAME}.${DOMAIN}.        IN      A      ${ingress_ip} ; ${CLUSTER_NAME}-${DOMAIN}-cp" >> ${WORK_DIR}/dns-work-dir/forward.zone
+    echo "api-int.${CLUSTER_NAME}.${DOMAIN}.    IN      A      ${ingress_ip} ; ${CLUSTER_NAME}-${DOMAIN}-cp" >> ${WORK_DIR}/dns-work-dir/forward.zone
+    bs_o4=$(echo ${bs_ip_addr} | cut -d"." -f4)
+    echo "${bs_o4}    IN      PTR     ${CLUSTER_NAME}-bootstrap.${DOMAIN}.   ; ${CLUSTER_NAME}-${DOMAIN}-bs" >> ${WORK_DIR}/dns-work-dir/reverse.zone
     for i in 0 1 2
     do
-      ip_addr=${NET_PREFIX}.6${i}
+      ip_addr=$(yq e ".control-plane.okd-hosts.[${i}].ip-addr" ${CLUSTER_CONFIG})
       host_name=${CLUSTER_NAME}-master-${i}
       if [[ ${metal} == "true" ]]
       then
@@ -482,24 +466,30 @@ then
       # Set the node values in the lab domain configuration file
       yq e ".control-plane.okd-hosts.[${i}].name = \"${host_name}\"" -i ${CLUSTER_CONFIG}
       yq e ".control-plane.okd-hosts.[${i}].ip-addr = \"${ip_addr}\"" -i ${CLUSTER_CONFIG}
+      # Create control plane node DNS Records:
+      echo "${host_name}.${DOMAIN}.   IN      A      ${ip_addr} ; ${CLUSTER_NAME}-${DOMAIN}-cp" >> ${WORK_DIR}/dns-work-dir/forward.zone
+      echo "etcd-${i}.${DOMAIN}.          IN      A      ${ip_addr} ; ${CLUSTER_NAME}-${DOMAIN}-cp" >> ${WORK_DIR}/dns-work-dir/forward.zone
+      o4=$(echo ${ip_addr} | cut -d"." -f4)
+      echo "${o4}    IN      PTR     ${host_name}.${DOMAIN}.  ; ${CLUSTER_NAME}-${DOMAIN}-cp" >> ${WORK_DIR}/dns-work-dir/reverse.zone
     done
-    # Create DNS Records:
-    createControlPlaneDNS
+    # Create DNS SRV Records:
+    for i in 0 1 2
+    do
+      echo "_etcd-server-ssl._tcp.${CLUSTER_NAME}.${DOMAIN}    86400     IN    SRV     0    10    2380    etcd-${i}.${CLUSTER_NAME}.${DOMAIN}. ; ${CLUSTER_NAME}-${DOMAIN}-cp" >> ${WORK_DIR}/dns-work-dir/forward.zone
+    done
   fi
 
-  if [[ ! -d ${OKD_LAB_PATH}/lab-config/fcos/${OKD_VERSION} ]]
-  then
-    mkdir -p ${OKD_LAB_PATH}/lab-config/fcos/${OKD_VERSION}
-    KERNEL_URL=$(openshift-install coreos print-stream-json | jq -r '.architectures.x86_64.artifacts.metal.formats.pxe.kernel.location')
-    INITRD_URL=$(openshift-install coreos print-stream-json | jq -r '.architectures.x86_64.artifacts.metal.formats.pxe.initramfs.location')
-    ROOTFS_URL=$(openshift-install coreos print-stream-json | jq -r '.architectures.x86_64.artifacts.metal.formats.pxe.rootfs.location')
+  KERNEL_URL=$(openshift-install coreos print-stream-json | jq -r '.architectures.x86_64.artifacts.metal.formats.pxe.kernel.location')
+  INITRD_URL=$(openshift-install coreos print-stream-json | jq -r '.architectures.x86_64.artifacts.metal.formats.pxe.initramfs.location')
+  ROOTFS_URL=$(openshift-install coreos print-stream-json | jq -r '.architectures.x86_64.artifacts.metal.formats.pxe.rootfs.location')
 
-    curl -o ${OKD_LAB_PATH}/lab-config/fcos/${OKD_VERSION}/vmlinuz ${KERNEL_URL}
-    curl -o ${OKD_LAB_PATH}/lab-config/fcos/${OKD_VERSION}/initrd ${INITRD_URL}
-    curl -o ${OKD_LAB_PATH}/lab-config/fcos/${OKD_VERSION}/rootfs.img ${ROOTFS_URL}
-  fi
+  ${SSH} root@${BASTION_HOST} "if [[ ! -d /usr/local/www/install/fcos/${OKD_VERSION} ]] ; \
+    then mkdir -p /usr/local/www/install/fcos/${OKD_VERSION} ; \
+    curl -o /usr/local/www/install/fcos/${OKD_VERSION}/vmlinuz ${KERNEL_URL} ; \
+    curl -o /usr/local/www/install/fcos/${OKD_VERSION}/initrd ${INITRD_URL} ; \
+    curl -o /usr/local/www/install/fcos/${OKD_VERSION}/rootfs.img ${ROOTFS_URL} ; \
+    fi"
 
-  ${SCP} -r ${OKD_LAB_PATH}/lab-config/fcos/${OKD_VERSION} root@${BASTION_HOST}:/usr/local/www/install/fcos/
   cp ${WORK_DIR}/okd-install-dir/auth/kubeconfig ${OKD_LAB_PATH}/lab-config/${CLUSTER_NAME}-${SUB_DOMAIN}-${LAB_DOMAIN}/
   chmod 400 ${OKD_LAB_PATH}/lab-config/${CLUSTER_NAME}-${SUB_DOMAIN}-${LAB_DOMAIN}/kubeconfig
 fi
@@ -519,11 +509,10 @@ then
   fi
   let NODE_COUNT=$(yq e ".compute-nodes" ${CLUSTER_CONFIG} | yq e 'length' -)
   let i=0
-  let j=70
   while [[ i -lt ${NODE_COUNT} ]]
   do
     host_name=${CLUSTER_NAME}-worker-${i}
-    ip_addr=${NET_PREFIX}.${j}
+    ip_addr=$(yq e ".compute-nodes.[${i}].ip-addr" ${CLUSTER_CONFIG})
     if [[ $(yq e ".compute-nodes.[${i}].metal" ${CLUSTER_CONFIG}) == "true" ]]
     then
       platform=metal
@@ -551,11 +540,10 @@ then
     yq e ".compute-nodes.[${i}].name = \"${host_name}\"" -i ${CLUSTER_CONFIG}
     yq e ".compute-nodes.[${i}].ip-addr = \"${ip_addr}\"" -i ${CLUSTER_CONFIG}
     # Create DNS entries
-    echo "${host_name}.${DOMAIN}.   IN      A      ${NET_PREFIX}.${j} ; ${host_name}-${DOMAIN}-wk" >> ${WORK_DIR}/dns-work-dir/forward.zone
-    echo "${j}    IN      PTR     ${host_name}.${DOMAIN}. ; ${host_name}-${DOMAIN}-wk" >> ${WORK_DIR}/dns-work-dir/reverse.zone
-
+    echo "${host_name}.${DOMAIN}.   IN      A      ${ip_addr} ; ${host_name}-${DOMAIN}-wk" >> ${WORK_DIR}/dns-work-dir/forward.zone
+    o4=$(echo ${ip_addr} | cut -d"." -f4)
+    echo "${o4}    IN      PTR     ${host_name}.${DOMAIN}. ; ${host_name}-${DOMAIN}-wk" >> ${WORK_DIR}/dns-work-dir/reverse.zone
     i=$(( ${i} + 1 ))
-    j=$(( ${j} + 1 ))
   done
 fi
 

@@ -8,6 +8,7 @@ SCP="scp -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null"
 INDEX=""
 CONFIG_FILE=${LAB_CONFIG_FILE}
 INIT_IP=192.168.8.1
+WIFI_CHANNEL=3
 
 for i in "$@"
 do
@@ -24,18 +25,11 @@ do
       sub_domain="${i#*=}"
       shift
     ;;
-    -wl=*|--wireless-lan=*)
-      OPTS="${i#*=}"
-      LAB_WIFI_SSID=$(cut -d"," -f1)
-      LAB_WIFI_KEY=$(cut -d"," -f2)
+    -wl|--wireless-lan)
       WLAN="true"
       shift
     ;;
-    -ww=*|--wireless-wan=*)
-      OPTS="${i#*=}"
-      WIFI_SSID=$(cut -d"," -f1)
-      WIFI_ENCRYPT=$(cut -d"," -f2)
-      WIFI_KEY=$(cut -d"," -f3)
+    -ww|--wireless-wan)
       WWAN="true"
       shift
     ;;
@@ -63,6 +57,15 @@ EOF
 
 if [[ ${WWAN} == "true" ]]
 then
+  echo "Listing available Wireless Networks:"
+  ${SSH} root@${INIT_IP} "iwinfo wlan0 scan"
+  echo ""
+  echo "Enter the SSID of the Wireless Lan that you are connecting to:"
+  read WIFI_SSID
+  echo "Enter the passphrase of the wireless lan that you are connecting to:"
+  read WIFI_KEY
+  WIFI_ENCRYPT=psk2
+
   unset zone
   let i=0
   let j=1
@@ -110,6 +113,11 @@ fi
 
 if [[ ${WLAN} == "true" ]]
 then
+echo "Enter an SSID for you Lab Wireless LAN:"
+read LAB_WIFI_SSID
+echo "Enter a WPA/PSK 2 Passphrase for your Lab Wireless LAN:"
+read LAB_WIFI_KEY
+
 cat << EOF >> ${WORK_DIR}/uci.batch
 delete network.guest
 delete dhcp.guest
@@ -127,6 +135,7 @@ set wireless.default_radio0.encryption="psk2"
 set wireless.default_radio0.multi_ap="1"
 set wireless.radio0.legacy_rates="0"
 set wireless.radio0.htmode="HT20"
+set wireless.radio0.channel=${WIFI_CHANNEL}
 EOF
 fi
 
@@ -198,32 +207,35 @@ function validateVars() {
     exit 1
   fi
 
-  if [[ ${sub_domain} != "" ]]
+  if [[ ${EDGE} == "false" ]]
   then
-    DONE=false
-    DOMAIN_COUNT=$(yq e ".sub-domain-configs" ${CONFIG_FILE} | yq e 'length' -)
-    let i=0
-    while [[ i -lt ${DOMAIN_COUNT} ]]
-    do
-      domain_name=$(yq e ".sub-domain-configs.[${i}].name" ${CONFIG_FILE})
-      if [[ ${domain_name} == ${SUB_DOMAIN} ]]
-      then
-        INDEX=${i}
-        DONE=true
-        break
-      fi
-      i=$(( ${i} + 1 ))
-    done
-    if [[ ${DONE} == "false" ]]
+    if [[ ${sub_domain} != "" ]]
     then
-      echo "Domain Entry Not Found In Config File."
-      exit 1
+      DONE=false
+      DOMAIN_COUNT=$(yq e ".sub-domain-configs" ${CONFIG_FILE} | yq e 'length' -)
+      let i=0
+      while [[ i -lt ${DOMAIN_COUNT} ]]
+      do
+        domain_name=$(yq e ".sub-domain-configs.[${i}].name" ${CONFIG_FILE})
+        if [[ ${domain_name} == ${sub_domain} ]]
+        then
+          INDEX=${i}
+          DONE=true
+          break
+        fi
+        i=$(( ${i} + 1 ))
+      done
+      if [[ ${DONE} == "false" ]]
+      then
+        echo "Domain Entry Not Found In Config File."
+        exit 1
+      fi
+      SUB_DOMAIN=${sub_domain}
     fi
-    SUB_DOMAIN=${sub_domain}
-  fi
-  if [[ -z "${SUB_DOMAIN}" ]]
-  then
-    labctx
+    if [[ -z "${SUB_DOMAIN}" ]]
+    then
+      labctx
+    fi
   fi
 }
 
@@ -260,5 +272,4 @@ echo "Copying workstation SSH key to router"
 cat ~/.ssh/id_rsa.pub | ${SSH} root@${INIT_IP} "cat >> /etc/dropbear/authorized_keys"
 echo "Applying UCI config"
 ${SCP} ${WORK_DIR}/uci.batch root@${INIT_IP}:/tmp/uci.batch
-${SSH} root@${INIT_IP} "cat /tmp/uci.batch | uci batch && passwd -l root && poweroff"
-
+${SSH} root@${INIT_IP} "cat /tmp/uci.batch | uci batch && passwd -l root && reboot"
