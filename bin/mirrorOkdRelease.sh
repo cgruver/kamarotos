@@ -1,4 +1,5 @@
 #!/bin/bash
+. ${OKD_LAB_PATH}/bin/labctx.env
 
 CONFIG_FILE=${LAB_CONFIG_FILE}
 
@@ -19,6 +20,11 @@ case $i in
     ;;
 esac
 done
+
+if [[ -z ${SUB_DOMAIN} ]]
+then
+  labctx
+fi
 
 DONE=false
 DOMAIN_COUNT=$(yq e ".sub-domain-configs" ${CONFIG_FILE} | yq e 'length' -)
