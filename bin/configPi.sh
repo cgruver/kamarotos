@@ -263,7 +263,7 @@ then
   ${SSH} root@${BASTION_HOST} "chmod 750 /root/bin/MirrorSync.sh"
   echo "Apply UCI config, disable root password, and reboot"
   ${SCP} ${WORK_DIR}/uci.batch root@${BASTION_HOST}:/tmp/uci.batch
-  ${SSH} root@${BASTION_HOST} "uci batch << /tmp/uci.batch ; passwd -l root ; reboot"
+  ${SSH} root@${BASTION_HOST} "cat /tmp/uci.batch | uci batch ; passwd -l root ; reboot"
   echo "Setup complete."
   echo "After the Pi reboots, run ${SSH} root@${BASTION_HOST} \"nohup /root/bin/MirrorSync.sh &\""
 fi
