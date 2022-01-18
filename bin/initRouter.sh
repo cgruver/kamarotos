@@ -1,6 +1,7 @@
 #!/bin/bash
 . ${OKD_LAB_PATH}/bin/labctx.env
 
+EDGE="false"
 WLAN="false"
 WWAN="false"
 SSH="ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null"
@@ -262,7 +263,7 @@ else
   createDomainFIles
   ${SSH} root@${INIT_IP} "ENTRY=\$(uci add firewall forwarding) ; uci set firewall.\${ENTRY}.src=wan ; uci set firewall.\${ENTRY}.dest=lan ; uci commit firewall"
   ${SSH} root@router.${LAB_DOMAIN} "unset ROUTE ; ROUTE=\$(uci add network route) ; uci set network.\${ROUTE}.interface=lan ; uci set network.\${ROUTE}.target=${NETWORK} ; uci set network.\${ROUTE}.netmask=${NETMASK} ; uci set network.\${ROUTE}.gateway=${EDGE_IP} ; uci commit network"
-  cat ${OKD_LAB_PATH}/work-dir/edge-zone | ${SSH} root@router.${LAB_DOMAIN} "cat >> /etc/bind/named.conf"
+  cat ${WORK_DIR}/edge-zone | ${SSH} root@router.${LAB_DOMAIN} "cat >> /etc/bind/named.conf"
   ${SSH} root@router.${LAB_DOMAIN} "/etc/init.d/network reload"
   ${SSH} root@router.${LAB_DOMAIN} "/etc/init.d/named stop && /etc/init.d/named start"
 fi

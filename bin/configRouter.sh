@@ -1,6 +1,7 @@
 #!/bin/bash
 . ${OKD_LAB_PATH}/bin/labctx.env
 
+EDGE="false"
 SSH="ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null"
 SCP="scp -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null"
 INDEX=""
