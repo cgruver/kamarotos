@@ -28,9 +28,16 @@ do
   esac
 done
 
+function mask2cidr () {
+   local x=${1##*255.}
+   set -- 0^^^128^192^224^240^248^252^254^ $(( (${#1} - ${#x})*2 )) ${x%%.*}
+   x=${1%%$3*}
+   echo $(( $2 + (${#x}/4) ))
+}
+
 function setNetVars() {
 
-CIDR=$(${SSH} root@${ROUTER} "ip -br addr show dev br-lan label br-lan | cut -d' ' -f1 | cut -d'/' -f2")
+CIDR=$(mask2cidr ${NETMASK})
 IFS=. read -r i1 i2 i3 i4 << EOF
 ${ROUTER}
 EOF
@@ -414,8 +421,15 @@ function validateVars() {
     exit 1
   fi
 
-  if [[ ${sub_domain} != "" ]]
+  if [[ ${EDGE} == "false" ]]
   then
+    if [[ ! -z ${sub_domain} ]]
+    then
+      SUB_DOMAIN=${sub_domain}
+    elif [[ -z "${SUB_DOMAIN}" ]]
+    then
+      labctx
+    fi
     DONE=false
     DOMAIN_COUNT=$(yq e ".sub-domain-configs" ${CONFIG_FILE} | yq e 'length' -)
     let i=0
@@ -435,20 +449,13 @@ function validateVars() {
       echo "Domain Entry Not Found In Config File."
       exit 1
     fi
-    SUB_DOMAIN=${sub_domain}
-  fi
-  if [[ -z ${SUB_DOMAIN} ]]
-  then
-    labctx
   fi
 }
 
 validateVars
 
-EDGE_NETWORK=$(yq e ".network" ${CONFIG_FILE})
 LAB_DOMAIN=$(yq e ".domain" ${CONFIG_FILE})
 EDGE_ROUTER=$(yq e ".router" ${CONFIG_FILE})
-EDGE_NETMASK=$(yq e ".netmask" ${CONFIG_FILE})
 
 WORK_DIR=${OKD_LAB_PATH}/work-dir-router
 rm -rf ${WORK_DIR}
@@ -464,11 +471,17 @@ then
   ${SSH} root@${ROUTER} "opkg update && opkg install ip-full procps-ng-ps bind-server bind-tools sfdisk rsync resize2fs wget"
 else
   ROUTER=$(yq e ".sub-domain-configs.[${INDEX}].router-ip" ${CONFIG_FILE})
+  NETWORK=$(yq e ".sub-domain-configs.[${INDEX}].network" ${CONFIG_FILE})
+  EDGE_IP=$(yq e ".sub-domain-configs.[${INDEX}].router-edge-ip" ${CONFIG_FILE})
+  EDGE_NETWORK=$(yq e ".network" ${CONFIG_FILE})
+  NETMASK=$(yq e ".sub-domain-configs.[${INDEX}].netmask" ${CONFIG_FILE})
   DOMAIN=${SUB_DOMAIN}.${LAB_DOMAIN}
   setNetVars
   createDomainDnsConfig
   createLbConfig
   createUciDomain
+  ${SSH} root@${EDGE_ROUTER} "unset ROUTE ; ROUTE=\$(uci add network route) ; uci set network.\${ROUTE}.interface=lan ; uci set network.\${ROUTE}.target=${NETWORK} ; uci set network.\${ROUTE}.netmask=${NETMASK} ; uci set network.\${ROUTE}.gateway=${EDGE_IP} ; uci commit network"
+  ${SSH} root@${EDGE_ROUTER} "/etc/init.d/network reload ; sleep 3"
   ${SSH} root@${ROUTER} "opkg update && opkg install ip-full procps-ng-ps bind-server bind-tools haproxy bash shadow uhttpd wget"
   ${SSH} root@${ROUTER} "mv /etc/haproxy.cfg /etc/haproxy.cfg.orig ; /etc/init.d/lighttpd disable ; /etc/init.d/lighttpd stop ; groupadd haproxy ; useradd -d /data/haproxy -g haproxy haproxy ; mkdir -p /data/haproxy ; chown -R haproxy:haproxy /data/haproxy"
   ${SCP} ${WORK_DIR}/haproxy.cfg root@${ROUTER}:/etc/haproxy.cfg

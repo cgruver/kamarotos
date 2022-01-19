@@ -145,15 +145,6 @@ echo "commit" >> ${WORK_DIR}/uci.batch
 
 function createDomainFIles() {
 
-cat << EOF > ${WORK_DIR}/edge-zone
-zone "${DOMAIN}" {
-    type stub;
-    masters { ${ROUTER_IP}; };
-    file "stub.${DOMAIN}";
-};
-
-EOF
-
 cat << EOF >> ${WORK_DIR}/uci.batch
 set dropbear.@dropbear[0].PasswordAuth='off'
 set dropbear.@dropbear[0].RootPasswordAuth='off'
@@ -210,32 +201,31 @@ function validateVars() {
 
   if [[ ${EDGE} == "false" ]]
   then
-    if [[ ${sub_domain} != "" ]]
+    if [[ ! -z ${sub_domain} ]]
     then
-      DONE=false
-      DOMAIN_COUNT=$(yq e ".sub-domain-configs" ${CONFIG_FILE} | yq e 'length' -)
-      let i=0
-      while [[ i -lt ${DOMAIN_COUNT} ]]
-      do
-        domain_name=$(yq e ".sub-domain-configs.[${i}].name" ${CONFIG_FILE})
-        if [[ ${domain_name} == ${sub_domain} ]]
-        then
-          INDEX=${i}
-          DONE=true
-          break
-        fi
-        i=$(( ${i} + 1 ))
-      done
-      if [[ ${DONE} == "false" ]]
-      then
-        echo "Domain Entry Not Found In Config File."
-        exit 1
-      fi
       SUB_DOMAIN=${sub_domain}
-    fi
-    if [[ -z "${SUB_DOMAIN}" ]]
+    elif [[ -z "${SUB_DOMAIN}" ]]
     then
       labctx
+    fi
+    DONE=false
+    DOMAIN_COUNT=$(yq e ".sub-domain-configs" ${CONFIG_FILE} | yq e 'length' -)
+    let i=0
+    while [[ i -lt ${DOMAIN_COUNT} ]]
+    do
+      domain_name=$(yq e ".sub-domain-configs.[${i}].name" ${CONFIG_FILE})
+      if [[ ${domain_name} == ${SUB_DOMAIN} ]]
+      then
+        INDEX=${i}
+        DONE=true
+        break
+      fi
+      i=$(( ${i} + 1 ))
+    done
+    if [[ ${DONE} == "false" ]]
+    then
+      echo "Domain Entry Not Found In Config File."
+      exit 1
     fi
   fi
 }
@@ -262,10 +252,6 @@ else
   NETMASK=$(yq e ".sub-domain-configs.[${INDEX}].netmask" ${CONFIG_FILE})
   createDomainFIles
   ${SSH} root@${INIT_IP} "ENTRY=\$(uci add firewall forwarding) ; uci set firewall.\${ENTRY}.src=wan ; uci set firewall.\${ENTRY}.dest=lan ; uci commit firewall"
-  ${SSH} root@router.${LAB_DOMAIN} "unset ROUTE ; ROUTE=\$(uci add network route) ; uci set network.\${ROUTE}.interface=lan ; uci set network.\${ROUTE}.target=${NETWORK} ; uci set network.\${ROUTE}.netmask=${NETMASK} ; uci set network.\${ROUTE}.gateway=${EDGE_IP} ; uci commit network"
-  cat ${WORK_DIR}/edge-zone | ${SSH} root@router.${LAB_DOMAIN} "cat >> /etc/bind/named.conf"
-  ${SSH} root@router.${LAB_DOMAIN} "/etc/init.d/network reload"
-  ${SSH} root@router.${LAB_DOMAIN} "/etc/init.d/named stop && /etc/init.d/named start"
 fi
 echo "Generating SSH keys"
 ${SSH} root@${INIT_IP} "rm -rf /root/.ssh ; rm -rf /data/* ; mkdir -p /root/.ssh ; dropbearkey -t rsa -s 4096 -f /root/.ssh/id_dropbear"
