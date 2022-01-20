@@ -54,7 +54,7 @@ local hostname=${1}
 local mac_addr=${2}
 local ip_addr=${3}
 
-cat << EOF > ${OKD_LAB_PATH}/boot-work-dir/${mac_addr//:/-}.ipxe
+cat << EOF > ${WORK_DIR}/${mac_addr//:/-}.ipxe
 #!ipxe
 
 kernel ${INSTALL_URL}/repos/BaseOS/x86_64/os/isolinux/vmlinuz net.ifnames=1 ifname=nic0:${mac_addr} ip=${ip_addr}::${ROUTER}:${NETMASK}:${hostname}.${DOMAIN}:nic0:none nameserver=${ROUTER} inst.ks=${INSTALL_URL}/kickstart/${mac_addr//:/-}.ks inst.repo=${INSTALL_URL}/repos/BaseOS/x86_64/os initrd=initrd.img
@@ -79,7 +79,7 @@ then
   DISK_LIST="${disk1},${disk2}"
 fi
 
-cat << EOF > ${OKD_LAB_PATH}/boot-work-dir/${mac_addr//:/-}.ks
+cat << EOF > ${WORK_DIR}/${mac_addr//:/-}.ks
 #version=RHEL8
 cmdline
 keyboard --vckeymap=us --xlayouts='us'
@@ -138,7 +138,7 @@ chmod 600 /root/.ssh/authorized_keys
 dnf -y module install virt
 dnf -y install wget git net-tools bind-utils bash-completion nfs-utils rsync libguestfs-tools virt-install iscsi-initiator-utils
 dnf -y update
-echo "InitiatorName=iqn.$(hostname)" > /etc/iscsi/initiatorname.iscsi
+echo "InitiatorName=iqn.\$(hostname)" > /etc/iscsi/initiatorname.iscsi
 echo "options kvm_intel nested=1" >> /etc/modprobe.d/kvm.conf
 systemctl enable libvirtd
 mkdir /VirtualMachines
@@ -158,10 +158,11 @@ EOF
 function createDnsRecords() {
 
   local hostname=${1}
-  local ip_octet=${2}
+  local ip_addr=${2}
+  IFS="." read -r i1 i2 i3 i4 <<< "${ip_addr}"
 
-  echo "${hostname}.${DOMAIN}.   IN      A      ${NET_PREFIX}.${ip_octet} ; ${hostname}-${DOMAIN}-kvm" >> ${OKD_LAB_PATH}/boot-work-dir/forward.zone
-  echo "${ip_octet}.${NET_PREFIX_ARPA}    IN      PTR     ${hostname}.${DOMAIN}. ; ${hostname}-${DOMAIN}-kvm" >> ${OKD_LAB_PATH}/boot-work-dir/reverse.zone
+  echo "${hostname}.${DOMAIN}.   IN      A      ${ip_addr} ; ${hostname}-${DOMAIN}-kvm" >> ${WORK_DIR}/forward.zone
+  echo "${i4}    IN      PTR     ${hostname}.${DOMAIN}. ; ${hostname}-${DOMAIN}-kvm" >> ${WORK_DIR}/reverse.zone
 }
 
 function buildHostConfig() {
@@ -169,12 +170,11 @@ function buildHostConfig() {
 
   hostname=$(yq e ".kvm-hosts.[${index}].host-name" ${CLUSTER_CONFIG})
   mac_addr=$(yq e ".kvm-hosts.[${index}].mac-addr" ${CLUSTER_CONFIG})
-  ip_octet=$(yq e ".kvm-hosts.[${index}].ip-octet" ${CLUSTER_CONFIG})
-  ip_addr=${NET_PREFIX}.${ip_octet}
+  ip_addr=$(yq e ".kvm-hosts.[${index}].ip-addr" ${CLUSTER_CONFIG})
   disk1=$(yq e ".kvm-hosts.[${index}].disks.disk1" ${CLUSTER_CONFIG})
   disk2=$(yq e ".kvm-hosts.[${index}].disks.disk2" ${CLUSTER_CONFIG})
 
-  createDnsRecords ${hostname} ${ip_octet}
+  createDnsRecords ${hostname} ${ip_addr}
   createBootFile ${hostname} ${mac_addr} ${ip_addr}
   createKickStartFile ${hostname} ${mac_addr} ${ip_addr} ${disk1} ${disk2}
 }
@@ -218,14 +218,13 @@ BASTION_HOST=$(yq e ".bastion-ip" ${CONFIG_FILE})
 INSTALL_URL="http://${BASTION_HOST}/install"
 
 LAB_PWD=$(cat ${OKD_LAB_PATH}/lab_host_pw)
-IFS=. read -r i1 i2 i3 i4 << EOF
-${NETWORK}
-EOF
-NET_PREFIX=${i1}.${i2}.${i3}
-NET_PREFIX_ARPA=${i3}.${i2}.${i1}
+IFS="." read -r i1 i2 i3 i4 <<< "${NETWORK}"
+ARPA=${i3}.${i2}.${i1}
 
 # Create temporary work directory
-mkdir -p ${OKD_LAB_PATH}/boot-work-dir
+WORK_DIR=${OKD_LAB_PATH}/boot-work-dir
+rm -rf ${WORK_DIR}
+mkdir -p ${WORK_DIR}
 
 HOST_COUNT=$(yq e ".kvm-hosts" ${CLUSTER_CONFIG} | yq e 'length' -)
 
@@ -258,12 +257,9 @@ else
   fi
 fi
 
-${SCP} -r ${OKD_LAB_PATH}/boot-work-dir/*.ks root@${BASTION_HOST}:/usr/local/www/install/kickstart
-${SCP} -r ${OKD_LAB_PATH}/boot-work-dir/*.ipxe root@${ROUTER}:/data/tftpboot/ipxe
+${SCP} -r ${WORK_DIR}/*.ks root@${BASTION_HOST}:/usr/local/www/install/kickstart
+${SCP} -r ${WORK_DIR}/*.ipxe root@${ROUTER}:/data/tftpboot/ipxe
 
-cat ${OKD_LAB_PATH}/boot-work-dir/forward.zone | ${SSH} root@${ROUTER} "cat >> /etc/bind/db.${DOMAIN}"
-cat ${OKD_LAB_PATH}/boot-work-dir/reverse.zone | ${SSH} root@${ROUTER} "cat >> /etc/bind/db.${NET_PREFIX_ARPA}"
+cat ${WORK_DIR}/forward.zone | ${SSH} root@${ROUTER} "cat >> /etc/bind/db.${DOMAIN}"
+cat ${WORK_DIR}/reverse.zone | ${SSH} root@${ROUTER} "cat >> /etc/bind/db.${ARPA}"
 ${SSH} root@${ROUTER} "/etc/init.d/named stop && /etc/init.d/named start"
-
-
-rm -rf ${OKD_LAB_PATH}/boot-work-dir

@@ -79,9 +79,9 @@ function destroyMetal() {
 
   if [[ ${ceph_dev} != "na" ]] && [[ ${ceph_dev} != "" ]]
   then
-    ${SSH} -o ConnectTimeout=5 ${user}@${hostname}.${DOMAIN} "sudo dd if=/dev/zero of=/dev/${ceph_dev} bs=4096 count=1"
+    ${SSH} -o ConnectTimeout=5 ${user}@${hostname}.${DOMAIN} "sudo wipefs -a -f /dev/${ceph_dev} && sudo dd if=/dev/zero of=/dev/${ceph_dev} bs=4096 count=1"
   fi
-  ${SSH} -o ConnectTimeout=5 ${user}@${hostname}.${DOMAIN} "sudo dd if=/dev/zero of=/dev/${boot_dev} bs=4096 count=1 && sudo poweroff"
+  ${SSH} -o ConnectTimeout=5 ${user}@${hostname}.${DOMAIN} "sudo wipefs -a -f /dev/${boot_dev} && sudo dd if=/dev/zero of=/dev/${boot_dev} bs=4096 count=1 && sudo poweroff"
 }
 
 # Remove the iPXE boot files
@@ -171,7 +171,7 @@ function validateAndSetVars() {
     fi
   fi
 
-  if [[ ${DELETE_KVM_HOST} == "true" ]]
+  if [[ ${DELETE_KVM_HOST} == "true" ]] && [[ ${K_HOST_NAME} != "all" ]]
   then
     if [[ ${K_HOST_NAME} == "" ]]
     then
@@ -215,7 +215,10 @@ function deleteBootstrap() {
   deleteDns ${CLUSTER_NAME}-${DOMAIN}-bs
   if [[ ${SNO} == "false" ]]
   then
-    ${SSH} root@${ROUTER} "cp /etc/haproxy.no-bootstrap /etc/haproxy.cfg && /etc/init.d/haproxy stop ; /etc/init.d/haproxy start"
+    ${SSH} root@${ROUTER} "cat /etc/haproxy-${CLUSTER_NAME}.cfg | grep -v bootstrap > /etc/haproxy-${CLUSTER_NAME}.no-bootstrap && \
+    mv /etc/haproxy-${CLUSTER_NAME}.no-bootstrap /etc/haproxy-${CLUSTER_NAME}.cfg && \
+    /etc/init.d/haproxy-${CLUSTER_NAME} stop ; \
+    /etc/init.d/haproxy-${CLUSTER_NAME} start"
   fi
 }
 
@@ -235,6 +238,17 @@ function deleteWorker() {
   fi
   deleteDns ${host_name}-${DOMAIN}
   deletePxeConfig ${mac_addr}
+}
+
+function deleteKvmHost() {
+  local index=${1}
+
+  mac_addr=$(yq e ".kvm-hosts.[${index}].mac-addr" ${CLUSTER_CONFIG})
+  host_name=$(yq e ".kvm-hosts.[${index}].host-name" ${CLUSTER_CONFIG})
+  boot_dev=$(yq e ".kvm-hosts.[${index}].disks.disk1" ${CLUSTER_CONFIG})
+  destroyMetal root ${host_name} ${boot_dev} na
+  deletePxeConfig ${mac_addr}
+  deleteDns ${host_name}-${DOMAIN}-kvm
 }
 
 function deleteCluster() {
@@ -307,17 +321,29 @@ fi
 
 if [[ ${RESET_LB} == "true" ]]
 then
-  ${SSH} root@${ROUTER} "cp /etc/haproxy.bootstrap /etc/haproxy.cfg && /etc/init.d/haproxy stop ; /etc/init.d/haproxy start" 
+  ${SSH} root@${ROUTER} "/etc/init.d/haproxy-${CLUSTER_NAME} stop ; \
+    /etc/init.d/haproxy-${CLUSTER_NAME} disable ; \
+    rm -f /etc/init.d/haproxy-${CLUSTER_NAME} ; \
+    rm -f /etc/haproxy-${CLUSTER_NAME}.cfg ; \
+    uci delete network.${CLUSTER_NAME}_lb ; \
+    uci commit ; \
+    /etc/init.d/network reload"
 fi
 
 if [[ ${DELETE_KVM_HOST} == "true" ]]
 then
-  mac_addr=$(yq e ".kvm-hosts.[${K_HOST_INDEX}].mac-addr" ${CLUSTER_CONFIG})
-  host_name=$(yq e ".kvm-hosts.[${K_HOST_INDEX}].host-name" ${CLUSTER_CONFIG})
-  boot_dev=$(yq e ".kvm-hosts.[${K_HOST_INDEX}].boot-dev" ${CLUSTER_CONFIG})
-  destroyMetal root ${host_name} ${boot_dev} na
-  deletePxeConfig ${mac_addr}
-  deleteDns ${host_name}-${DOMAIN}-kvm
+    if [[ ${K_HOST_NAME} == "all" ]] # Delete all Nodes
+  then
+    let j=$(yq e ".kvm-hosts" ${CLUSTER_CONFIG} | yq e 'length' -)
+    let i=0
+    while [[ i -lt ${j} ]]
+    do
+      deleteKvmHost ${i}
+      i=$(( ${i} + 1 ))
+    done
+  else
+    deleteKvmHost ${K_HOST_INDEX}
+  fi
 fi
 
 ${SSH} root@${ROUTER} "/etc/init.d/named stop && sleep 2 && /etc/init.d/named start && sleep 2"

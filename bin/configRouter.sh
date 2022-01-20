@@ -101,11 +101,6 @@ add_list uhttpd.main.listen_http="${ROUTER}:80"
 add_list uhttpd.main.listen_https="${ROUTER}:443"
 add_list uhttpd.main.listen_http="127.0.0.1:80"
 add_list uhttpd.main.listen_https="127.0.0.1:443"
-set network.lan_lb01=interface
-set network.lan_lb01.ifname="@lan"
-set network.lan_lb01.proto="static"
-set network.lan_lb01.hostname="okd4-lb01.${DOMAIN}"
-set network.lan_lb01.ipaddr="${LB_IP}/${NETMASK}"
 commit
 EOF
 
@@ -335,83 +330,7 @@ cat << EOF > ${WORK_DIR}/dns/db.${NET_PREFIX_ARPA}
 EOF
 }
 
-function createLbConfig() {
 
-cat << EOF > ${WORK_DIR}/haproxy.cfg
-global
-
-    log         127.0.0.1 local2
-
-    chroot      /data/haproxy
-    pidfile     /var/run/haproxy.pid
-    maxconn     50000
-    user        haproxy
-    group       haproxy
-    daemon
-
-    stats socket /data/haproxy/stats
-
-defaults
-    mode                    http
-    log                     global
-    option                  dontlognull
-    option                  redispatch
-    retries                 3
-    timeout http-request    10s
-    timeout queue           1m
-    timeout connect         10s
-    timeout client          10m
-    timeout server          10m
-    timeout http-keep-alive 10s
-    timeout check           10s
-    maxconn                 50000
-
-listen okd4-api 
-    bind ${LB_IP}:6443
-    balance roundrobin
-    option                  tcplog
-    mode tcp
-    option tcpka
-    option tcp-check
-    server okd4-bootstrap ${NET_PREFIX}.49:6443 check weight 1
-    server okd4-master-0 ${NET_PREFIX}.60:6443 check weight 1
-    server okd4-master-1 ${NET_PREFIX}.61:6443 check weight 1
-    server okd4-master-2 ${NET_PREFIX}.62:6443 check weight 1
-
-listen okd4-mc 
-    bind ${LB_IP}:22623
-    balance roundrobin
-    option                  tcplog
-    mode tcp
-    option tcpka
-    server okd4-bootstrap ${NET_PREFIX}.49:22623 check weight 1
-    server okd4-master-0 ${NET_PREFIX}.60:22623 check weight 1
-    server okd4-master-1 ${NET_PREFIX}.61:22623 check weight 1
-    server okd4-master-2 ${NET_PREFIX}.62:22623 check weight 1
-
-listen okd4-apps 
-    bind ${LB_IP}:80
-    balance source
-    option                  tcplog
-    mode tcp
-    option tcpka
-    server okd4-master-0 ${NET_PREFIX}.60:80 check weight 1
-    server okd4-master-1 ${NET_PREFIX}.61:80 check weight 1
-    server okd4-master-2 ${NET_PREFIX}.62:80 check weight 1
-
-listen okd4-apps-ssl 
-    bind ${LB_IP}:443
-    balance source
-    option                  tcplog
-    mode tcp
-    option tcpka
-    option tcp-check
-    server okd4-master-0 ${NET_PREFIX}.60:443 check weight 1
-    server okd4-master-1 ${NET_PREFIX}.61:443 check weight 1
-    server okd4-master-2 ${NET_PREFIX}.62:443 check weight 1
-EOF
-
-}
 
 function validateVars() {
 
@@ -478,15 +397,26 @@ else
   DOMAIN=${SUB_DOMAIN}.${LAB_DOMAIN}
   setNetVars
   createDomainDnsConfig
-  createLbConfig
   createUciDomain
-  ${SSH} root@${EDGE_ROUTER} "unset ROUTE ; ROUTE=\$(uci add network route) ; uci set network.\${ROUTE}.interface=lan ; uci set network.\${ROUTE}.target=${NETWORK} ; uci set network.\${ROUTE}.netmask=${NETMASK} ; uci set network.\${ROUTE}.gateway=${EDGE_IP} ; uci commit network"
-  ${SSH} root@${EDGE_ROUTER} "/etc/init.d/network reload ; sleep 3"
-  ${SSH} root@${ROUTER} "opkg update && opkg install ip-full procps-ng-ps bind-server bind-tools haproxy bash shadow uhttpd wget"
-  ${SSH} root@${ROUTER} "mv /etc/haproxy.cfg /etc/haproxy.cfg.orig ; /etc/init.d/lighttpd disable ; /etc/init.d/lighttpd stop ; groupadd haproxy ; useradd -d /data/haproxy -g haproxy haproxy ; mkdir -p /data/haproxy ; chown -R haproxy:haproxy /data/haproxy"
-  ${SCP} ${WORK_DIR}/haproxy.cfg root@${ROUTER}:/etc/haproxy.cfg
-  ${SSH} root@${ROUTER} "cp /etc/haproxy.cfg /etc/haproxy.bootstrap && cat /etc/haproxy.cfg | grep -v bootstrap > /etc/haproxy.no-bootstrap"
-  ${SSH} root@${ROUTER} "/etc/init.d/uhttpd enable ; /etc/init.d/haproxy enable"
+  ${SSH} root@${EDGE_ROUTER} "unset ROUTE ; \
+    ROUTE=\$(uci add network route) ; \
+    uci set network.\${ROUTE}.interface=lan ; \
+    uci set network.\${ROUTE}.target=${NETWORK} ; \
+    uci set network.\${ROUTE}.netmask=${NETMASK} ; \
+    uci set network.\${ROUTE}.gateway=${EDGE_IP} ; \
+    uci commit network ; \
+    /etc/init.d/network reload"
+    sleep 3
+  ${SSH} root@${ROUTER} "opkg update && opkg install ip-full procps-ng-ps bind-server bind-tools haproxy bash shadow uhttpd wget ; \
+    mv /etc/haproxy.cfg /etc/haproxy.cfg.orig ; \
+    /etc/init.d/lighttpd disable ; \
+    /etc/init.d/lighttpd stop ; \
+    groupadd haproxy ; \
+    useradd -d /data/haproxy -g haproxy haproxy ; \
+    mkdir -p /data/haproxy ; \
+    chown -R haproxy:haproxy /data/haproxy ; \
+    rm -f /etc/init.d/haproxy ; \
+    /etc/init.d/uhttpd enable"
   cat ${WORK_DIR}/edge-zone | ${SSH} root@${EDGE_ROUTER} "cat >> /etc/bind/named.conf"
 fi
 
@@ -512,10 +442,6 @@ echo ========================================================
    
 chain --replace --autofree ipxe/\${mac:hexhyp}.ipxe
 EOF
-
-wget http://boot.ipxe.org/ipxe.efi -O ${WORK_DIR}/ipxe.efi
-wget http://mirror.centos.org/centos/8-stream/BaseOS/x86_64/os/isolinux/vmlinuz -O ${WORK_DIR}/vmlinuz
-wget http://mirror.centos.org/centos/8-stream/BaseOS/x86_64/os/isolinux/initrd.img -O ${WORK_DIR}/initrd.img
 
 ${SSH} root@${ROUTER} "mkdir -p /data/tftpboot/ipxe ; \
   mkdir /data/tftpboot/networkboot ; \
