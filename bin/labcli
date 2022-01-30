@@ -1,0 +1,396 @@
+#!/bin/bash
+. ${OKD_LAB_PATH}/bin/labEnv.sh
+. ${OKD_LAB_PATH}/bin/labUtils.sh
+
+SSH="ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null"
+SCP="scp -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null"
+START="false"
+STOP="false"
+DEPLOY_CLUSTER="false"
+DEPLOY_WORKERS="false"
+DEPLOY_KVM_HOST="false"
+DESTROY_CLUSTER="false"
+DESTROY_WORKER="false"
+DESTROY_KVM_HOST="false"
+BOOTSTRAP="false"
+CONTROL_PLANE="false"
+ADD_USER="false"
+WORKER="false"
+CONFIG_FILE=${LAB_CONFIG_FILE}
+
+for i in "$@"
+do
+  case $i in
+    -d=*|--domain=*)
+      SUB_DOMAIN="${i#*=}"
+    ;;
+    *)
+       # catch all
+    ;;
+  esac
+done
+
+if [[ -z ${SUB_DOMAIN} ]]
+then
+  labctx
+else
+  labctx ${SUB_DOMAIN}
+fi
+
+if [[ ${LAB_CTX_ERROR} == "true" ]]
+then
+  exit 1
+fi
+
+DOMAIN="${SUB_DOMAIN}.${LAB_DOMAIN}"
+INSTALL_URL="http://${BASTION_HOST}/install"
+
+for i in "$@"
+do
+  case $i in
+    -d=*|--domain=*)
+      SUB_DOMAIN="${i#*=}"
+    ;;
+    --disconnect)
+      noInternet
+    ;;
+    --connect)
+      restoreInternet
+    ;;
+    --deploy-cluster)
+      DEPLOY_CLUSTER="true"
+    ;;
+    --deploy)
+      DEPLOY="true"
+    ;;
+    --deploy-workers)
+      DEPLOY_WORKERS="true"
+    ;;
+    --deploy-host)
+      DEPLOY_KVM_HOST="true"
+    ;;
+    --destroy)
+      DESTROY="true"
+    ;;
+    --start)
+      START="true"
+    ;;
+    --stop)
+      STOP="true"
+    ;;
+    --user)
+      ADD_USER="true"
+    ;;
+    --trust)
+      trustClusterCert
+    ;;
+    --config-infra)
+        configInfraNodes
+    ;;
+    --csr)
+      approveCsr
+    ;;
+    --pull-secret)
+      pullSecret
+    ;;
+    --latest)
+      getOkdRelease
+    ;;
+    --console)
+      ocConsole
+    ;;
+    --login)
+      ocLogin
+    ;;
+    --cli)
+      getOkdCmds
+    ;;
+    --dns)
+      resetDns
+    ;;
+    --mirror)
+      mirrorOkdRelease
+    ;;
+    --kube)
+      setKubeConfig
+      echo ${KUBECONFIG}
+    ;;
+    *)
+       # catch all
+    ;;
+  esac
+done
+
+if [[ ${DEPLOY} == "true" ]]
+then
+  for i in "$@"
+  do
+    case $i in
+      -c|--cluster)
+        deployCluster
+      ;;
+      -w|--worker)
+        deployWorkers
+      ;;
+      -k|--kvm-hosts)
+        deployKvmHosts
+      ;;
+      *)
+        # catch all
+      ;;
+    esac
+  done
+fi
+
+if [[ ${DESTROY} == "true" ]]
+then
+  for i in "$@"
+  do
+    case $i in
+      -b|--bootstrap)
+        DELETE_BOOTSTRAP=true
+       
+      ;;
+      -w=*|--worker=*)
+        DELETE_WORKER=true
+        W_HOST_NAME="${i#*=}"
+       
+      ;;
+      -c|--cluster)
+        DELETE_CLUSTER=true
+        DELETE_WORKER=true
+        W_HOST_NAME="all"
+       
+      ;;
+      -k=*|--kvm-host=*)
+        DELETE_KVM_HOST=true
+        K_HOST_NAME="${i#*=}"
+       
+      ;;
+      -m=*|--master=*)
+        M_HOST_NAME="${i#*=}"
+       
+      ;;
+      *)
+        # catch all
+       
+      ;;
+    esac
+  done
+
+  WORK_DIR=${OKD_LAB_PATH}/${CLUSTER_NAME}-${SUB_DOMAIN}-${LAB_DOMAIN}
+
+  if [[ ${DELETE_WORKER} == "true" ]]
+  then
+    if [[ ${W_HOST_NAME} == "" ]]
+    then
+      echo "-w | --worker must have a value"
+      exit 1
+    fi
+    if [[ ${W_HOST_NAME} == "all" ]] # Delete all Nodes
+    then
+      let j=$(yq e ".compute-nodes" ${CLUSTER_CONFIG} | yq e 'length' -)
+      let i=0
+      while [[ i -lt ${j} ]]
+      do
+        deleteWorker ${i}
+        i=$(( ${i} + 1 ))
+      done
+    else
+      let i=0
+      DONE=false
+      let NODE_COUNT=$(yq e ".compute-nodes" ${CLUSTER_CONFIG} | yq e 'length' -)
+      while [[ i -lt ${NODE_COUNT} ]]
+      do
+        host_name=$(yq e ".compute-nodes.[${i}].name" ${CLUSTER_CONFIG})
+        if [[ ${host_name} == ${W_HOST_NAME} ]]
+        then
+          W_HOST_INDEX=${i}
+          DONE=true
+          break;
+        fi
+        i=$(( ${i} + 1 ))
+      done
+      if [[ ${W_HOST_INDEX} == "" ]]
+      then
+        echo "Host: ${W_HOST_NAME} not found in config file."
+        exit 1
+      fi
+      deleteWorker ${W_HOST_INDEX}
+    fi
+  fi
+
+  if [[ ${DELETE_KVM_HOST} == "true" ]]
+  then
+    if [[ ${K_HOST_NAME} == "" ]]
+    then
+      echo "-w | --worker must have a value"
+      exit 1
+    fi
+    if [[ ${K_HOST_NAME} == "all" ]] # Delete all Nodes
+    then
+      let j=$(yq e ".kvm-hosts" ${CLUSTER_CONFIG} | yq e 'length' -)
+      let i=0
+      while [[ i -lt ${j} ]]
+      do
+        deleteKvmHost ${i}
+        i=$(( ${i} + 1 ))
+      done
+    else
+      let i=0
+      DONE=false
+      let NODE_COUNT=$(yq e ".kvm-hosts" ${CLUSTER_CONFIG} | yq e 'length' -)
+      while [[ i -lt ${NODE_COUNT} ]]
+      do
+        host_name=$(yq e ".kvm-hosts.[${i}].host-name" ${CLUSTER_CONFIG})
+        if [[ ${host_name} == ${K_HOST_NAME} ]]
+        then
+          K_HOST_INDEX=${i}
+          DONE=true
+          break;
+        fi
+        i=$(( ${i} + 1 ))
+      done
+      if [[ ${K_HOST_INDEX} == "" ]]
+      then
+        echo "Host: ${K_HOST_NAME} not found in config file."
+        exit 1
+      fi
+      deleteKvmHost ${K_HOST_INDEX}
+    fi
+  fi
+
+  if [[ ${DELETE_BOOTSTRAP} == "true" ]]
+  then
+    if [[ $(yq e ".bootstrap.metal" ${CLUSTER_CONFIG}) == "true" ]]
+    then
+      kill $(ps -ef | grep qemu | grep bootstrap | awk '{print $2}')
+      rm -rf ${WORK_DIR}/bootstrap
+    else
+      host_name="${CLUSTER_NAME}-bootstrap"
+      kvm_host=$(yq e ".bootstrap.kvm-host" ${CLUSTER_CONFIG})
+      deleteNodeVm ${host_name} ${kvm_host}
+    fi
+    deletePxeConfig $(yq e ".bootstrap.mac-addr" ${CLUSTER_CONFIG})
+    deleteDns ${CLUSTER_NAME}-${DOMAIN}-bs
+    if [[ ${SNO} == "false" ]]
+    then
+      ${SSH} root@${DOMAIN_ROUTER} "cat /etc/haproxy-${CLUSTER_NAME}.cfg | grep -v bootstrap > /etc/haproxy-${CLUSTER_NAME}.no-bootstrap && \
+      mv /etc/haproxy-${CLUSTER_NAME}.no-bootstrap /etc/haproxy-${CLUSTER_NAME}.cfg && \
+      /etc/init.d/haproxy-${CLUSTER_NAME} stop ; \
+      /etc/init.d/haproxy-${CLUSTER_NAME} start"
+    fi
+  fi
+
+  if [[ ${DELETE_WORKER} == "true" ]]
+  then
+    if [[ ${W_HOST_NAME} == "all" ]] # Delete all Nodes
+    then
+      let j=$(yq e ".compute-nodes" ${CLUSTER_CONFIG} | yq e 'length' -)
+      let i=0
+      while [[ i -lt ${j} ]]
+      do
+        deleteWorker ${i}
+        i=$(( ${i} + 1 ))
+      done
+    else
+      deleteWorker ${W_HOST_INDEX}
+    fi
+  fi
+
+  if [[ ${DELETE_CLUSTER} == "true" ]]
+  then
+    deleteControlPlane
+  fi
+
+  ${SSH} root@${DOMAIN_ROUTER} "/etc/init.d/named stop && sleep 2 && /etc/init.d/named start && sleep 2"
+  ${SSH} root@${EDGE_ROUTER} "/etc/init.d/named stop && sleep 2 && /etc/init.d/named start"
+fi
+
+if [[ ${START} == "true" ]]
+then
+  for i in "$@"
+  do
+    case $i in
+      -b|--bootstrap)
+        startBootstrap
+      ;;
+      -m|--master)
+        startControlPlane
+      ;;
+      -w|--worker)
+        startWorker
+      ;;
+      -u|--uncordon)
+        unCordonNode
+      ;;
+      *)
+        # catch all
+      ;;
+    esac
+  done
+fi
+
+if [[ ${STOP} == "true" ]]
+then
+  for i in "$@"
+  do
+    case $i in
+      -c|--cluster)
+        stopCluster
+      ;;
+      -w|--worker)
+        stopWorkers
+      ;;
+      *)
+        # catch all
+      ;;
+    esac
+  done
+fi
+
+if [[ ${ADD_USER} == "true" ]]
+then
+  setKubeConfig
+  for i in "$@"
+  do
+    case $i in
+      -a|--admin)
+        ADMIN_USER="true"
+      ;;
+      -i|--init)
+        OAUTH_INIT="true"
+      ;;
+      -u=*|--user=*)
+        USER="${i#*=}"
+      ;;
+      *)
+        # catch all
+      ;;
+    esac
+  done
+  PASSWD_FILE=${OKD_LAB_PATH}/lab-config/${CLUSTER_NAME}-${SUB_DOMAIN}-${LAB_DOMAIN}/htpasswd
+  if [[ ! -d ${OKD_LAB_PATH}/lab-config/${CLUSTER_NAME}-${SUB_DOMAIN}-${LAB_DOMAIN} ]]
+  then
+    mkdir -p ${OKD_LAB_PATH}/lab-config/${CLUSTER_NAME}-${SUB_DOMAIN}-${LAB_DOMAIN}
+  fi
+  if [[ ! -f  ${PASSWD_FILE} ]]
+  then
+    touch ${PASSWD_FILE}
+  fi
+  if [[ -z ${USER} ]]
+  then
+    echo "Usage: cluster.sh --add-user [ -a | --admin ] -u=user-name-to-add"
+    exit 1
+  fi
+  htpasswd -B ${PASSWD_FILE} ${USER}
+  oc create -n openshift-config secret generic okd-htpasswd-secret --from-file=htpasswd=${PASSWD_FILE} -o yaml --dry-run='client' | oc apply -f -
+  if [[ ${ADMIN_USER} == "true" ]]
+  then
+    oc adm policy add-cluster-role-to-user cluster-admin ${USER}
+  fi
+  if [[ ${OAUTH_INIT} == "true" ]]
+  then
+    oc patch oauth cluster --type json --patch '[{"op":"add","path":"/spec/identityProviders/-","value":{"name":"okd_htpasswd_idp","mappingMethod":"claim","type":"HTPasswd","htpasswd":{"fileData":{"name":"okd-htpasswd-secret"}}}}]'
+  fi
+fi

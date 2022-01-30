@@ -1,7 +1,7 @@
 #!/bin/bash
-. ${OKD_LAB_PATH}/bin/labctx.env
+. ${OKD_LAB_PATH}/bin/labEnv.sh
+LAB_CTX_ERROR="false"
 
-INIT_CLUSTER=false
 SSH="ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null"
 SCP="scp -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null"
 CONFIG_FILE=${LAB_CONFIG_FILE}
@@ -14,14 +14,6 @@ SNO_BIP=""
 for i in "$@"
 do
   case $i in
-    -c=*|--config=*)
-      CONFIG_FILE="${i#*=}"
-      shift # past argument=value
-    ;;
-    -i|--init)
-      INIT_CLUSTER=true
-      shift
-    ;;
     -d=*|--domain=*)
       SUB_DOMAIN="${i#*=}"
       shift
@@ -57,11 +49,6 @@ function createInstallConfig() {
 
   local install_dev=${1}
 
-read -r -d '' SNO_BIP << EOF
-BootstrapInPlace:
-  InstallationDisk: "/dev/${install_dev}"
-EOF
-
 cat << EOF > ${WORK_DIR}/install-config-upi.yaml
 apiVersion: v1
 baseDomain: ${DOMAIN}
@@ -79,7 +66,7 @@ compute:
   replicas: 0
 controlPlane:
   name: master
-  replicas: ${CP_REPLICAS}
+  replicas: 1
 platform:
   none: {}
 pullSecret: '${PULL_SECRET}'
@@ -88,12 +75,13 @@ additionalTrustBundle: |
 ${NEXUS_CERT}
 imageContentSources:
 - mirrors:
-  - ${REGISTRY}/okd
+  - ${PROXY_REGISTRY}/okd
   source: quay.io/openshift/okd
 - mirrors:
-  - ${REGISTRY}/okd
+  - ${PROXY_REGISTRY}/okd
   source: quay.io/openshift/okd-content
-${SNO_BIP}
+BootstrapInPlace:
+  InstallationDisk: "/dev/${install_dev}"
 EOF
 }
 
@@ -110,14 +98,13 @@ fi
 cat << EOF > ${WORK_DIR}/ipxe-work-dir/${mac//:/-}.ipxe
 #!ipxe
 
-kernel http://${BASTION_HOST}/install/fcos/${OKD_VERSION}/vmlinuz edd=off net.ifnames=1 rd.neednet=1 ignition.firstboot ignition.config.url=http://${BASTION_HOST}/install/fcos/ignition/${CLUSTER_NAME}-${SUB_DOMAIN}/${mac//:/-}.ign ignition.platform.id=${platform} initrd=initrd initrd=rootfs.img ${CONSOLE_OPT}
-initrd http://${BASTION_HOST}/install/fcos/${OKD_VERSION}/initrd
-initrd http://${BASTION_HOST}/install/fcos/${OKD_VERSION}/rootfs.img
+kernel http://${BASTION_HOST}/install/fcos/${OKD_RELEASE}/vmlinuz edd=off net.ifnames=1 rd.neednet=1 coreos.inst.install_dev=/dev/${boot_dev} coreos.inst.ignition_url=http://${BASTION_HOST}/install/fcos/ignition/${CLUSTER_NAME}-${SUB_DOMAIN}/${mac//:/-}.ign coreos.inst.platform_id=${platform} initrd=initrd initrd=rootfs.img ${CONSOLE_OPT}
+initrd http://${BASTION_HOST}/install/fcos/${OKD_RELEASE}/initrd
+initrd http://${BASTION_HOST}/install/fcos/${OKD_RELEASE}/rootfs.img
 
 boot
 EOF
 }
-
 
 function createOkdVmNode() {
     
@@ -129,6 +116,7 @@ function createOkdVmNode() {
   local cpu=${6}
   local root_vol=${7}
   local ceph_vol=${8}
+  local yq_loc=${9}
 
   # Create the VM
   DISK_CONFIG="--disk size=${root_vol},path=/VirtualMachines/${host_name}/rootvol,bus=sata"
@@ -136,67 +124,37 @@ function createOkdVmNode() {
   then
     DISK_CONFIG="${DISK_CONFIG} --disk size=${ceph_vol},path=/VirtualMachines/${host_name}/datavol,bus=sata"
   fi
-  ${SSH} root@${kvm_host}.${DOMAIN} "mkdir -p /VirtualMachines/${host_name}"
-  ${SSH} root@${kvm_host}.${DOMAIN} "virt-install --print-xml 1 --name ${host_name} --memory ${memory} --vcpus ${cpu} --boot=hd,network,menu=on,useserial=on ${DISK_CONFIG} --network bridge=br0 --graphics none --noautoconsole --os-variant centos7.0 --cpu host-passthrough,match=exact > /VirtualMachines/${host_name}.xml"
-  ${SSH} root@${kvm_host}.${DOMAIN} "virsh define /VirtualMachines/${host_name}.xml"
+  ${SSH} root@${kvm_host}.${DOMAIN} "mkdir -p /VirtualMachines/${host_name} ; \
+    virt-install --print-xml 1 --name ${host_name} --memory ${memory} --vcpus ${cpu} --boot=hd,network,menu=on,useserial=on ${DISK_CONFIG} --network bridge=br0 --graphics none --noautoconsole --os-variant centos7.0 --cpu host-passthrough,match=exact > /VirtualMachines/${host_name}.xml ; \
+    virsh define /VirtualMachines/${host_name}.xml"
+  # Get the MAC address for eth0 in the new VM  
+  var=$(${SSH} root@${kvm_host}.${DOMAIN} "virsh -q domiflist ${host_name} | grep br0")
+  mac_addr=$(echo ${var} | cut -d" " -f5)
+  yq e "${yq_loc} = \"${mac_addr}\"" -i ${CLUSTER_CONFIG}
 }
 
 if [[ -z ${SUB_DOMAIN} ]]
 then
   labctx
+else
+  labctx ${SUB_DOMAIN}
 fi
 
-DONE=false
-DOMAIN_COUNT=$(yq e ".sub-domain-configs" ${CONFIG_FILE} | yq e 'length' -)
-let i=0
-while [[ i -lt ${DOMAIN_COUNT} ]]
-do
-  domain_name=$(yq e ".sub-domain-configs.[${i}].name" ${CONFIG_FILE})
-  if [[ ${domain_name} == ${SUB_DOMAIN} ]]
-  then
-    INDEX=${i}
-    DONE=true
-    break
-  fi
-  i=$(( ${i} + 1 ))
-done
-if [[ ${DONE} == "false" ]]
+if [[ ${LAB_CTX_ERROR} == "true" ]]
 then
-  echo "Domain Entry Not Found In Config File."
   exit 1
 fi
 
-EDGE_ROUTER=$(yq e ".router" ${CONFIG_FILE})
-LAB_DOMAIN=$(yq e ".domain" ${CONFIG_FILE})
-BASTION_HOST=$(yq e ".bastion-ip" ${CONFIG_FILE})
-SUB_DOMAIN=$(yq e ".sub-domain-configs.[${INDEX}].name" ${CONFIG_FILE})
-ROUTER=$(yq e ".sub-domain-configs.[${INDEX}].router-ip" ${CONFIG_FILE})
-NETWORK=$(yq e ".sub-domain-configs.[${INDEX}].network" ${CONFIG_FILE})
-NETMASK=$(yq e ".sub-domain-configs.[${INDEX}].netmask" ${CONFIG_FILE})
-CLUSTER_CONFIG=$(yq e ".sub-domain-configs.[${INDEX}].cluster-config-file" ${CONFIG_FILE})
-DOMAIN="${SUB_DOMAIN}.${LAB_DOMAIN}"
-REGISTRY=$(yq e ".cluster.proxy-registry" ${CLUSTER_CONFIG})
-CLUSTER_NAME=$(yq e ".cluster.name" ${CLUSTER_CONFIG})
-CLUSTER_CIDR=$(yq e ".cluster.cluster-cidr" ${CLUSTER_CONFIG})
-SERVICE_CIDR=$(yq e ".cluster.service-cidr" ${CLUSTER_CONFIG})
-BUTANE_SPEC_VERSION=$(yq e ".cluster.butane-spec-version" ${CLUSTER_CONFIG})
-OKD_VERSION=$(yq e ".cluster.release" ${CLUSTER_CONFIG})
 INSTALL_URL="http://${BASTION_HOST}/install"
 PULL_SECRET_FILE=$(yq e ".cluster.secret-file" ${CLUSTER_CONFIG})
 PULL_SECRET=$(cat ${PULL_SECRET_FILE})
-
-IFS=. read -r i1 i2 i3 i4 << EOF
-${NETWORK}
-EOF
-NET_PREFIX=${i1}.${i2}.${i3}
-NET_PREFIX_ARPA=${i3}.${i2}.${i1}
 
 WORK_DIR=${OKD_LAB_PATH}/${CLUSTER_NAME}-${SUB_DOMAIN}-${LAB_DOMAIN}
 mkdir -p ${WORK_DIR}
 rm -rf ${WORK_DIR}/ipxe-work-dir
 rm -rf ${WORK_DIR}/dns-work-dir
-mkdir -p ${WORK_DIR}/ipxe-work-dir/ignition
 
+mkdir -p ${WORK_DIR}/ipxe-work-dir/ignition
 mkdir -p ${WORK_DIR}/dns-work-dir
 
 if [[ -d ${OKD_LAB_PATH}/lab-config/${CLUSTER_NAME}-${SUB_DOMAIN}-${LAB_DOMAIN} ]]
@@ -205,7 +163,8 @@ then
 fi
 mkdir -p ${OKD_LAB_PATH}/lab-config/${CLUSTER_NAME}-${SUB_DOMAIN}-${LAB_DOMAIN}
 SSH_KEY=$(cat ${OKD_LAB_PATH}/id_rsa.pub)
-NEXUS_CERT=$(openssl s_client -showcerts -connect ${REGISTRY} </dev/null 2>/dev/null|openssl x509 -outform PEM | while read line; do echo "  ${line}"; done)
+NEXUS_CERT=$(openssl s_client -showcerts -connect ${PROXY_REGISTRY} </dev/null 2>/dev/null|openssl x509 -outform PEM | while read line; do echo "  ${line}"; done)
+
 CP_REPLICAS=$(yq e ".control-plane.okd-hosts" ${CLUSTER_CONFIG} | yq e 'length' -)
 if [[ ${CP_REPLICAS} != "1" ]]
 then
@@ -215,7 +174,7 @@ fi
 
 # Create and deploy ignition files single-node-ignition-config
 rm -rf ${WORK_DIR}/okd-install-dir
-mkdir ${WORK_DIR}/okd-install-dir
+mkdir -p ${WORK_DIR}/okd-install-dir
 
 #Create Control Plane Node
 metal=$(yq e ".control-plane.metal" ${CLUSTER_CONFIG})
@@ -228,33 +187,28 @@ fi
 
 ip_addr=$(yq e ".control-plane.okd-hosts.[0].ip-addr" ${CLUSTER_CONFIG})
 host_name=${CLUSTER_NAME}-node
-if [[ ${metal} == "true" ]]
+if [[ ${platform} == "qemu" ]]
 then
-  mac_addr=$(yq e ".control-plane.okd-hosts.[0].mac-addr" ${CLUSTER_CONFIG})
-else
   memory=$(yq e ".control-plane.node-spec.memory" ${CLUSTER_CONFIG})
   cpu=$(yq e ".control-plane.node-spec.cpu" ${CLUSTER_CONFIG})
   root_vol=$(yq e ".control-plane.node-spec.root_vol" ${CLUSTER_CONFIG})
   kvm_host=$(yq e ".control-plane.okd-hosts.[0].kvm-host" ${CLUSTER_CONFIG})
   # Create the VM
-  createOkdVmNode ${ip_addr} ${host_name} ${kvm_host} sno ${memory} ${cpu} ${root_vol} 0
-  # Get the MAC address for eth0 in the new VM  
-  var=$(${SSH} root@${kvm_host}.${DOMAIN} "virsh -q domiflist ${host_name} | grep br0")
-  mac_addr=$(echo ${var} | cut -d" " -f5)
-  yq e ".control-plane.okd-hosts.[0].mac-addr = \"${mac_addr}\"" -i ${CLUSTER_CONFIG}
+  createOkdVmNode ${ip_addr} ${host_name} ${kvm_host} sno ${memory} ${cpu} ${root_vol} 0 ".control-plane.okd-hosts.[0].mac-addr"
 fi
 # Create the ignition and iPXE boot files
+mac_addr=$(yq e ".control-plane.okd-hosts.[0].mac-addr" ${CLUSTER_CONFIG})
 install_dev=$(yq e ".control-plane.okd-hosts.[0].sno-install-dev" ${CLUSTER_CONFIG})
 boot_dev=$(yq e ".control-plane.okd-hosts.[0].boot-dev" ${CLUSTER_CONFIG})
 
 createInstallConfig ${install_dev}
 cp ${WORK_DIR}/install-config-upi.yaml ${WORK_DIR}/okd-install-dir/install-config.yaml
 openshift-install --dir=${WORK_DIR}/okd-install-dir create single-node-ignition-config
-cp ${WORK_DIR}/okd-install-dir/bootstrap-in-place-for-live-iso.ign ${WORK_DIR}/ipxe-work-dir/sno.ign
-configOkdNode ${ip_addr} ${host_name}.${DOMAIN} ${mac_addr} sno
+cp ${WORK_DIR}/okd-install-dir/bootstrap-in-place-for-live-iso.ign ${WORK_DIR}/ipxe-work-dir/ignition/${mac_addr//:/-}.ign
 createSnoBipDNS ${host_name} ${ip_addr}
 
-${SSH} root@${ROUTER} "HOST=\$(uci add dhcp host) ; \
+# Create an IP reservation for DHCP
+${SSH} root@${DOMAIN_ROUTER} "HOST=\$(uci add dhcp host) ; \
     uci set dhcp.\${HOST}.name=${host_name} ; \
     uci set dhcp.\${HOST}.mac=${mac_addr} ; \
     uci set dhcp.\${HOST}.ip=${ip_addr} ; \
@@ -270,21 +224,21 @@ KERNEL_URL=$(openshift-install coreos print-stream-json | jq -r '.architectures.
 INITRD_URL=$(openshift-install coreos print-stream-json | jq -r '.architectures.x86_64.artifacts.metal.formats.pxe.initramfs.location')
 ROOTFS_URL=$(openshift-install coreos print-stream-json | jq -r '.architectures.x86_64.artifacts.metal.formats.pxe.rootfs.location')
 
-${SSH} root@${BASTION_HOST} "if [[ ! -d /usr/local/www/install/fcos/${OKD_VERSION} ]] ; \
-  then mkdir -p /usr/local/www/install/fcos/${OKD_VERSION} ; \
-  curl -o /usr/local/www/install/fcos/${OKD_VERSION}/vmlinuz ${KERNEL_URL} ; \
-  curl -o /usr/local/www/install/fcos/${OKD_VERSION}/initrd ${INITRD_URL} ; \
-  curl -o /usr/local/www/install/fcos/${OKD_VERSION}/rootfs.img ${ROOTFS_URL} ; \
+${SSH} root@${BASTION_HOST} "if [[ ! -d /usr/local/www/install/fcos/${OKD_RELEASE} ]] ; \
+  then mkdir -p /usr/local/www/install/fcos/${OKD_RELEASE} ; \
+  curl -o /usr/local/www/install/fcos/${OKD_RELEASE}/vmlinuz ${KERNEL_URL} ; \
+  curl -o /usr/local/www/install/fcos/${OKD_RELEASE}/initrd ${INITRD_URL} ; \
+  curl -o /usr/local/www/install/fcos/${OKD_RELEASE}/rootfs.img ${ROOTFS_URL} ; \
   fi"
 
 cp ${WORK_DIR}/okd-install-dir/auth/kubeconfig ${OKD_LAB_PATH}/lab-config/${CLUSTER_NAME}-${SUB_DOMAIN}-${LAB_DOMAIN}/
 chmod 400 ${OKD_LAB_PATH}/lab-config/${CLUSTER_NAME}-${SUB_DOMAIN}-${LAB_DOMAIN}/kubeconfig
 
-cat ${WORK_DIR}/dns-work-dir/forward.zone | ${SSH} root@${ROUTER} "cat >> /etc/bind/db.${DOMAIN}"
-cat ${WORK_DIR}/dns-work-dir/reverse.zone | ${SSH} root@${ROUTER} "cat >> /etc/bind/db.${NET_PREFIX_ARPA}"
-${SSH} root@${ROUTER} "/etc/init.d/named stop && sleep 2 && /etc/init.d/named start && sleep 2"
+cat ${WORK_DIR}/dns-work-dir/forward.zone | ${SSH} root@${DOMAIN_ROUTER} "cat >> /etc/bind/db.${DOMAIN}"
+cat ${WORK_DIR}/dns-work-dir/reverse.zone | ${SSH} root@${DOMAIN_ROUTER} "cat >> /etc/bind/db.${DOMAIN_ARPA}"
+${SSH} root@${DOMAIN_ROUTER} "/etc/init.d/named stop && sleep 2 && /etc/init.d/named start && sleep 2"
 ${SSH} root@${EDGE_ROUTER} "/etc/init.d/named stop && sleep 2 && /etc/init.d/named start"
 ${SSH} root@${BASTION_HOST} "mkdir -p /usr/local/www/install/fcos/ignition/${CLUSTER_NAME}-${SUB_DOMAIN}"
 ${SCP} -r ${WORK_DIR}/ipxe-work-dir/ignition/*.ign root@${BASTION_HOST}:/usr/local/www/install/fcos/ignition/${CLUSTER_NAME}-${SUB_DOMAIN}/
 ${SSH} root@${BASTION_HOST} "chmod 644 /usr/local/www/install/fcos/ignition/${CLUSTER_NAME}-${SUB_DOMAIN}/*"
-${SCP} -r ${WORK_DIR}/ipxe-work-dir/*.ipxe root@${ROUTER}:/data/tftpboot/ipxe/
+${SCP} -r ${WORK_DIR}/ipxe-work-dir/*.ipxe root@${DOMAIN_ROUTER}:/data/tftpboot/ipxe/
