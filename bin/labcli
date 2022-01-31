@@ -1,22 +1,18 @@
 #!/bin/bash
 . ${OKD_LAB_PATH}/bin/labEnv.sh
 . ${OKD_LAB_PATH}/bin/labUtils.sh
+. ${OKD_LAB_PATH}/bin/piUtils.sh
+. ${OKD_LAB_PATH}/bin/routerUtils.sh
 
 SSH="ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null"
 SCP="scp -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null"
 START="false"
 STOP="false"
-DEPLOY_CLUSTER="false"
-DEPLOY_WORKERS="false"
-DEPLOY_KVM_HOST="false"
-DESTROY_CLUSTER="false"
-DESTROY_WORKER="false"
-DESTROY_KVM_HOST="false"
-BOOTSTRAP="false"
-CONTROL_PLANE="false"
+DEPLOY="false"
+DESTROY="false"
+CONFIG_PI="false"
+CONFIG_ROUTER="false"
 ADD_USER="false"
-WORKER="false"
-CONFIG_FILE=${LAB_CONFIG_FILE}
 
 for i in "$@"
 do
@@ -51,23 +47,20 @@ do
     -d=*|--domain=*)
       SUB_DOMAIN="${i#*=}"
     ;;
+    --pi)
+      CONFIG_PI="true"
+    ;;
+    --router)
+      CONFIG_ROUTER="true"
+    ;;
     --disconnect)
       noInternet
     ;;
     --connect)
       restoreInternet
     ;;
-    --deploy-cluster)
-      DEPLOY_CLUSTER="true"
-    ;;
     --deploy)
       DEPLOY="true"
-    ;;
-    --deploy-workers)
-      DEPLOY_WORKERS="true"
-    ;;
-    --deploy-host)
-      DEPLOY_KVM_HOST="true"
     ;;
     --destroy)
       DESTROY="true"
@@ -149,31 +142,25 @@ then
     case $i in
       -b|--bootstrap)
         DELETE_BOOTSTRAP=true
-       
       ;;
       -w=*|--worker=*)
         DELETE_WORKER=true
         W_HOST_NAME="${i#*=}"
-       
       ;;
       -c|--cluster)
         DELETE_CLUSTER=true
         DELETE_WORKER=true
         W_HOST_NAME="all"
-       
       ;;
       -k=*|--kvm-host=*)
         DELETE_KVM_HOST=true
         K_HOST_NAME="${i#*=}"
-       
       ;;
       -m=*|--master=*)
         M_HOST_NAME="${i#*=}"
-       
       ;;
       *)
         # catch all
-       
       ;;
     esac
   done
@@ -391,6 +378,83 @@ then
   fi
   if [[ ${OAUTH_INIT} == "true" ]]
   then
-    oc patch oauth cluster --type json --patch '[{"op":"add","path":"/spec/identityProviders/-","value":{"name":"okd_htpasswd_idp","mappingMethod":"claim","type":"HTPasswd","htpasswd":{"fileData":{"name":"okd-htpasswd-secret"}}}}]'
+    oc patch oauth cluster --type merge --patch '{"spec":{"identityProviders":[{"name":"okd_htpasswd_idp","mappingMethod":"claim","type":"HTPasswd","htpasswd":{"fileData":{"name":"okd-htpasswd-secret"}}}]}}'
+  fi
+fi
+
+if [[ ${CONFIG_PI} == "true" ]]
+then
+  PI_WORK_DIR=${OKD_LAB_PATH}/work-dir-pi
+  rm -rf ${PI_WORK_DIR}
+  mkdir -p ${PI_WORK_DIR}/config
+  for i in "$@"
+  do
+    case ${i} in
+      -i|--init)
+        initPi
+      ;;
+      -s|--setup)
+        piSetup
+      ;;
+      -n|--nexus)
+        instalNexus
+      ;;
+      -g|--gitea)
+        installGitea
+      ;;
+      *)
+        # catch all
+      ;;
+    esac
+  done
+fi
+
+if [[ ${CONFIG_ROUTER} == "true" ]]
+then
+  EDGE="false"
+  WLAN="false"
+  WWAN="false"
+  INIT_IP=192.168.8.1
+  WIFI_CHANNEL=3
+  WORK_DIR=${OKD_LAB_PATH}/work-dir-router
+  rm -rf ${WORK_DIR}
+  mkdir -p ${WORK_DIR}/dns
+
+  for i in "$@"
+  do
+    case ${i} in
+      -e|--edge)
+        EDGE=true
+      ;;
+      -wl|--wireless-lan)
+        WLAN="true"
+      ;;
+      -ww|--wireless-wan)
+        WWAN="true"
+      ;;
+      -i|--init)
+        INIT="true"
+      ;;
+      -s|--setup)
+        SETUP="true"
+      ;;
+      -aw|--add-wireless)
+        ADD_WIRELESS="true"
+      ;;
+      *)
+        # catch all
+      ;;
+    esac
+  done
+
+  if [[ ${INIT} == "true" ]]
+  then
+    initRouter
+  elif [[ ${SETUP} == "true" ]]
+  then
+    setupRouter
+  elif [[ ${ADD_WIRELESS} == "true" ]]
+  then
+    addWireless
   fi
 fi

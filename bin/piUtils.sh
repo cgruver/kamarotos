@@ -1,20 +1,3 @@
-#!/bin/bash
-. ${OKD_LAB_PATH}/bin/labEnv.sh
-
-SSH="ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null"
-SCP="scp -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null"
-
-PI_WORK_DIR=${OKD_LAB_PATH}/work-dir-pi
-rm -rf ${PI_WORK_DIR}
-mkdir -p ${PI_WORK_DIR}/config
-
-LAB_CTX_ERROR="false"
-lab --edge
-if [[ ${LAB_CTX_ERROR} == "true" ]]
-then
-  exit 1
-fi
-
 function initPi() {
 
   OPENWRT_VER=$(yq e ".openwrt-version" ${LAB_CONFIG_FILE})
@@ -391,27 +374,3 @@ EOF
   ${SSH} root@${EDGE_ROUTER} "/etc/init.d/named stop && /etc/init.d/named start"
 }
 
-for i in "$@"
-do
-  case ${i} in
-    -i|--init)
-      initPi
-      shift
-    ;;
-    -s|--setup)
-      piSetup
-      shift
-    ;;
-    -n|--nexus)
-      instalNexus
-      shift
-    ;;
-    -g|--gitea)
-      installGitea
-      shift
-    ;;
-    *)
-          echo "USAGE: configPi.sh [-s|--setup] [-n|--nexus] [-g|--gitea]"
-    ;;
-  esac
-done

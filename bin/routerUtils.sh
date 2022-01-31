@@ -1,18 +1,3 @@
-#!/bin/bash
-. ${OKD_LAB_PATH}/bin/labEnv.sh
-
-LAB_CTX_ERROR="false"
-EDGE="false"
-WLAN="false"
-WWAN="false"
-SSH="ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null"
-SCP="scp -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null"
-INIT_IP=192.168.8.1
-WIFI_CHANNEL=3
-WORK_DIR=${OKD_LAB_PATH}/work-dir-router
-rm -rf ${WORK_DIR}
-mkdir -p ${WORK_DIR}/dns
-
 function initRouter() {
   if [[ ${EDGE} == "true" ]]
   then
@@ -631,51 +616,3 @@ function addWireless() {
     uci commit wireless ; \
     /etc/init.d/network reload"
 }
-
-for i in "$@"
-do
-  case ${i} in
-    -e|--edge)
-      EDGE=true
-      shift
-    ;;
-    -wl|--wireless-lan)
-      WLAN="true"
-      shift
-    ;;
-    -ww|--wireless-wan)
-      WWAN="true"
-      shift
-    ;;
-    -i|--init)
-      INIT="true"
-      shift
-    ;;
-    -s|--setup)
-      SETUP="true"
-      shift
-    ;;
-    -aw|--add-wireless)
-      ADD_WIRELESS="true"
-      shift
-    ;;
-    -d=*|--domain=*)
-      SUB_DOMAIN="${i#*=}"
-      shift
-    ;;
-    *)
-          echo "USAGE: initRouter.sh -e -c=path/to/config/file -d=sub-domain-name"
-    ;;
-  esac
-done
-
-if [[ ${INIT} == "true" ]]
-then
-  initRouter
-elif [[ ${SETUP} == "true" ]]
-then
-  setupRouter
-elif [[ ${ADD_WIRELESS} == "true" ]]
-then
-  addWireless
-fi
