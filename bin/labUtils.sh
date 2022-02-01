@@ -2,7 +2,8 @@ function deployCluster() {
   WORK_DIR=${OKD_LAB_PATH}/${CLUSTER_NAME}-${SUB_DOMAIN}-${LAB_DOMAIN}
   rm -rf ${WORK_DIR}
   mkdir -p ${WORK_DIR}/ipxe-work-dir/ignition
-  mkdir -p ${WORK_DIR}/dns-work-dir
+  mkdir ${WORK_DIR}/dns-work-dir
+  mkdir ${WORK_DIR}/okd-install-dir
   PULL_SECRET_FILE=$(yq e ".cluster.secret-file" ${CLUSTER_CONFIG})
   PULL_SECRET=$(cat ${PULL_SECRET_FILE})
   CP_REPLICAS="3"
@@ -27,8 +28,7 @@ function deployCluster() {
   fi
 
   # Create and deploy ignition files single-node-ignition-config
-  rm -rf ${WORK_DIR}/okd-install-dir
-  mkdir ${WORK_DIR}/okd-install-dir
+  
 
   if [[ $(yq e ". | has(\"bootstrap\")" ${CLUSTER_CONFIG}) == "false" ]]
   then
@@ -283,7 +283,6 @@ function startBootstrap() {
     root_vol=$(yq e ".bootstrap.node-spec.root_vol" ${CLUSTER_CONFIG})
     bridge_dev=$(yq e ".bootstrap.bridge-dev" ${CLUSTER_CONFIG})
     WORK_DIR=${OKD_LAB_PATH}/${CLUSTER_NAME}-${SUB_DOMAIN}-${LAB_DOMAIN}
-    rm -rf ${WORK_DIR}
     mkdir -p ${WORK_DIR}/bootstrap
     qemu-img create -f qcow2 ${WORK_DIR}/bootstrap/bootstrap-node.qcow2 ${root_vol}G
     qemu-system-x86_64 -accel accel=hvf -m ${memory}M -smp ${cpu} -display none -nographic -drive file=${WORK_DIR}/bootstrap/bootstrap-node.qcow2,if=none,id=disk1  -device ide-hd,bus=ide.0,drive=disk1,id=sata0-0-0,bootindex=1 -boot n -netdev vde,id=nic0,sock=/var/run/vde.bridged.${bridge_dev}.ctl -device virtio-net-pci,netdev=nic0,mac=52:54:00:a1:b2:c3
