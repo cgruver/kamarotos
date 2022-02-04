@@ -374,7 +374,7 @@ function deleteControlPlane() {
 function startWorker() {
   let node_count=$(yq e ".compute-nodes" ${CLUSTER_CONFIG} | yq e 'length' -)
   let node_index=0
-  while [[ i -lt ${node_count} ]]
+  while [[ node_index -lt ${node_count} ]]
   do
     host_name=$(yq e ".compute-nodes.[${node_index}].name" ${CLUSTER_CONFIG})
     if [[ $(yq e ".compute-nodes.[${node_index}].metal" ${CLUSTER_CONFIG}) == "true" ]]
