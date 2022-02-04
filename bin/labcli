@@ -329,6 +329,9 @@ then
       -w|--worker)
         stopWorkers
       ;;
+      -k|--kvm)
+        stopKvmHosts
+      ;;
       *)
         # catch all
       ;;

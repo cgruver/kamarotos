@@ -111,37 +111,37 @@ function deployCluster() {
     echo "api-int.${CLUSTER_NAME}.${DOMAIN}.    IN      A      ${ingress_ip} ; ${CLUSTER_NAME}-${DOMAIN}-cp" >> ${WORK_DIR}/dns-work-dir/forward.zone
     bs_o4=$(echo ${bs_ip_addr} | cut -d"." -f4)
     echo "${bs_o4}    IN      PTR     ${CLUSTER_NAME}-bootstrap.${DOMAIN}.   ; ${CLUSTER_NAME}-${DOMAIN}-bs" >> ${WORK_DIR}/dns-work-dir/reverse.zone
-    for i in 0 1 2
+    for node_index in 0 1 2
     do
-      ip_addr=$(yq e ".control-plane.okd-hosts.[${i}].ip-addr" ${CLUSTER_CONFIG})
-      host_name=${CLUSTER_NAME}-master-${i}
-      yq e ".control-plane.okd-hosts.[${i}].name = \"${host_name}\"" -i ${CLUSTER_CONFIG}
+      ip_addr=$(yq e ".control-plane.okd-hosts.[${node_index}].ip-addr" ${CLUSTER_CONFIG})
+      host_name=${CLUSTER_NAME}-master-${node_index}
+      yq e ".control-plane.okd-hosts.[${node_index}].name = \"${host_name}\"" -i ${CLUSTER_CONFIG}
       if [[ ${metal} == "true" ]]
       then
-        boot_dev=$(yq e ".control-plane.okd-hosts.[${i}].boot-dev" ${CLUSTER_CONFIG})
+        boot_dev=$(yq e ".control-plane.okd-hosts.[${node_index}].boot-dev" ${CLUSTER_CONFIG})
       else
         memory=$(yq e ".control-plane.node-spec.memory" ${CLUSTER_CONFIG})
         cpu=$(yq e ".control-plane.node-spec.cpu" ${CLUSTER_CONFIG})
         root_vol=$(yq e ".control-plane.node-spec.root_vol" ${CLUSTER_CONFIG})
-        kvm_host=$(yq e ".control-plane.okd-hosts.[${i}].kvm-host" ${CLUSTER_CONFIG})
+        kvm_host=$(yq e ".control-plane.okd-hosts.[${node_index}].kvm-host" ${CLUSTER_CONFIG})
         boot_dev="sda"
         # Create the VM
-        createOkdVmNode ${ip_addr} ${host_name} ${kvm_host} master ${memory} ${cpu} ${root_vol} 0 ".control-plane.okd-hosts.[${i}].mac-addr"
+        createOkdVmNode ${ip_addr} ${host_name} ${kvm_host} master ${memory} ${cpu} ${root_vol} 0 ".control-plane.okd-hosts.[${node_index}].mac-addr"
       fi
       # Create the ignition and iPXE boot files
-      mac_addr=$(yq e ".control-plane.okd-hosts.[${i}].mac-addr" ${CLUSTER_CONFIG})
+      mac_addr=$(yq e ".control-plane.okd-hosts.[${node_index}].mac-addr" ${CLUSTER_CONFIG})
       configOkdNode ${ip_addr} ${host_name}.${DOMAIN} ${mac_addr} master
       createPxeFile ${mac_addr} ${platform} ${boot_dev}
       # Create control plane node DNS Records:
       echo "${host_name}.${DOMAIN}.   IN      A      ${ip_addr} ; ${CLUSTER_NAME}-${DOMAIN}-cp" >> ${WORK_DIR}/dns-work-dir/forward.zone
-      echo "etcd-${i}.${DOMAIN}.          IN      A      ${ip_addr} ; ${CLUSTER_NAME}-${DOMAIN}-cp" >> ${WORK_DIR}/dns-work-dir/forward.zone
+      echo "etcd-${node_index}.${DOMAIN}.          IN      A      ${ip_addr} ; ${CLUSTER_NAME}-${DOMAIN}-cp" >> ${WORK_DIR}/dns-work-dir/forward.zone
       o4=$(echo ${ip_addr} | cut -d"." -f4)
       echo "${o4}    IN      PTR     ${host_name}.${DOMAIN}.  ; ${CLUSTER_NAME}-${DOMAIN}-cp" >> ${WORK_DIR}/dns-work-dir/reverse.zone
     done
     # Create DNS SRV Records:
-    for i in 0 1 2
+    for node_index in 0 1 2
     do
-      echo "_etcd-server-ssl._tcp.${CLUSTER_NAME}.${DOMAIN}    86400     IN    SRV     0    10    2380    etcd-${i}.${CLUSTER_NAME}.${DOMAIN}. ; ${CLUSTER_NAME}-${DOMAIN}-cp" >> ${WORK_DIR}/dns-work-dir/forward.zone
+      echo "_etcd-server-ssl._tcp.${CLUSTER_NAME}.${DOMAIN}    86400     IN    SRV     0    10    2380    etcd-${node_index}.${CLUSTER_NAME}.${DOMAIN}. ; ${CLUSTER_NAME}-${DOMAIN}-cp" >> ${WORK_DIR}/dns-work-dir/forward.zone
     done
     # Create The HA-Proxy Load Balancer
     createLbConfig
@@ -171,36 +171,36 @@ function deployWorkers() {
   setKubeConfig
   oc extract -n openshift-machine-api secret/worker-user-data --keys=userData --to=- > ${WORK_DIR}/ipxe-work-dir/worker.ign
   let NODE_COUNT=$(yq e ".compute-nodes" ${CLUSTER_CONFIG} | yq e 'length' -)
-  let i=0
-  while [[ i -lt ${NODE_COUNT} ]]
+  let node_index=0
+  while [[ node_index -lt ${NODE_COUNT} ]]
   do
-    host_name=${CLUSTER_NAME}-worker-${i}
-    yq e ".compute-nodes.[${i}].name = \"${host_name}\"" -i ${CLUSTER_CONFIG}
-    ip_addr=$(yq e ".compute-nodes.[${i}].ip-addr" ${CLUSTER_CONFIG})
-    if [[ $(yq e ".compute-nodes.[${i}].metal" ${CLUSTER_CONFIG}) == "true" ]]
+    host_name=${CLUSTER_NAME}-worker-${node_index}
+    yq e ".compute-nodes.[${node_index}].name = \"${host_name}\"" -i ${CLUSTER_CONFIG}
+    ip_addr=$(yq e ".compute-nodes.[${node_index}].ip-addr" ${CLUSTER_CONFIG})
+    if [[ $(yq e ".compute-nodes.[${node_index}].metal" ${CLUSTER_CONFIG}) == "true" ]]
     then
       platform=metal
-      boot_dev=$(yq e ".compute-nodes.[${i}].boot-dev" ${CLUSTER_CONFIG})
+      boot_dev=$(yq e ".compute-nodes.[${node_index}].boot-dev" ${CLUSTER_CONFIG})
     else
       platform=qemu
       boot_dev="sda"
-      memory=$(yq e ".compute-nodes.[${i}].node-spec.memory" ${CLUSTER_CONFIG})
-      cpu=$(yq e ".compute-nodes.[${i}].node-spec.cpu" ${CLUSTER_CONFIG})
-      root_vol=$(yq e ".compute-nodes.[${i}].node-spec.root_vol" ${CLUSTER_CONFIG})
-      ceph_vol=$(yq e ".compute-nodes.[${i}].node-spec.ceph_vol" ${CLUSTER_CONFIG})
-      kvm_host=$(yq e ".compute-nodes.[${i}].kvm-host" ${CLUSTER_CONFIG})
+      memory=$(yq e ".compute-nodes.[${node_index}].node-spec.memory" ${CLUSTER_CONFIG})
+      cpu=$(yq e ".compute-nodes.[${node_index}].node-spec.cpu" ${CLUSTER_CONFIG})
+      root_vol=$(yq e ".compute-nodes.[${node_index}].node-spec.root_vol" ${CLUSTER_CONFIG})
+      ceph_vol=$(yq e ".compute-nodes.[${node_index}].node-spec.ceph_vol" ${CLUSTER_CONFIG})
+      kvm_host=$(yq e ".compute-nodes.[${node_index}].kvm-host" ${CLUSTER_CONFIG})
       # Create the VM
-      createOkdVmNode ${ip_addr} ${host_name} ${kvm_host} worker ${memory} ${cpu} ${root_vol} ${ceph_vol} ".compute-nodes.[${i}].mac-addr"
+      createOkdVmNode ${ip_addr} ${host_name} ${kvm_host} worker ${memory} ${cpu} ${root_vol} ${ceph_vol} ".compute-nodes.[${node_index}].mac-addr"
     fi
     # Create the ignition and iPXE boot files
-    mac_addr=$(yq e ".compute-nodes.[${i}].mac-addr" ${CLUSTER_CONFIG})
+    mac_addr=$(yq e ".compute-nodes.[${node_index}].mac-addr" ${CLUSTER_CONFIG})
     configOkdNode ${ip_addr} ${host_name}.${DOMAIN} ${mac_addr} worker
     createPxeFile ${mac_addr} ${platform} ${boot_dev}
     # Create DNS entries
     echo "${host_name}.${DOMAIN}.   IN      A      ${ip_addr} ; ${host_name}-${DOMAIN}-wk" >> ${WORK_DIR}/dns-work-dir/forward.zone
     o4=$(echo ${ip_addr} | cut -d"." -f4)
     echo "${o4}    IN      PTR     ${host_name}.${DOMAIN}. ; ${host_name}-${DOMAIN}-wk" >> ${WORK_DIR}/dns-work-dir/reverse.zone
-    i=$(( ${i} + 1 ))
+    node_index=$(( ${node_index} + 1 ))
   done
   prepNodeFiles
 }
@@ -232,25 +232,25 @@ function deployKvmHosts() {
 
   if [[ ${HOST_NAME} == "" ]]
   then
-    let i=0
-    while [[ i -lt ${HOST_COUNT} ]]
+    let node_index=0
+    while [[ node_index -lt ${HOST_COUNT} ]]
     do
-      buildHostConfig ${i}
-      i=$(( ${i} + 1 ))
+      buildHostConfig ${node_index}
+      node_index=$(( ${node_index} + 1 ))
     done
   else
     DONE=false
-    let i=0
-    while [[ i -lt ${HOST_COUNT} ]]
+    let node_index=0
+    while [[ node_index -lt ${HOST_COUNT} ]]
     do
-      host_name=$(yq e ".kvm-hosts.[${i}].host-name" ${CONFIG_FILE})
+      host_name=$(yq e ".kvm-hosts.[${node_index}].host-name" ${CONFIG_FILE})
       if [[ ${host_name} == ${HOST_NAME} ]]
       then
-        buildHostConfig ${i}
+        buildHostConfig ${node_index}
         DONE=true
         break
       fi
-      i=$(( ${i} + 1 ))
+      node_index=$(( ${node_index} + 1 ))
     done
     if [[ ${DONE} == "false" ]]
     then
@@ -297,10 +297,10 @@ function startControlPlane() {
   then
     echo "This script will not auto start bare-metal nodes.  Please power them on manually."
   else
-    for i in 0 1 2
+    for node_index in 0 1 2
     do
-      kvm_host=$(yq e ".control-plane.okd-hosts.[${i}].kvm-host" ${CLUSTER_CONFIG})
-      host_name=$(yq e ".control-plane.okd-hosts.[${i}].name" ${CLUSTER_CONFIG})
+      kvm_host=$(yq e ".control-plane.okd-hosts.[${node_index}].kvm-host" ${CLUSTER_CONFIG})
+      host_name=$(yq e ".control-plane.okd-hosts.[${node_index}].name" ${CLUSTER_CONFIG})
       startNode ${kvm_host} ${host_name}
       echo "Pause for 15 seconds to stagger node start up."
       sleep 15
@@ -309,10 +309,13 @@ function startControlPlane() {
 }
 
 function stopControlPlane() {
-  for i in 0 1 2
+  let node_count=$(yq e ".control-plane.okd-hosts" ${CLUSTER_CONFIG} | yq e 'length' -)
+  let node_index=0
+  while [[ ${node_index} -lt ${node_count} ]]
   do
-    host_name=$(yq e ".control-plane.okd-hosts.[${i}].name" ${CLUSTER_CONFIG})
-    ${SSH} -o ConnectTimeout=5 core@okd4-master-${i}.${DOMAIN} "sudo systemctl poweroff"
+    host_name=$(yq e ".control-plane.okd-hosts.[${node_index}].name" ${CLUSTER_CONFIG})
+    ${SSH} -o ConnectTimeout=5 core@${host_name}.${DOMAIN} "sudo systemctl poweroff"
+    node_index=$(( ${node_index} + 1 ))
   done
 }
 
@@ -328,7 +331,7 @@ function deleteControlPlane() {
   metal=$(yq e ".control-plane.metal" ${CLUSTER_CONFIG})
   if [[ ${SNO} == "true" ]]
   then
-    mac_addr=$(yq e ".control-plane.okd-hosts.[${i}].mac-addr" ${CLUSTER_CONFIG})
+    mac_addr=$(yq e ".control-plane.okd-hosts.[0].mac-addr" ${CLUSTER_CONFIG})
     host_name=$(yq e ".control-plane.okd-hosts.[0].name" ${CLUSTER_CONFIG})
     if [[ ${metal} == "true" ]]
     then
@@ -340,16 +343,16 @@ function deleteControlPlane() {
     fi
     deletePxeConfig ${mac_addr}
   else
-    for i in 0 1 2
+    for node_index in 0 1 2
     do
-      mac_addr=$(yq e ".control-plane.okd-hosts.[${i}].mac-addr" ${CLUSTER_CONFIG})
-      host_name=$(yq e ".control-plane.okd-hosts.[${i}].name" ${CLUSTER_CONFIG})
+      mac_addr=$(yq e ".control-plane.okd-hosts.[${node_index}].mac-addr" ${CLUSTER_CONFIG})
+      host_name=$(yq e ".control-plane.okd-hosts.[${node_index}].name" ${CLUSTER_CONFIG})
       if [[ ${metal} == "true" ]]
       then
-        boot_dev=$(yq e ".control-plane.okd-hosts.[${i}].boot-dev" ${CLUSTER_CONFIG})
+        boot_dev=$(yq e ".control-plane.okd-hosts.[${node_index}].boot-dev" ${CLUSTER_CONFIG})
         destroyMetal core ${host_name} ${boot_dev}
       else
-        kvm_host=$(yq e ".control-plane.okd-hosts.[${i}].kvm-host" ${CLUSTER_CONFIG})
+        kvm_host=$(yq e ".control-plane.okd-hosts.[${node_index}].kvm-host" ${CLUSTER_CONFIG})
         deleteNodeVm ${host_name} ${kvm_host}
       fi
       deletePxeConfig ${mac_addr}
@@ -369,39 +372,39 @@ function deleteControlPlane() {
 }
 
 function startWorker() {
-  let NODE_COUNT=$(yq e ".compute-nodes" ${CLUSTER_CONFIG} | yq e 'length' -)
-  let i=0
-  while [[ i -lt ${NODE_COUNT} ]]
+  let node_count=$(yq e ".compute-nodes" ${CLUSTER_CONFIG} | yq e 'length' -)
+  let node_index=0
+  while [[ i -lt ${node_count} ]]
   do
-    host_name=$(yq e ".compute-nodes.[${i}].name" ${CLUSTER_CONFIG})
-    if [[ $(yq e ".compute-nodes.[${i}].metal" ${CLUSTER_CONFIG}) == "true" ]]
+    host_name=$(yq e ".compute-nodes.[${node_index}].name" ${CLUSTER_CONFIG})
+    if [[ $(yq e ".compute-nodes.[${node_index}].metal" ${CLUSTER_CONFIG}) == "true" ]]
     then
       echo "This script will not auto start a bare-metal node.  Please power on ${host_name} manually."
     else
-      kvm_host=$(yq e ".compute-nodes.[${i}].kvm-host" ${CLUSTER_CONFIG})  
+      kvm_host=$(yq e ".compute-nodes.[${node_index}].kvm-host" ${CLUSTER_CONFIG})  
       startNode ${kvm_host} ${host_name}
       echo "Pause for 15 seconds to stagger node start up."
       sleep 15
     fi
-    i=$(( ${i} + 1 ))
+    node_index=$(( ${node_index} + 1 ))
   done
 }
 
 function stopWorkers() {
   setKubeConfig
-  let NODE_COUNT=$(yq e ".compute-nodes" ${CLUSTER_CONFIG} | yq e 'length' -)
+  let node_count=$(yq e ".compute-nodes" ${CLUSTER_CONFIG} | yq e 'length' -)
 
   # Cordon Compute Nodes
   cordonNode
 
   # Drain & Shutdown Compute Nodes
-  let i=0
-  while [[ i -lt ${NODE_COUNT} ]]
+  let node_index=0
+  while [[ node_index -lt ${node_count} ]]
   do
-    host_name=$(yq e ".compute-nodes.[${i}].name" ${CLUSTER_CONFIG})
+    host_name=$(yq e ".compute-nodes.[${node_index}].name" ${CLUSTER_CONFIG})
     oc adm drain ${host_name}.${DOMAIN} --ignore-daemonsets --force --grace-period=20 --delete-emptydir-data
     ${SSH} -o ConnectTimeout=5 core@${host_name}.${DOMAIN} "sudo systemctl poweroff"
-    i=$(( ${i} + 1 ))
+    node_index=$(( ${node_index} + 1 ))
   done
 }
 
@@ -426,36 +429,40 @@ function deleteWorker() {
 function cordonNode() {
   setKubeConfig
   let NODE_COUNT=$(yq e ".compute-nodes" ${CLUSTER_CONFIG} | yq e 'length' -)
-  let i=0
-  while [[ i -lt ${NODE_COUNT} ]]
+  let node_index=0
+  while [[ node_index -lt ${NODE_COUNT} ]]
   do
-    host_name=$(yq e ".compute-nodes.[${i}].name" ${CLUSTER_CONFIG})
+    host_name=$(yq e ".compute-nodes.[${node_index}].name" ${CLUSTER_CONFIG})
     oc adm cordon ${host_name}.${DOMAIN}
-    i=$(( ${i} + 1 ))
+    node_index=$(( ${node_index} + 1 ))
   done
 }
 
 function unCordonNode() {
   setKubeConfig
   let NODE_COUNT=$(yq e ".compute-nodes" ${CLUSTER_CONFIG} | yq e 'length' -)
-  let i=0
-  while [[ i -lt ${NODE_COUNT} ]]
+  let node_index=0
+  while [[ node_index -lt ${NODE_COUNT} ]]
   do
-    host_name=$(yq e ".compute-nodes.[${i}].name" ${CLUSTER_CONFIG})
+    host_name=$(yq e ".compute-nodes.[${node_index}].name" ${CLUSTER_CONFIG})
     oc adm uncordon ${host_name}.${DOMAIN}
-    i=$(( ${i} + 1 ))
+    node_index=$(( ${node_index} + 1 ))
   done
 }
 
 function stopCluster() {
   PAUSE=60
-  stopWorker
-  let pause=${PAUSE}
-  while [ ${pause} -gt 0 ]; do
-   echo -ne "Giving Compute Nodes Time to Shutdown: ${pause}\033[0K\r"
-   sleep 1
-   : $((pause--))
-  done
+  node_count=$(yq e ".compute-nodes" ${CLUSTER_CONFIG} | yq e 'length' -)
+  if [[ ${node_count} -gt 0 ]]
+  then
+    stopWorkers
+    let pause=${PAUSE}
+    while [ ${pause} -gt 0 ]; do
+    echo -ne "Giving Compute Nodes Time to Shutdown: ${pause}\033[0K\r"
+    sleep 1
+    : $((pause--))
+    done
+  fi
   stopControlPlane
 }
 
@@ -468,6 +475,16 @@ function deleteNodeVm() {
   ${SSH} root@${kvm_host}.${DOMAIN} "virsh pool-destroy ${host_name}"
   ${SSH} root@${kvm_host}.${DOMAIN} "virsh pool-undefine ${host_name}"
   ${SSH} root@${kvm_host}.${DOMAIN} "rm -rf /VirtualMachines/${host_name}"
+}
+
+function stopKvmHosts() {
+
+  let node_count=$(yq e ".kvm-hosts" ${CLUSTER_CONFIG} | yq e 'length' -)
+  let node_index=0
+  while [[ node_index -lt ${NODE_COUNT} ]]
+  do
+    host_name=$(yq e ".kvm-hosts.[${node_index}].host-name" ${CLUSTER_CONFIG})
+    ssh root@${host_name}.${DOMAIN} "shutdown -h now"
 }
 
 function deleteKvmHost() {
@@ -1122,15 +1139,15 @@ function ocConsole() {
 
 function configInfraNodes() {
   setKubeConfig
-  for i in 0 1 2
+  for node_index in 0 1 2
   do
-    oc label nodes ${CLUSTER_NAME}-master-${i}.${SUB_DOMAIN}.${LAB_DOMAIN} node-role.kubernetes.io/infra=""
+    oc label nodes ${CLUSTER_NAME}-master-${node_index}.${SUB_DOMAIN}.${LAB_DOMAIN} node-role.kubernetes.io/infra=""
   done
   oc patch scheduler cluster --patch '{"spec":{"mastersSchedulable":false}}' --type=merge
   oc patch -n openshift-ingress-operator ingresscontroller default --patch '{"spec":{"nodePlacement":{"nodeSelector":{"matchLabels":{"node-role.kubernetes.io/infra":""}},"tolerations":[{"key":"node.kubernetes.io/unschedulable","effect":"NoSchedule"},{"key":"node-role.kubernetes.io/master","effect":"NoSchedule"}]}}}' --type=merge
-  for i in $(oc get pods -n openshift-ingress-canary | grep -v NAME | cut -d" " -f1)
+  for node_index in $(oc get pods -n openshift-ingress-canary | grep -v NAME | cut -d" " -f1)
   do
-    oc delete pod ${i} -n openshift-ingress-canary
+    oc delete pod ${node_index} -n openshift-ingress-canary
   done
 
   oc patch configs.imageregistry.operator.openshift.io cluster --patch '{"spec":{"nodeSelector":{"node-role.kubernetes.io/infra":""},"tolerations":[{"key":"node.kubernetes.io/unschedulable","effect":"NoSchedule"},{"key":"node-role.kubernetes.io/master","effect":"NoSchedule"}]}}' --type=merge
