@@ -84,6 +84,7 @@ function labctx() {
     setEdgeEnv
     setDomainEnv
   fi
+  echo "Your shell environment is now set up to control lab domain: ${DOMAIN}"
 }
 
 function mask2cidr() {
@@ -135,7 +136,7 @@ function setEdgeEnv() {
     export LAB_CTX_ERROR="true"
   else
     export LAB_DOMAIN=$(yq e ".domain" ${LAB_CONFIG_FILE})
-    export EDGE_ROUTER=$(yq e ".router" ${LAB_CONFIG_FILE})
+    export EDGE_ROUTER=$(yq e ".router-ip" ${LAB_CONFIG_FILE})
     export EDGE_NETMASK=$(yq e ".netmask" ${LAB_CONFIG_FILE})
     export EDGE_NETWORK=$(yq e ".network" ${LAB_CONFIG_FILE})
     export EDGE_CIDR=$(mask2cidr ${EDGE_NETMASK})
