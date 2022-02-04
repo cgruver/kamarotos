@@ -485,6 +485,7 @@ function stopKvmHosts() {
   do
     host_name=$(yq e ".kvm-hosts.[${node_index}].host-name" ${CLUSTER_CONFIG})
     ssh root@${host_name}.${DOMAIN} "shutdown -h now"
+  done
 }
 
 function deleteKvmHost() {
