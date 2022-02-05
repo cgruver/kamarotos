@@ -6,6 +6,7 @@
 
 SSH="ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null"
 SCP="scp -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null"
+
 START="false"
 STOP="false"
 DEPLOY="false"

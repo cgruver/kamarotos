@@ -170,9 +170,9 @@ function deployWorkers() {
   mkdir -p ${WORK_DIR}/dns-work-dir
   setKubeConfig
   oc extract -n openshift-machine-api secret/worker-user-data --keys=userData --to=- > ${WORK_DIR}/ipxe-work-dir/worker.ign
-  let NODE_COUNT=$(yq e ".compute-nodes" ${CLUSTER_CONFIG} | yq e 'length' -)
+  let node_count=$(yq e ".compute-nodes" ${CLUSTER_CONFIG} | yq e 'length' -)
   let node_index=0
-  while [[ node_index -lt ${NODE_COUNT} ]]
+  while [[ node_index -lt ${node_count} ]]
   do
     host_name=${CLUSTER_NAME}-worker-${node_index}
     yq e ".compute-nodes.[${node_index}].name = \"${host_name}\"" -i ${CLUSTER_CONFIG}
@@ -428,9 +428,9 @@ function deleteWorker() {
 
 function cordonNode() {
   setKubeConfig
-  let NODE_COUNT=$(yq e ".compute-nodes" ${CLUSTER_CONFIG} | yq e 'length' -)
+  let node_count=$(yq e ".compute-nodes" ${CLUSTER_CONFIG} | yq e 'length' -)
   let node_index=0
-  while [[ node_index -lt ${NODE_COUNT} ]]
+  while [[ node_index -lt ${node_count} ]]
   do
     host_name=$(yq e ".compute-nodes.[${node_index}].name" ${CLUSTER_CONFIG})
     oc adm cordon ${host_name}.${DOMAIN}
@@ -440,9 +440,9 @@ function cordonNode() {
 
 function unCordonNode() {
   setKubeConfig
-  let NODE_COUNT=$(yq e ".compute-nodes" ${CLUSTER_CONFIG} | yq e 'length' -)
+  let node_count=$(yq e ".compute-nodes" ${CLUSTER_CONFIG} | yq e 'length' -)
   let node_index=0
-  while [[ node_index -lt ${NODE_COUNT} ]]
+  while [[ node_index -lt ${node_count} ]]
   do
     host_name=$(yq e ".compute-nodes.[${node_index}].name" ${CLUSTER_CONFIG})
     oc adm uncordon ${host_name}.${DOMAIN}
@@ -481,10 +481,11 @@ function stopKvmHosts() {
 
   let node_count=$(yq e ".kvm-hosts" ${CLUSTER_CONFIG} | yq e 'length' -)
   let node_index=0
-  while [[ node_index -lt ${NODE_COUNT} ]]
+  while [[ node_index -lt ${node_count} ]]
   do
     host_name=$(yq e ".kvm-hosts.[${node_index}].host-name" ${CLUSTER_CONFIG})
-    ssh root@${host_name}.${DOMAIN} "shutdown -h now"
+    ${SSH} root@${host_name}.${DOMAIN} "shutdown -h now"
+    node_index=$(( ${node_index} + 1 ))
   done
 }
 
@@ -1069,7 +1070,7 @@ function trustClusterCert() {
 }
 
 function noInternet() {
-  ssh root@router.${LAB_DOMAIN} "new_rule=\$(uci add firewall rule) ; \
+  ${SSH} root@router.${LAB_DOMAIN} "new_rule=\$(uci add firewall rule) ; \
     uci set firewall.\${new_rule}.enabled=1 ; \
     uci set firewall.\${new_rule}.target=REJECT ; \
     uci set firewall.\${new_rule}.src=lan ; \
@@ -1083,10 +1084,10 @@ function noInternet() {
 }
 
 function restoreInternet() {
-  local fw_index=$(ssh root@router.${LAB_DOMAIN} "uci show firewall" | grep ${SUB_DOMAIN}-internet-deny | cut -d"[" -f2 | cut -d "]" -f1)
+  local fw_index=$(${SSH} root@router.${LAB_DOMAIN} "uci show firewall" | grep ${SUB_DOMAIN}-internet-deny | cut -d"[" -f2 | cut -d "]" -f1)
   if [[ ! -z ${fw_index} ]] && [[ ${fw_index} != 0 ]]
   then
-    ssh root@router.${LAB_DOMAIN} "uci delete firewall.@rule[${fw_index}] ; \
+    ${SSH} root@router.${LAB_DOMAIN} "uci delete firewall.@rule[${fw_index}] ; \
       uci commit firewall ; \
       /etc/init.d/firewall restart"
   fi
