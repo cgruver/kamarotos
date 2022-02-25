@@ -141,6 +141,7 @@ function setEdgeEnv() {
     export EDGE_NETWORK=$(yq e ".network" ${LAB_CONFIG_FILE})
     export EDGE_CIDR=$(mask2cidr ${EDGE_NETMASK})
     export BASTION_HOST=$(yq e ".bastion-ip" ${LAB_CONFIG_FILE})
+    export GIT_SERVER=$(yq e ".git-url" ${LAB_CONFIG_FILE})
     IFS="." read -r i1 i2 i3 i4 <<< "${EDGE_NETWORK}"
     export EDGE_ARPA=${i3}.${i2}.${i1}
   fi

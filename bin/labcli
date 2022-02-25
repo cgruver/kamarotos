@@ -3,17 +3,11 @@
 . ${OKD_LAB_PATH}/bin/labUtils.sh
 . ${OKD_LAB_PATH}/bin/piUtils.sh
 . ${OKD_LAB_PATH}/bin/routerUtils.sh
+. ${OKD_LAB_PATH}/bin/clusterUtils.sh
+. ${OKD_LAB_PATH}/bin/hostUtils.sh
 
 SSH="ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null"
 SCP="scp -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null"
-
-START="false"
-STOP="false"
-DEPLOY="false"
-DESTROY="false"
-CONFIG_PI="false"
-CONFIG_ROUTER="false"
-ADD_USER="false"
 
 for i in "$@"
 do
@@ -42,81 +36,7 @@ fi
 DOMAIN="${SUB_DOMAIN}.${LAB_DOMAIN}"
 INSTALL_URL="http://${BASTION_HOST}/install"
 
-for i in "$@"
-do
-  case $i in
-    -d=*|--domain=*)
-      SUB_DOMAIN="${i#*=}"
-    ;;
-    --pi)
-      CONFIG_PI="true"
-    ;;
-    --router)
-      CONFIG_ROUTER="true"
-    ;;
-    --disconnect)
-      noInternet
-    ;;
-    --connect)
-      restoreInternet
-    ;;
-    --deploy)
-      DEPLOY="true"
-    ;;
-    --destroy)
-      DESTROY="true"
-    ;;
-    --start)
-      START="true"
-    ;;
-    --stop)
-      STOP="true"
-    ;;
-    --user)
-      ADD_USER="true"
-    ;;
-    --trust)
-      trustClusterCert
-    ;;
-    --config-infra)
-        configInfraNodes
-    ;;
-    --csr)
-      approveCsr
-    ;;
-    --pull-secret)
-      pullSecret
-    ;;
-    --latest)
-      getOkdRelease
-    ;;
-    --console)
-      ocConsole
-    ;;
-    --login)
-      ocLogin
-    ;;
-    --cli)
-      getOkdCmds
-    ;;
-    --dns)
-      resetDns
-    ;;
-    --mirror)
-      mirrorOkdRelease
-    ;;
-    --kube)
-      setKubeConfig
-      echo ${KUBECONFIG}
-    ;;
-    *)
-       # catch all
-    ;;
-  esac
-done
-
-if [[ ${DEPLOY} == "true" ]]
-then
+function deploy() {
   for i in "$@"
   do
     case $i in
@@ -134,10 +54,9 @@ then
       ;;
     esac
   done
-fi
+}
 
-if [[ ${DESTROY} == "true" ]]
-then
+function destroy() {
   for i in "$@"
   do
     case $i in
@@ -293,10 +212,9 @@ then
 
   ${SSH} root@${DOMAIN_ROUTER} "/etc/init.d/named stop && sleep 2 && /etc/init.d/named start && sleep 2"
   ${SSH} root@${EDGE_ROUTER} "/etc/init.d/named stop && sleep 2 && /etc/init.d/named start"
-fi
+}
 
-if [[ ${START} == "true" ]]
-then
+function start() {
   for i in "$@"
   do
     case $i in
@@ -317,10 +235,9 @@ then
       ;;
     esac
   done
-fi
+}
 
-if [[ ${STOP} == "true" ]]
-then
+function stop() {
   for i in "$@"
   do
     case $i in
@@ -338,127 +255,77 @@ then
       ;;
     esac
   done
-fi
+}
 
-if [[ ${ADD_USER} == "true" ]]
-then
-  setKubeConfig
-  for i in "$@"
-  do
-    case $i in
-      -a|--admin)
-        ADMIN_USER="true"
-      ;;
-      -i|--init)
-        OAUTH_INIT="true"
-      ;;
-      -u=*|--user=*)
-        USER="${i#*=}"
-      ;;
-      *)
-        # catch all
-      ;;
-    esac
-  done
-  PASSWD_FILE=${OKD_LAB_PATH}/lab-config/${CLUSTER_NAME}-${SUB_DOMAIN}-${LAB_DOMAIN}/htpasswd
-  if [[ ! -d ${OKD_LAB_PATH}/lab-config/${CLUSTER_NAME}-${SUB_DOMAIN}-${LAB_DOMAIN} ]]
-  then
-    mkdir -p ${OKD_LAB_PATH}/lab-config/${CLUSTER_NAME}-${SUB_DOMAIN}-${LAB_DOMAIN}
-  fi
-  if [[ ! -f  ${PASSWD_FILE} ]]
-  then
-    touch ${PASSWD_FILE}
-  fi
-  if [[ -z ${USER} ]]
-  then
-    echo "Usage: cluster.sh --add-user [ -a | --admin ] -u=user-name-to-add"
-    exit 1
-  fi
-  htpasswd -B ${PASSWD_FILE} ${USER}
-  oc create -n openshift-config secret generic okd-htpasswd-secret --from-file=htpasswd=${PASSWD_FILE} -o yaml --dry-run='client' | oc apply -f -
-  if [[ ${ADMIN_USER} == "true" ]]
-  then
-    oc adm policy add-cluster-role-to-user cluster-admin ${USER}
-  fi
-  if [[ ${OAUTH_INIT} == "true" ]]
-  then
-    oc patch oauth cluster --type merge --patch '{"spec":{"identityProviders":[{"name":"okd_htpasswd_idp","mappingMethod":"claim","type":"HTPasswd","htpasswd":{"fileData":{"name":"okd-htpasswd-secret"}}}]}}'
-  fi
-fi
-
-if [[ ${CONFIG_PI} == "true" ]]
-then
-  PI_WORK_DIR=${OKD_LAB_PATH}/work-dir-pi
-  rm -rf ${PI_WORK_DIR}
-  mkdir -p ${PI_WORK_DIR}/config
-  for i in "$@"
-  do
-    case ${i} in
-      -i|--init)
-        initPi
-      ;;
-      -s|--setup)
-        piSetup
-      ;;
-      -n|--nexus)
-        instalNexus
-      ;;
-      -g|--gitea)
-        installGitea
-      ;;
-      *)
-        # catch all
-      ;;
-    esac
-  done
-fi
-
-if [[ ${CONFIG_ROUTER} == "true" ]]
-then
-  EDGE="false"
-  WLAN="false"
-  WWAN="false"
-  INIT_IP=192.168.8.1
-  WIFI_CHANNEL=3
-  WORK_DIR=${OKD_LAB_PATH}/work-dir-router
-  rm -rf ${WORK_DIR}
-  mkdir -p ${WORK_DIR}/dns
-
-  for i in "$@"
-  do
-    case ${i} in
-      -e|--edge)
-        EDGE=true
-      ;;
-      -wl|--wireless-lan)
-        WLAN="true"
-      ;;
-      -ww|--wireless-wan)
-        WWAN="true"
-      ;;
-      -i|--init)
-        INIT="true"
-      ;;
-      -s|--setup)
-        SETUP="true"
-      ;;
-      -aw|--add-wireless)
-        ADD_WIRELESS="true"
-      ;;
-      *)
-        # catch all
-      ;;
-    esac
-  done
-
-  if [[ ${INIT} == "true" ]]
-  then
-    initRouter
-  elif [[ ${SETUP} == "true" ]]
-  then
-    setupRouter
-  elif [[ ${ADD_WIRELESS} == "true" ]]
-  then
-    addWireless
-  fi
-fi
+for i in "$@"
+do
+  case $i in
+    --pi)
+      configPi "$@"
+    ;;
+    --router)
+      configRouter "$@"
+    ;;
+    --disconnect)
+      noInternet
+    ;;
+    --connect)
+      restoreInternet
+    ;;
+    --deploy)
+      deploy "$@"
+    ;;
+    --destroy)
+      destroy "$@"
+    ;;
+    --start)
+      start "$@"
+    ;;
+    --stop)
+      stop "$@"
+    ;;
+    --user)
+      addUser "$@"
+    ;;
+    --trust)
+      trustClusterCert
+    ;;
+    --config-infra)
+        configInfraNodes
+    ;;
+    --csr)
+      approveCsr
+    ;;
+    --pull-secret)
+      pullSecret
+    ;;
+    --git-secret)
+      gitSecret $@
+    ;;
+    --latest)
+      getOkdRelease
+    ;;
+    --console)
+      ocConsole
+    ;;
+    --login)
+      ocLogin
+    ;;
+    --cli)
+      getOkdCmds
+    ;;
+    --dns)
+      resetDns
+    ;;
+    --mirror)
+      mirrorOkdRelease
+    ;;
+    --kube)
+      setKubeConfig
+      echo ${KUBECONFIG}
+    ;;
+    *)
+       # catch all
+    ;;
+  esac
+done

@@ -1,3 +1,52 @@
+function configRouter() {
+  EDGE="false"
+  WLAN="false"
+  WWAN="false"
+  INIT_IP=192.168.8.1
+  WIFI_CHANNEL=3
+  WORK_DIR=${OKD_LAB_PATH}/work-dir-router
+  rm -rf ${WORK_DIR}
+  mkdir -p ${WORK_DIR}/dns
+
+  for i in "$@"
+  do
+    case ${i} in
+      -e|--edge)
+        EDGE=true
+      ;;
+      -wl|--wireless-lan)
+        WLAN="true"
+      ;;
+      -ww|--wireless-wan)
+        WWAN="true"
+      ;;
+      -i|--init)
+        INIT="true"
+      ;;
+      -s|--setup)
+        SETUP="true"
+      ;;
+      -aw|--add-wireless)
+        ADD_WIRELESS="true"
+      ;;
+      *)
+        # catch all
+      ;;
+    esac
+  done
+
+  if [[ ${INIT} == "true" ]]
+  then
+    initRouter
+  elif [[ ${SETUP} == "true" ]]
+  then
+    setupRouter
+  elif [[ ${ADD_WIRELESS} == "true" ]]
+  then
+    addWireless
+  fi
+}
+
 function initRouter() {
   if [[ ${EDGE} == "true" ]]
   then

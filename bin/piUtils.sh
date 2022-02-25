@@ -1,3 +1,30 @@
+
+function configPi() {
+  PI_WORK_DIR=${OKD_LAB_PATH}/work-dir-pi
+  rm -rf ${PI_WORK_DIR}
+  mkdir -p ${PI_WORK_DIR}/config
+  for i in "$@"
+  do
+    case ${i} in
+      -i)
+        initPi
+      ;;
+      -s)
+        piSetup
+      ;;
+      -n)
+        instalNexus
+      ;;
+      -g)
+        installGitea
+      ;;
+      *)
+        # catch all
+      ;;
+    esac
+  done
+}
+
 function initPi() {
 
   OPENWRT_VER=$(yq e ".openwrt-version" ${LAB_CONFIG_FILE})
