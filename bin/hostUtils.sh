@@ -97,13 +97,12 @@ pwpolicy luks --minlen=6 --minquality=1 --notstrict --nochanges --notempty
 dnf config-manager --add-repo ${INSTALL_URL}/postinstall/local-repos.repo
 dnf config-manager  --disable appstream
 dnf config-manager  --disable baseos
-dnf config-manager  --disable extras
+dnf config-manager  --disable extras-common
 
 mkdir -p /root/.ssh
 chmod 700 /root/.ssh
 curl -o /root/.ssh/authorized_keys ${INSTALL_URL}/postinstall/authorized_keys
 chmod 600 /root/.ssh/authorized_keys
-dnf -y module install virt
 dnf -y install wget git net-tools bind-utils bash-completion nfs-utils rsync libguestfs-tools virt-install iscsi-initiator-utils
 dnf -y update
 echo "InitiatorName=iqn.\$(hostname)" > /etc/iscsi/initiatorname.iscsi
@@ -147,11 +146,12 @@ function stopKvmHosts() {
 
 function deleteKvmHost() {
   local index=${1}
+  local p_cmd=${2}
 
   mac_addr=$(yq e ".kvm-hosts.[${index}].mac-addr" ${CLUSTER_CONFIG})
   host_name=$(yq e ".kvm-hosts.[${index}].host-name" ${CLUSTER_CONFIG})
   boot_dev=$(yq e ".kvm-hosts.[${index}].disks.disk1" ${CLUSTER_CONFIG})
-  destroyMetal root ${host_name} ${boot_dev} na
+  destroyMetal root ${host_name} ${boot_dev} na ${p_cmd}
   deletePxeConfig ${mac_addr}
   deleteDns ${host_name}-${DOMAIN}-kvm
 }
@@ -161,12 +161,13 @@ function destroyMetal() {
   local hostname=${2}
   local boot_dev=${3}
   local ceph_dev=${4}
+  local p_cmd=${5}
 
   if [[ ${ceph_dev} != "na" ]] && [[ ${ceph_dev} != "" ]]
   then
     ${SSH} -o ConnectTimeout=5 ${user}@${hostname}.${DOMAIN} "sudo wipefs -a -f /dev/${ceph_dev} && sudo dd if=/dev/zero of=/dev/${ceph_dev} bs=4096 count=1"
   fi
-  ${SSH} -o ConnectTimeout=5 ${user}@${hostname}.${DOMAIN} "sudo wipefs -a -f /dev/${boot_dev} && sudo dd if=/dev/zero of=/dev/${boot_dev} bs=4096 count=1 && sudo poweroff"
+  ${SSH} -o ConnectTimeout=5 ${user}@${hostname}.${DOMAIN} "sudo wipefs -a -f /dev/${boot_dev} && sudo dd if=/dev/zero of=/dev/${boot_dev} bs=4096 count=1 && sudo ${p_cmd}"
 }
 
 function deletePxeConfig() {

@@ -85,6 +85,7 @@ function stopWorkers() {
 
 function deleteWorker() {
   local index=${1}
+  local p_cmd=${2}
 
   host_name=$(yq e ".compute-nodes.[${index}].name" ${CLUSTER_CONFIG})
   mac_addr=$(yq e ".control-plane.okd-hosts.[${index}].mac-addr" ${CLUSTER_CONFIG})
@@ -92,7 +93,7 @@ function deleteWorker() {
   then
     boot_dev=$(yq e ".compute-nodes.[${index}].boot-dev" ${CLUSTER_CONFIG})
     ceph_dev=$(yq e ".compute-nodes.[${index}].ceph.ceph-dev" ${CLUSTER_CONFIG})
-    destroyMetal core ${host_name} ${boot_dev} ${ceph_dev}
+    destroyMetal core ${host_name} ${boot_dev} ${ceph_dev} ${p_cmd}
   else
     kvm_host=$(yq e ".compute-nodes.[${index}].kvm-host" ${CLUSTER_CONFIG})
     deleteNodeVm ${host_name} ${kvm_host}
@@ -183,6 +184,7 @@ function addUser() {
   if [[ ${OAUTH_INIT} == "true" ]]
   then
     oc patch oauth cluster --type merge --patch '{"spec":{"identityProviders":[{"name":"okd_htpasswd_idp","mappingMethod":"claim","type":"HTPasswd","htpasswd":{"fileData":{"name":"okd-htpasswd-secret"}}}]}}'
+    oc delete secrets kubeadmin -n kube-system
   fi
 }
 
@@ -387,6 +389,7 @@ function mirrorOkdRelease() {
 }
 
 function deleteControlPlane() {
+  local p_cmd=${1}
   #Delete Control Plane Nodes:
   RESET_LB="true"
   CP_COUNT=$(yq e ".control-plane.okd-hosts" ${CLUSTER_CONFIG} | yq e 'length' -)
@@ -403,7 +406,7 @@ function deleteControlPlane() {
     if [[ ${metal} == "true" ]]
     then
       install_dev=$(yq e ".control-plane.okd-hosts.[0].sno-install-dev" ${CLUSTER_CONFIG})
-      destroyMetal core ${host_name} ${install_dev}
+      destroyMetal core ${host_name} ${install_dev} ${p_cmd}
     else
       kvm_host=$(yq e ".control-plane.okd-hosts.[0].kvm-host" ${CLUSTER_CONFIG})
       deleteNodeVm ${host_name} ${kvm_host}
@@ -417,7 +420,7 @@ function deleteControlPlane() {
       if [[ ${metal} == "true" ]]
       then
         boot_dev=$(yq e ".control-plane.okd-hosts.[${node_index}].boot-dev" ${CLUSTER_CONFIG})
-        destroyMetal core ${host_name} ${boot_dev}
+        destroyMetal core ${host_name} ${boot_dev} ${p_cmd}
       else
         kvm_host=$(yq e ".control-plane.okd-hosts.[${node_index}].kvm-host" ${CLUSTER_CONFIG})
         deleteNodeVm ${host_name} ${kvm_host}

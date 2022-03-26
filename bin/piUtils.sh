@@ -125,9 +125,9 @@ CENTOS_MIRROR=$(yq e ".centos-mirror" ${LAB_CONFIG_FILE})
 cat << EOF > ${PI_WORK_DIR}/MirrorSync.sh
 #!/bin/bash
 
-for i in BaseOS AppStream PowerTools extras
+for i in BaseOS AppStream 
 do 
-  rsync  -avSHP --delete ${CENTOS_MIRROR}8-stream/\${i}/x86_64/os/ /usr/local/www/install/repos/\${i}/x86_64/os/ > /tmp/repo-mirror.\${i}.out 2>&1
+  rsync  -avSHP --delete ${CENTOS_MIRROR}9-stream/\${i}/x86_64/os/ /usr/local/www/install/repos/\${i}/x86_64/os/ > /tmp/repo-mirror.\${i}.out 2>&1
 done
 EOF
 
@@ -138,23 +138,12 @@ baseurl=http://${BASTION_HOST}/install/repos/AppStream/x86_64/os/
 gpgcheck=0
 enabled=1
 
-[local-extras]
-name=extras
-baseurl=http://${BASTION_HOST}/install/repos/extras/x86_64/os/
-gpgcheck=0
-enabled=1
-
 [local-baseos]
 name=BaseOS
 baseurl=http://${BASTION_HOST}/install/repos/BaseOS/x86_64/os/
 gpgcheck=0
 enabled=1
 
-[local-powertools]
-name=PowerTools
-baseurl=http://${BASTION_HOST}/install/repos/PowerTools/x86_64/os/
-gpgcheck=0
-enabled=1
 EOF
 
 cat << EOF > ${PI_WORK_DIR}/chrony.conf
@@ -208,7 +197,7 @@ EOF
     mkdir /usr/local/www/install/postinstall ; \
     mkdir /usr/local/www/install/fcos ; \
     mkdir -p /root/bin ; \
-    for i in BaseOS AppStream PowerTools extras ; \
+    for i in BaseOS AppStream ; \
     do mkdir -p /usr/local/www/install/repos/\${i}/x86_64/os/ ; \
     done ;\
     dropbearkey -y -f /root/.ssh/id_dropbear | grep \"ssh-\" > /usr/local/www/install/postinstall/authorized_keys ;\

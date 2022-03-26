@@ -57,6 +57,8 @@ function deploy() {
 }
 
 function destroy() {
+  P_CMD="poweroff"
+
   for i in "$@"
   do
     case $i in
@@ -79,6 +81,9 @@ function destroy() {
       -m=*|--master=*)
         M_HOST_NAME="${i#*=}"
       ;;
+      -r)
+        P_CMD="reboot"
+      ;;
       *)
         # catch all
       ;;
@@ -100,7 +105,7 @@ function destroy() {
       let i=0
       while [[ i -lt ${j} ]]
       do
-        deleteWorker ${i}
+        deleteWorker ${i} ${P_CMD}
         i=$(( ${i} + 1 ))
       done
     else
@@ -123,7 +128,7 @@ function destroy() {
         echo "Host: ${W_HOST_NAME} not found in config file."
         exit 1
       fi
-      deleteWorker ${W_HOST_INDEX}
+      deleteWorker ${W_HOST_INDEX} ${P_CMD}
     fi
   fi
 
@@ -131,7 +136,7 @@ function destroy() {
   then
     if [[ ${K_HOST_NAME} == "" ]]
     then
-      echo "-w | --worker must have a value"
+      echo "-k"
       exit 1
     fi
     if [[ ${K_HOST_NAME} == "all" ]] # Delete all Nodes
@@ -140,7 +145,7 @@ function destroy() {
       let i=0
       while [[ i -lt ${j} ]]
       do
-        deleteKvmHost ${i}
+        deleteKvmHost ${i} ${P_CMD}
         i=$(( ${i} + 1 ))
       done
     else
@@ -163,7 +168,7 @@ function destroy() {
         echo "Host: ${K_HOST_NAME} not found in config file."
         exit 1
       fi
-      deleteKvmHost ${K_HOST_INDEX}
+      deleteKvmHost ${K_HOST_INDEX} ${P_CMD}
     fi
   fi
 
@@ -197,17 +202,17 @@ function destroy() {
       let i=0
       while [[ i -lt ${j} ]]
       do
-        deleteWorker ${i}
+        deleteWorker ${i} ${P_CMD}
         i=$(( ${i} + 1 ))
       done
     else
-      deleteWorker ${W_HOST_INDEX}
+      deleteWorker ${W_HOST_INDEX} ${P_CMD}
     fi
   fi
 
   if [[ ${DELETE_CLUSTER} == "true" ]]
   then
-    deleteControlPlane
+    deleteControlPlane ${P_CMD}
   fi
 
   ${SSH} root@${DOMAIN_ROUTER} "/etc/init.d/named stop && sleep 2 && /etc/init.d/named start && sleep 2"
@@ -249,6 +254,121 @@ function stop() {
       ;;
       -k|--kvm)
         stopKvmHosts
+      ;;
+      *)
+        # catch all
+      ;;
+    esac
+  done
+}
+
+function updateCentos() {
+
+  wget http://mirror.stream.centos.org/9-stream/BaseOS/x86_64/os/isolinux/vmlinuz -O ${OKD_LAB_PATH}/boot-files/vmlinuz
+  wget http://mirror.stream.centos.org/9-stream/BaseOS/x86_64/os/isolinux/initrd.img -O ${OKD_LAB_PATH}/boot-files/initrd.img
+  DOMAIN_COUNT=$(yq e ".sub-domain-configs" ${LAB_CONFIG_FILE} | yq e 'length' -)
+  let array_index=0
+  while [[ array_index -lt ${DOMAIN_COUNT} ]]
+  do
+    router_ip=$(yq e ".sub-domain-configs.[${array_index}].router-ip" ${LAB_CONFIG_FILE})
+    ${SCP} ${OKD_LAB_PATH}/boot-files/vmlinuz root@${router_ip}:/data/tftpboot/networkboot/vmlinuz
+    ${SCP} ${OKD_LAB_PATH}/boot-files/initrd.img root@${router_ip}:/data/tftpboot/networkboot/initrd.img
+    array_index=$(( ${array_index} + 1 ))
+  done
+  ${SSH} root@${BASTION_HOST} "nohup /root/bin/MirrorSync.sh &"
+}
+
+function mirrorCeph() {
+
+  echo "Enter the credentials for the openshift mirrir service account in Nexus:"
+  podman login ${LOCAL_REGISTRY}
+
+  echo "Pulling Rook/Ceph Images..."
+  podman pull  quay.io/cephcsi/cephcsi:${CEPH_CSI_VER}
+  podman pull  k8s.gcr.io/sig-storage/csi-node-driver-registrar:${CSI_NODE_DRIVER_REG_VER}
+  podman pull  k8s.gcr.io/sig-storage/csi-resizer:${CSI_RESIZER_VER}
+  podman pull  k8s.gcr.io/sig-storage/csi-provisioner:${CSI_PROVISIONER_VER}
+  podman pull  k8s.gcr.io/sig-storage/csi-snapshotter:${CSI_SNAPSHOTTER_VER}
+  podman pull  k8s.gcr.io/sig-storage/csi-attacher:${CSI_ATTACHER_VER}
+  podman pull  docker.io/rook/ceph:${ROOK_CEPH_VER}
+  podman pull  quay.io/ceph/ceph:${CEPH_VER}
+
+  echo "Tagging Rook/Ceph Images..."
+  podman tag quay.io/cephcsi/cephcsi:${CEPH_CSI_VER} ${LOCAL_REGISTRY}/cephcsi/cephcsi:${CEPH_CSI_VER}
+  podman tag k8s.gcr.io/sig-storage/csi-node-driver-registrar:${CSI_NODE_DRIVER_REG_VER} ${LOCAL_REGISTRY}/sig-storage/csi-node-driver-registrar:${CSI_NODE_DRIVER_REG_VER}
+  podman tag k8s.gcr.io/sig-storage/csi-resizer:${CSI_RESIZER_VER} ${LOCAL_REGISTRY}/sig-storage/csi-resizer:${CSI_RESIZER_VER}
+  podman tag k8s.gcr.io/sig-storage/csi-provisioner:${CSI_PROVISIONER_VER} ${LOCAL_REGISTRY}/sig-storage/csi-provisioner:${CSI_PROVISIONER_VER}
+  podman tag k8s.gcr.io/sig-storage/csi-snapshotter:${CSI_SNAPSHOTTER_VER} ${LOCAL_REGISTRY}/sig-storage/csi-snapshotter:${CSI_SNAPSHOTTER_VER}
+  podman tag k8s.gcr.io/sig-storage/csi-attacher:${CSI_ATTACHER_VER} ${LOCAL_REGISTRY}/sig-storage/csi-attacher:${CSI_ATTACHER_VER}
+  podman tag docker.io/rook/ceph:${ROOK_CEPH_VER} ${LOCAL_REGISTRY}/rook/ceph:${ROOK_CEPH_VER}
+  podman tag quay.io/ceph/ceph:${CEPH_VER} ${LOCAL_REGISTRY}/ceph/ceph:${CEPH_VER}
+
+  echo "Pushing Rook/Ceph Images..."
+  podman push ${LOCAL_REGISTRY}/cephcsi/cephcsi:${CEPH_CSI_VER} --tls-verify=false
+  podman push ${LOCAL_REGISTRY}/sig-storage/csi-node-driver-registrar:${CSI_NODE_DRIVER_REG_VER} --tls-verify=false
+  podman push ${LOCAL_REGISTRY}/sig-storage/csi-resizer:${CSI_RESIZER_VER} --tls-verify=false
+  podman push ${LOCAL_REGISTRY}/sig-storage/csi-provisioner:${CSI_PROVISIONER_VER} --tls-verify=false
+  podman push ${LOCAL_REGISTRY}/sig-storage/csi-snapshotter:${CSI_SNAPSHOTTER_VER} --tls-verify=false
+  podman push ${LOCAL_REGISTRY}/sig-storage/csi-attacher:${CSI_ATTACHER_VER} --tls-verify=false
+  podman push ${LOCAL_REGISTRY}/rook/ceph:${ROOK_CEPH_VER} --tls-verify=false
+  podman push ${LOCAL_REGISTRY}/ceph/ceph:${CEPH_VER} --tls-verify=false
+
+  echo "Cleaning up local Rook/Ceph Images..."
+  podman image rm -a
+}
+
+function installCeph() {
+
+  setKubeConfig
+
+  oc apply -f ${CEPH_WORK_DIR}/install/crds.yaml
+  oc apply -f ${CEPH_WORK_DIR}/install/common.yaml
+  oc apply -f ${CEPH_WORK_DIR}/install/rbac.yaml
+
+  envsubst < ${CEPH_WORK_DIR}/install/operator-openshift.yaml | oc apply -f -
+
+  let NODE_COUNT=$(yq e ".rook-ceph-nodes" ${CLUSTER_CONFIG} | yq e 'length' -)
+  let node_index=0
+  while [[ node_index -lt ${NODE_COUNT} ]]
+  do
+    node_name=$(yq e ".rook-ceph-nodes.[${node_index}].host" ${CLUSTER_CONFIG}).${DOMAIN}
+    disk=$(yq e ".rook-ceph-nodes.[${node_index}].disk" ${CLUSTER_CONFIG})
+    yq e ".spec.storage.nodes.[${node_index}].name = \"${node_name}\"" -i ${CEPH_WORK_DIR}/install/cluster.yaml
+    yq e ".spec.storage.nodes.[${node_index}].devices.[0].name = \"${disk}\"" -i ${CEPH_WORK_DIR}/install/cluster.yaml
+    yq e ".spec.storage.nodes.[${node_index}].devices.[0].config.osdsPerDevice = \"1\"" -i ${CEPH_WORK_DIR}/install/cluster.yaml
+    node_index=$(( ${node_index} + 1 ))
+    oc label nodes ${node_name} role=storage-node
+  done
+  let pause=20
+  while [ ${pause} -gt 0 ]; do
+    echo -ne "Giving The Operator Time To Start: ${pause}\033[0K\r"
+    sleep 1
+    : $((pause--))
+  done
+  envsubst < ${CEPH_WORK_DIR}/install/cluster.yaml | oc apply -f -
+}
+
+function initCephVars() {
+  export CEPH_WORK_DIR=${OKD_LAB_PATH}/ceph-work-dir
+  git clone https://github.com/cgruver/lab-ceph.git ${CEPH_WORK_DIR}
+
+  export CEPH_CSI_VER=$(yq e ".cephcsi" ${CEPH_WORK_DIR}/install/versions.yaml)
+  export CSI_NODE_DRIVER_REG_VER=$(yq e ".csi-node-driver-registrar" ${CEPH_WORK_DIR}/install/versions.yaml)
+  export CSI_RESIZER_VER=$(yq e ".csi-resizer" ${CEPH_WORK_DIR}/install/versions.yaml)
+  export CSI_PROVISIONER_VER=$(yq e ".csi-provisioner" ${CEPH_WORK_DIR}/install/versions.yaml)
+  export CSI_SNAPSHOTTER_VER=$(yq e ".csi-snapshotter" ${CEPH_WORK_DIR}/install/versions.yaml)
+  export CSI_ATTACHER_VER=$(yq e ".csi-attacher" ${CEPH_WORK_DIR}/install/versions.yaml)
+  export ROOK_CEPH_VER=$(yq e ".rook-ceph" ${CEPH_WORK_DIR}/install/versions.yaml)
+  export CEPH_VER=$(yq e ".ceph" ${CEPH_WORK_DIR}/install/versions.yaml)
+
+  for j in "$@"
+  do
+    case $j in
+      -m)
+        mirrorCeph
+      ;;
+      -i)     
+        installCeph
       ;;
       *)
         # catch all
@@ -300,7 +420,7 @@ do
       pullSecret
     ;;
     --git-secret)
-      gitSecret $@
+      gitSecret "$@"
     ;;
     --latest)
       getOkdRelease
@@ -323,6 +443,12 @@ do
     --kube)
       setKubeConfig
       echo ${KUBECONFIG}
+    ;;
+    --update)
+      updateCentos
+    ;;
+    --ceph)
+      initCephVars "$@"
     ;;
     *)
        # catch all
