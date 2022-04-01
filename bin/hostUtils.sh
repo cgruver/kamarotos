@@ -438,3 +438,19 @@ function deployKvmHosts() {
   cat ${WORK_DIR}/reverse.zone | ${SSH} root@${ROUTER} "cat >> /etc/bind/db.${ARPA}"
   ${SSH} root@${ROUTER} "/etc/init.d/named stop && /etc/init.d/named start"
 }
+
+function updateCentos() {
+
+  wget http://mirror.stream.centos.org/9-stream/BaseOS/x86_64/os/isolinux/vmlinuz -O ${OKD_LAB_PATH}/boot-files/vmlinuz
+  wget http://mirror.stream.centos.org/9-stream/BaseOS/x86_64/os/isolinux/initrd.img -O ${OKD_LAB_PATH}/boot-files/initrd.img
+  DOMAIN_COUNT=$(yq e ".sub-domain-configs" ${LAB_CONFIG_FILE} | yq e 'length' -)
+  let array_index=0
+  while [[ array_index -lt ${DOMAIN_COUNT} ]]
+  do
+    router_ip=$(yq e ".sub-domain-configs.[${array_index}].router-ip" ${LAB_CONFIG_FILE})
+    ${SCP} ${OKD_LAB_PATH}/boot-files/vmlinuz root@${router_ip}:/data/tftpboot/networkboot/vmlinuz
+    ${SCP} ${OKD_LAB_PATH}/boot-files/initrd.img root@${router_ip}:/data/tftpboot/networkboot/initrd.img
+    array_index=$(( ${array_index} + 1 ))
+  done
+  ${SSH} root@${BASTION_HOST} "nohup /root/bin/MirrorSync.sh &"
+}

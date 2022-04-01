@@ -46,3 +46,14 @@ function resetDns() {
     echo "Unsupported OS: Cannot reset DNS"
   fi
 }
+
+function pause() {
+  let pause=${1}
+  MSG=${2}
+
+  while [ ${pause} -gt 0 ]; do
+    echo -ne "${2}: ${pause}\033[0K\r"
+    sleep 1
+    : $((pause--))
+  done
+}

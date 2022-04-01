@@ -113,7 +113,7 @@ function setupRouter() {
       uci set network.\${ROUTE}.gateway=${DOMAIN_ROUTER_EDGE} ; \
       uci commit network ; \
       /etc/init.d/network restart"
-    sleep 3
+    pause 5 "Give the Router network time to restart"
     ${SSH} root@${EDGE_ROUTER} "/etc/init.d/named restart"
     ${SSH} root@${DOMAIN_ROUTER} "opkg update && opkg install ip-full procps-ng-ps bind-server bind-tools haproxy bash shadow uhttpd wget ; \
       mv /etc/haproxy.cfg /etc/haproxy.cfg.orig ; \
