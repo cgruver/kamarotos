@@ -553,11 +553,13 @@ EOF
 
 ${SCP} ${WORK_DIR}/haproxy-${CLUSTER_NAME}.cfg root@${DOMAIN_ROUTER}:/etc/haproxy-${CLUSTER_NAME}.cfg
 ${SCP} ${WORK_DIR}/haproxy-${CLUSTER_NAME}.init root@${DOMAIN_ROUTER}:/etc/init.d/haproxy-${CLUSTER_NAME}
-${SSH} root@${DOMAIN_ROUTER} "uci set network.${CLUSTER_NAME}_lb=interface ; \
-  uci set network.${CLUSTER_NAME}_lb.ifname=\"@lan\" ; \
-  uci set network.${CLUSTER_NAME}_lb.proto=static ; \
-  uci set network.${CLUSTER_NAME}_lb.hostname=${CLUSTER_NAME}-lb.${DOMAIN} ; \
-  uci set network.${CLUSTER_NAME}_lb.ipaddr=${haproxy_ip}/${DOMAIN_NETMASK} ; \
+
+INTERFACE=$(echo "${CLUSTER_NAME//-/_}" | tr "[:upper:]" "[:lower:]")
+${SSH} root@${DOMAIN_ROUTER} "uci set network.${INTERFACE}_lb=interface ; \
+  uci set network.${INTERFACE}_lb.ifname=\"@lan\" ; \
+  uci set network.${INTERFACE}_lb.proto=static ; \
+  uci set network.${INTERFACE}_lb.hostname=${CLUSTER_NAME}-lb.${DOMAIN} ; \
+  uci set network.${INTERFACE}_lb.ipaddr=${haproxy_ip}/${DOMAIN_NETMASK} ; \
   uci commit ; \
   /etc/init.d/network reload ; \
   sleep 2 ; \
@@ -984,22 +986,6 @@ function destroy() {
     fi
   fi
 
-  if [[ ${DELETE_WORKER} == "true" ]]
-  then
-    if [[ ${W_HOST_NAME} == "all" ]] # Delete all Nodes
-    then
-      let j=$(yq e ".compute-nodes" ${CLUSTER_CONFIG} | yq e 'length' -)
-      let i=0
-      while [[ i -lt ${j} ]]
-      do
-        deleteWorker ${i} ${P_CMD}
-        i=$(( ${i} + 1 ))
-      done
-    else
-      deleteWorker ${W_HOST_INDEX} ${P_CMD}
-    fi
-  fi
-
   if [[ ${DELETE_CLUSTER} == "true" ]]
   then
     deleteControlPlane ${P_CMD}
@@ -1122,15 +1108,19 @@ function installCeph() {
 
   envsubst < ${CEPH_WORK_DIR}/install/operator-openshift.yaml | oc apply -f -
 
-  let NODE_COUNT=$(yq e ".rook-ceph-nodes" ${CLUSTER_CONFIG} | yq e 'length' -)
+  let NODE_COUNT=$(yq e ".compute-nodes" ${CLUSTER_CONFIG} | yq e 'length' -)
   let node_index=0
   while [[ node_index -lt ${NODE_COUNT} ]]
   do
-    node_name=$(yq e ".rook-ceph-nodes.[${node_index}].host" ${CLUSTER_CONFIG}).${DOMAIN}
-    disk=$(yq e ".rook-ceph-nodes.[${node_index}].disk" ${CLUSTER_CONFIG})
-    yq e ".spec.storage.nodes.[${node_index}].name = \"${node_name}\"" -i ${CEPH_WORK_DIR}/install/cluster.yaml
-    yq e ".spec.storage.nodes.[${node_index}].devices.[0].name = \"${disk}\"" -i ${CEPH_WORK_DIR}/install/cluster.yaml
-    yq e ".spec.storage.nodes.[${node_index}].devices.[0].config.osdsPerDevice = \"1\"" -i ${CEPH_WORK_DIR}/install/cluster.yaml
+    node_name=$(yq e ".compute-nodes.[${node_index}].name" ${CLUSTER_CONFIG}).${DOMAIN}
+    CEPH_NODE=$(yq ".compute-nodes.[${node_index}] | has(\"ceph\")" ${CLUSTER_CONFIG})
+    if [[ ${CEPH_NODE} == "true" ]]
+    then
+      disk=$(yq e ".compute-nodes.[${node_index}].ceph.disk" ${CLUSTER_CONFIG})
+      yq e ".spec.storage.nodes.[${node_index}].name = \"${node_name}\"" -i ${CEPH_WORK_DIR}/install/cluster.yaml
+      yq e ".spec.storage.nodes.[${node_index}].devices.[0].name = \"${disk}\"" -i ${CEPH_WORK_DIR}/install/cluster.yaml
+      yq e ".spec.storage.nodes.[${node_index}].devices.[0].config.osdsPerDevice = \"1\"" -i ${CEPH_WORK_DIR}/install/cluster.yaml
+    fi
     node_index=$(( ${node_index} + 1 ))
     oc label nodes ${node_name} role=storage-node
   done
@@ -1140,8 +1130,14 @@ function installCeph() {
   oc patch configmap rook-ceph-operator-config -n rook-ceph --type merge --patch '"data": {"CSI_PLUGIN_TOLERATIONS": "- key: \"node-role.kubernetes.io/master\"\n  operator: \"Exists\"\n  effect: \"NoSchedule\"\n"}'
 }
 
+function regPvc() {
+  oc apply -f ${CEPH_WORK_DIR}/configure/registry-pvc.yaml
+  oc patch configs.imageregistry.operator.openshift.io cluster --type json -p '[{ "op": "remove", "path": "/spec/storage/emptyDir" }]'
+  oc patch configs.imageregistry.operator.openshift.io cluster --type merge --patch '{"spec":{"rolloutStrategy":"Recreate","managementState":"Managed","storage":{"pvc":{"claim":"registry-pvc"}}}}'
+}
+
 function initCephVars() {
-  export CEPH_WORK_DIR=${OKD_LAB_PATH}/ceph-work-dir
+  export CEPH_WORK_DIR=${OKD_LAB_PATH}/${CLUSTER_NAME}-${SUB_DOMAIN}-${LAB_DOMAIN}/ceph-work-dir
   rm -rf ${CEPH_WORK_DIR}
   git clone https://github.com/cgruver/lab-ceph.git ${CEPH_WORK_DIR}
 
@@ -1163,9 +1159,30 @@ function initCephVars() {
       -i)     
         installCeph
       ;;
+      -r)
+        regPvc
+      ;;
       *)
         # catch all
       ;;
     esac
   done
+}
+
+function postInstall() {
+    for j in "$@"
+  do
+    case $j in
+      -d)
+        oc patch ClusterVersion version --type merge -p '{"spec":{"channel":""}}'
+        oc patch configs.samples.operator.openshift.io cluster --type merge --patch '{"spec":{"managementState":"Removed"}}'
+        oc patch OperatorHub cluster --type json -p '[{"op": "add", "path": "/spec/sources/0/disabled", "value": true}]'
+      ;;
+      *)
+        # catch all
+      ;;
+    esac
+  done
+  oc patch imagepruners.imageregistry.operator.openshift.io/cluster --type merge -p '{"spec":{"schedule":"0 0 * * *","suspend":false,"keepTagRevisions":3,"keepYoungerThan":60,"resources":{},"affinity":{},"nodeSelector":{},"tolerations":[],"startingDeadlineSeconds":60,"successfulJobsHistoryLimit":3,"failedJobsHistoryLimit":3}}'
+  oc delete pod --field-selector=status.phase==Succeeded --all-namespaces
 }

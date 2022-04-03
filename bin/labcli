@@ -112,6 +112,9 @@ do
     --monitor)
       monitor "$@"
     ;;
+    --post)
+      postInstall "$@"
+    ;;
     *)
        # catch all
     ;;

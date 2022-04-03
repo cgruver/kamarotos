@@ -1,4 +1,5 @@
 function labenv() {
+
   for i in "$@"
   do
     case $i in
@@ -6,15 +7,24 @@ function labenv() {
         sub_domain="${i#*=}"
         labctx ${sub_domain}
       ;;
-      --edge)
+    esac
+  done
+
+  for i in "$@"
+  do
+    case $i in
+      -e)
         setEdgeEnv
       ;;
-      --kube)
-        labcli --kube
-        export KUBECONFIG
+      -k)
+        if [[ -z ${SUB_DOMAIN} ]]
+        then
+          labctx
+        fi
+        export KUBECONFIG=${KUBE_INIT_CONFIG}
       ;;
-      *)
-        usage
+      -c)
+        clearLabEnv
       ;;
     esac
   done
@@ -180,4 +190,44 @@ function getOkdCmds() {
       ln -s ${OKD_LAB_PATH}/okd-cmds/${OKD_RELEASE}/${i} ${OKD_LAB_PATH}/bin/${i}
     done
   fi
+}
+
+function clearLabEnv() {
+  if [[ ! -z ${OKD_RELEASE} ]]
+  then
+    for i in $(ls ${OKD_LAB_PATH}/okd-cmds/${OKD_RELEASE})
+    do
+      rm -f ${OKD_LAB_PATH}/bin/${i}
+    done
+  fi
+  unset CLUSTER_CONFIG
+  unset SUB_DOMAIN
+  unset DOMAIN
+  unset DOMAIN_ROUTER
+  unset DOMAIN_ROUTER_EDGE
+  unset DOMAIN_NETWORK
+  unset DOMAIN_NETMASK
+  unset LOCAL_REGISTRY
+  unset PROXY_REGISTRY
+  unset CLUSTER_NAME
+  unset KUBE_INIT_CONFIG
+  unset INSTALL_DIR
+  unset OKD_RELEASE
+  unset DOMAIN_CIDR
+  unset CLUSTER_CIDR
+  unset SERVICE_CIDR
+  unset BUTANE_VERSION
+  unset BUTANE_SPEC_VERSION
+  unset OKD_REGISTRY
+  unset PULL_SECRET
+  unset DOMAIN_ARPA
+  unset LAB_DOMAIN
+  unset EDGE_ROUTER
+  unset EDGE_NETMASK
+  unset EDGE_NETWORK
+  unset EDGE_CIDR
+  unset BASTION_HOST
+  unset GIT_SERVER
+  unset EDGE_ARPA
+  unset KUBECONFIG
 }
