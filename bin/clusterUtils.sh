@@ -129,6 +129,7 @@ function unCordonNode() {
 }
 
 function stopCluster() {
+  oc patch configs.imageregistry.operator.openshift.io cluster --type merge --patch '{"spec":{"managementState":"Removed"}}'
   node_count=$(yq e ".compute-nodes" ${CLUSTER_CONFIG} | yq e 'length' -)
   if [[ ${node_count} -gt 0 ]]
   then

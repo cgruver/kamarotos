@@ -28,6 +28,7 @@ function labenv() {
       ;;
     esac
   done
+  i=""
 }
 
 function setDomainIndex() {
@@ -137,6 +138,7 @@ function setDomainEnv() {
     rm -f ${OKD_LAB_PATH}/bin/${i}
     ln -s ${OKD_LAB_PATH}/okd-cmds/${OKD_RELEASE}/${i} ${OKD_LAB_PATH}/bin/${i}
   done
+  i=""
 }
 
 function setEdgeEnv() {
