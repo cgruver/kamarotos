@@ -44,6 +44,26 @@ function resetDns() {
     sudo killall -HUP mDNSResponder
   else
     echo "Unsupported OS: Cannot reset DNS"
+    exit 1
+  fi
+}
+
+function resetNic() {
+  SYS_ARCH=$(uname)
+  if [[ ${SYS_ARCH} == "Darwin" ]]
+  then
+    bridge_dev=$(yq e ".bootstrap.bridge-dev" ${CLUSTER_CONFIG})
+    sudo launchctl unload -w "/Library/LaunchDaemons/io.github.lima-vm.vde_vmnet.bridged.${bridge_dev}.plist"
+    sudo launchctl unload -w "/Library/LaunchDaemons/io.github.virtualsquare.vde-2.vde_switch.bridged.${bridge_dev}.plist"
+    sudo launchctl unload -w "/Library/LaunchDaemons/io.github.lima-vm.vde_vmnet.plist"
+    sudo launchctl unload -w "/Library/LaunchDaemons/io.github.virtualsquare.vde-2.vde_switch.plist"
+    sudo launchctl load -w "/Library/LaunchDaemons/io.github.virtualsquare.vde-2.vde_switch.plist"
+    sudo launchctl load -w "/Library/LaunchDaemons/io.github.lima-vm.vde_vmnet.plist"
+    sudo launchctl load -w "/Library/LaunchDaemons/io.github.virtualsquare.vde-2.vde_switch.bridged.${bridge_dev}.plist"
+    sudo launchctl load -w "/Library/LaunchDaemons/io.github.lima-vm.vde_vmnet.bridged.${bridge_dev}.plist"
+  else
+    echo "Unsupported OS: Cannot reset DNS"
+    exit 1
   fi
 }
 

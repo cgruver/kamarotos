@@ -7,7 +7,7 @@ if [[ ${BIP} == "true" ]]
 then
 read -r -d '' SNO_BIP << EOF
 BootstrapInPlace:
-  InstallationDisk: "--copy-network /dev/${install_dev}"
+  InstallationDisk: "--copy-network ${install_dev}"
 EOF
 fi
 
@@ -68,7 +68,7 @@ function startWorker() {
 }
 
 function stopWorkers() {
-  setKubeConfig
+  
   let node_count=$(yq e ".compute-nodes" ${CLUSTER_CONFIG} | yq e 'length' -)
 
   # Cordon Compute Nodes
@@ -79,7 +79,7 @@ function stopWorkers() {
   while [[ node_index -lt ${node_count} ]]
   do
     host_name=$(yq e ".compute-nodes.[${node_index}].name" ${CLUSTER_CONFIG})
-    oc adm drain ${host_name}.${DOMAIN} --ignore-daemonsets --force --grace-period=20 --delete-emptydir-data
+    ${OC} adm drain ${host_name}.${DOMAIN} --ignore-daemonsets --force --grace-period=20 --delete-emptydir-data
     ${SSH} -o ConnectTimeout=5 core@${host_name}.${DOMAIN} "sudo systemctl poweroff"
     node_index=$(( ${node_index} + 1 ))
   done
@@ -95,7 +95,7 @@ function deleteWorker() {
   then
     boot_dev=$(yq e ".compute-nodes.[${index}].boot-dev" ${CLUSTER_CONFIG})
     ceph_dev=$(yq e ".compute-nodes.[${index}].ceph.ceph-dev" ${CLUSTER_CONFIG})
-    destroyMetal core ${host_name} ${boot_dev} ${ceph_dev} ${p_cmd}
+    destroyMetal core ${host_name} ${boot_dev} "/dev/${ceph_dev}" ${p_cmd}
   else
     kvm_host=$(yq e ".compute-nodes.[${index}].kvm-host" ${CLUSTER_CONFIG})
     deleteNodeVm ${host_name} ${kvm_host}
@@ -105,31 +105,31 @@ function deleteWorker() {
 }
 
 function cordonNode() {
-  setKubeConfig
+  
   let node_count=$(yq e ".compute-nodes" ${CLUSTER_CONFIG} | yq e 'length' -)
   let node_index=0
   while [[ node_index -lt ${node_count} ]]
   do
     host_name=$(yq e ".compute-nodes.[${node_index}].name" ${CLUSTER_CONFIG})
-    oc adm cordon ${host_name}.${DOMAIN}
+    ${OC} adm cordon ${host_name}.${DOMAIN}
     node_index=$(( ${node_index} + 1 ))
   done
 }
 
 function unCordonNode() {
-  setKubeConfig
+  
   let node_count=$(yq e ".compute-nodes" ${CLUSTER_CONFIG} | yq e 'length' -)
   let node_index=0
   while [[ node_index -lt ${node_count} ]]
   do
     host_name=$(yq e ".compute-nodes.[${node_index}].name" ${CLUSTER_CONFIG})
-    oc adm uncordon ${host_name}.${DOMAIN}
+    ${OC} adm uncordon ${host_name}.${DOMAIN}
     node_index=$(( ${node_index} + 1 ))
   done
 }
 
 function stopCluster() {
-  oc patch configs.imageregistry.operator.openshift.io cluster --type merge --patch '{"spec":{"managementState":"Removed"}}'
+  ${OC} patch configs.imageregistry.operator.openshift.io cluster --type merge --patch '{"spec":{"managementState":"Removed"}}'
   node_count=$(yq e ".compute-nodes" ${CLUSTER_CONFIG} | yq e 'length' -)
   if [[ ${node_count} -gt 0 ]]
   then
@@ -140,7 +140,7 @@ function stopCluster() {
 }
 
 function addUser() {
-  setKubeConfig
+  
   for i in "$@"
   do
     case $i in
@@ -169,19 +169,19 @@ function addUser() {
   fi
   if [[ -z ${USER} ]]
   then
-    echo "Usage: cluster.sh --add-user [ -a | --admin ] -u=user-name-to-add"
+    echo "Usage: labcli --user [ -a | --admin ] -u=user-name-to-add"
     exit 1
   fi
   htpasswd -B ${PASSWD_FILE} ${USER}
-  oc create -n openshift-config secret generic okd-htpasswd-secret --from-file=htpasswd=${PASSWD_FILE} -o yaml --dry-run='client' | oc apply -f -
+  ${OC} create -n openshift-config secret generic okd-htpasswd-secret --from-file=htpasswd=${PASSWD_FILE} -o yaml --dry-run='client' | ${OC} apply -f -
   if [[ ${ADMIN_USER} == "true" ]]
   then
-    oc adm policy add-cluster-role-to-user cluster-admin ${USER}
+    ${OC} adm policy add-cluster-role-to-user cluster-admin ${USER}
   fi
   if [[ ${OAUTH_INIT} == "true" ]]
   then
-    oc patch oauth cluster --type merge --patch '{"spec":{"identityProviders":[{"name":"okd_htpasswd_idp","mappingMethod":"claim","type":"HTPasswd","htpasswd":{"fileData":{"name":"okd-htpasswd-secret"}}}]}}'
-    oc delete secrets kubeadmin -n kube-system
+    ${OC} patch oauth cluster --type merge --patch '{"spec":{"identityProviders":[{"name":"okd_htpasswd_idp","mappingMethod":"claim","type":"HTPasswd","htpasswd":{"fileData":{"name":"okd-htpasswd-secret"}}}]}}'
+    ${OC} delete secrets kubeadmin -n kube-system
   fi
 }
 
@@ -190,7 +190,7 @@ function setKubeConfig() {
 }
 
 function approveCsr() {
-    oc --kubeconfig=${KUBE_INIT_CONFIG} get csr -ojson | jq -r '.items[] | select(.status == {} ) | .metadata.name' | xargs oc adm certificate approve
+    ${OC} get csr -ojson | jq -r '.items[] | select(.status == {} ) | .metadata.name' | xargs ${OC} adm certificate approve
 }
 
 function pullSecret() {
@@ -239,7 +239,7 @@ function gitSecret() {
     read -s GIT_PWD_CHK
   done
 
-cat << EOF | oc apply -n ${NAMESPACE} -f -
+cat << EOF | ${OC} apply -n ${NAMESPACE} -f -
 apiVersion: v1
 kind: Secret
 metadata:
@@ -252,7 +252,7 @@ data:
   password: $(echo -n ${GIT_PWD} | base64)
 EOF
 
-  oc --kubeconfig=${KUBE_INIT_CONFIG} patch sa pipeline --type json --patch '[{"op": "add", "path": "/secrets/-", "value": {"name":"git-secret"}}]' -n ${NAMESPACE}
+  ${OC} patch sa pipeline --type json --patch '[{"op": "add", "path": "/secrets/-", "value": {"name":"git-secret"}}]' -n ${NAMESPACE}
 }
 
 function getOkdRelease() {
@@ -277,21 +277,21 @@ function ocConsole() {
 }
 
 function configInfraNodes() {
-  setKubeConfig
+  
   for node_index in 0 1 2
   do
-    oc label nodes ${CLUSTER_NAME}-master-${node_index}.${SUB_DOMAIN}.${LAB_DOMAIN} node-role.kubernetes.io/infra=""
+    ${OC} label nodes ${CLUSTER_NAME}-master-${node_index}.${SUB_DOMAIN}.${LAB_DOMAIN} node-role.kubernetes.io/infra=""
   done
-  oc patch scheduler cluster --patch '{"spec":{"mastersSchedulable":false}}' --type=merge
-  oc patch -n openshift-ingress-operator ingresscontroller default --patch '{"spec":{"nodePlacement":{"nodeSelector":{"matchLabels":{"node-role.kubernetes.io/infra":""}},"tolerations":[{"key":"node.kubernetes.io/unschedulable","effect":"NoSchedule"},{"key":"node-role.kubernetes.io/master","effect":"NoSchedule"}]}}}' --type=merge
-  for node_index in $(oc get pods -n openshift-ingress-canary | grep -v NAME | cut -d" " -f1)
+  ${OC} patch scheduler cluster --patch '{"spec":{"mastersSchedulable":false}}' --type=merge
+  ${OC} patch -n openshift-ingress-operator ingresscontroller default --patch '{"spec":{"nodePlacement":{"nodeSelector":{"matchLabels":{"node-role.kubernetes.io/infra":""}},"tolerations":[{"key":"node.kubernetes.io/unschedulable","effect":"NoSchedule"},{"key":"node-role.kubernetes.io/master","effect":"NoSchedule"}]}}}' --type=merge
+  for node_index in $(${OC} get pods -n openshift-ingress-canary | grep -v NAME | cut -d" " -f1)
   do
-    oc delete pod ${node_index} -n openshift-ingress-canary
+    ${OC} delete pod ${node_index} -n openshift-ingress-canary
   done
 
-  oc patch configs.imageregistry.operator.openshift.io cluster --patch '{"spec":{"nodeSelector":{"node-role.kubernetes.io/infra":""},"tolerations":[{"key":"node.kubernetes.io/unschedulable","effect":"NoSchedule"},{"key":"node-role.kubernetes.io/master","effect":"NoSchedule"}]}}' --type=merge
+  ${OC} patch configs.imageregistry.operator.openshift.io cluster --patch '{"spec":{"nodeSelector":{"node-role.kubernetes.io/infra":""},"tolerations":[{"key":"node.kubernetes.io/unschedulable","effect":"NoSchedule"},{"key":"node-role.kubernetes.io/master","effect":"NoSchedule"}]}}' --type=merge
 
-cat << EOF | oc apply -f -
+cat << EOF | ${OC} apply -f -
 apiVersion: v1
 kind: ConfigMap
 metadata:
@@ -403,7 +403,7 @@ function deleteControlPlane() {
     if [[ ${metal} == "true" ]]
     then
       install_dev=$(yq e ".control-plane.okd-hosts.[0].sno-install-dev" ${CLUSTER_CONFIG})
-      destroyMetal core ${host_name} ${install_dev} ${p_cmd}
+      destroyMetal core ${host_name} ${install_dev} na ${p_cmd}
     else
       kvm_host=$(yq e ".control-plane.okd-hosts.[0].kvm-host" ${CLUSTER_CONFIG})
       deleteNodeVm ${host_name} ${kvm_host}
@@ -417,7 +417,7 @@ function deleteControlPlane() {
       if [[ ${metal} == "true" ]]
       then
         boot_dev=$(yq e ".control-plane.okd-hosts.[${node_index}].boot-dev" ${CLUSTER_CONFIG})
-        destroyMetal core ${host_name} ${boot_dev} ${p_cmd}
+        destroyMetal core ${host_name} ${boot_dev} na ${p_cmd}
       else
         kvm_host=$(yq e ".control-plane.okd-hosts.[${node_index}].kvm-host" ${CLUSTER_CONFIG})
         deleteNodeVm ${host_name} ${kvm_host}
@@ -427,11 +427,12 @@ function deleteControlPlane() {
   fi
   if [[ ${RESET_LB} == "true" ]]
   then
+    INTERFACE=$(echo "${CLUSTER_NAME//-/_}" | tr "[:upper:]" "[:lower:]")
     ${SSH} root@${DOMAIN_ROUTER} "/etc/init.d/haproxy-${CLUSTER_NAME} stop ; \
       /etc/init.d/haproxy-${CLUSTER_NAME} disable ; \
       rm -f /etc/init.d/haproxy-${CLUSTER_NAME} ; \
       rm -f /etc/haproxy-${CLUSTER_NAME}.cfg ; \
-      uci delete network.${CLUSTER_NAME}_lb ; \
+      uci delete network.${INTERFACE}_lb ; \
       uci commit ; \
       /etc/init.d/network reload"
     fi
@@ -583,7 +584,7 @@ function startBootstrap() {
   then
     memory=$(yq e ".bootstrap.node-spec.memory" ${CLUSTER_CONFIG})
     cpu=$(yq e ".bootstrap.node-spec.cpu" ${CLUSTER_CONFIG})
-    root_vol=$(yq e ".bootstrap.node-spec.root_vol" ${CLUSTER_CONFIG})
+    root_vol=$(yq e ".bootstrap.node-spec.root-vol" ${CLUSTER_CONFIG})
     bridge_dev=$(yq e ".bootstrap.bridge-dev" ${CLUSTER_CONFIG})
     WORK_DIR=${OKD_LAB_PATH}/${CLUSTER_NAME}-${SUB_DOMAIN}-${LAB_DOMAIN}
     mkdir -p ${WORK_DIR}/bootstrap
@@ -677,7 +678,7 @@ function deployCluster() {
       kvm_host=$(yq e ".bootstrap.kvm-host" ${CLUSTER_CONFIG})
       memory=$(yq e ".bootstrap.node-spec.memory" ${CLUSTER_CONFIG})
       cpu=$(yq e ".bootstrap.node-spec.cpu" ${CLUSTER_CONFIG})
-      root_vol=$(yq e ".bootstrap.node-spec.root_vol" ${CLUSTER_CONFIG})
+      root_vol=$(yq e ".bootstrap.node-spec.root-vol" ${CLUSTER_CONFIG})
       createOkdVmNode ${bs_ip_addr} ${host_name} ${kvm_host} bootstrap ${memory} ${cpu} ${root_vol} 0 ".bootstrap.mac-addr"
     fi
     # Create the ignition and iPXE boot files
@@ -704,7 +705,7 @@ function deployCluster() {
     then
       memory=$(yq e ".control-plane.node-spec.memory" ${CLUSTER_CONFIG})
       cpu=$(yq e ".control-plane.node-spec.cpu" ${CLUSTER_CONFIG})
-      root_vol=$(yq e ".control-plane.node-spec.root_vol" ${CLUSTER_CONFIG})
+      root_vol=$(yq e ".control-plane.node-spec.root-vol" ${CLUSTER_CONFIG})
       kvm_host=$(yq e ".control-plane.okd-hosts.[0].kvm-host" ${CLUSTER_CONFIG})
       # Create the VM
       createOkdVmNode ${ip_addr} ${host_name} ${kvm_host} sno ${memory} ${cpu} ${root_vol} 0 ".control-plane.okd-hosts.[0].mac-addr"
@@ -746,7 +747,7 @@ function deployCluster() {
       else
         memory=$(yq e ".control-plane.node-spec.memory" ${CLUSTER_CONFIG})
         cpu=$(yq e ".control-plane.node-spec.cpu" ${CLUSTER_CONFIG})
-        root_vol=$(yq e ".control-plane.node-spec.root_vol" ${CLUSTER_CONFIG})
+        root_vol=$(yq e ".control-plane.node-spec.root-vol" ${CLUSTER_CONFIG})
         kvm_host=$(yq e ".control-plane.okd-hosts.[${node_index}].kvm-host" ${CLUSTER_CONFIG})
         boot_dev="sda"
         # Create the VM
@@ -792,8 +793,8 @@ function deployWorkers() {
   rm -rf ${WORK_DIR}
   mkdir -p ${WORK_DIR}/ipxe-work-dir/ignition
   mkdir -p ${WORK_DIR}/dns-work-dir
-  setKubeConfig
-  oc extract -n openshift-machine-api secret/worker-user-data --keys=userData --to=- > ${WORK_DIR}/ipxe-work-dir/worker.ign
+  
+  ${OC} extract -n openshift-machine-api secret/worker-user-data --keys=userData --to=- > ${WORK_DIR}/ipxe-work-dir/worker.ign
   let node_count=$(yq e ".compute-nodes" ${CLUSTER_CONFIG} | yq e 'length' -)
   let node_index=0
   while [[ node_index -lt ${node_count} ]]
@@ -801,6 +802,7 @@ function deployWorkers() {
     host_name=${CLUSTER_NAME}-worker-${node_index}
     yq e ".compute-nodes.[${node_index}].name = \"${host_name}\"" -i ${CLUSTER_CONFIG}
     ip_addr=$(yq e ".compute-nodes.[${node_index}].ip-addr" ${CLUSTER_CONFIG})
+    ceph_node=$(yq ".compute-nodes.[${node_index}] | has(\"ceph\")" ${CLUSTER_CONFIG})
     if [[ $(yq e ".compute-nodes.[${node_index}].metal" ${CLUSTER_CONFIG}) == "true" ]]
     then
       platform=metal
@@ -810,15 +812,28 @@ function deployWorkers() {
       boot_dev="sda"
       memory=$(yq e ".compute-nodes.[${node_index}].node-spec.memory" ${CLUSTER_CONFIG})
       cpu=$(yq e ".compute-nodes.[${node_index}].node-spec.cpu" ${CLUSTER_CONFIG})
-      root_vol=$(yq e ".compute-nodes.[${node_index}].node-spec.root_vol" ${CLUSTER_CONFIG})
-      ceph_vol=$(yq e ".compute-nodes.[${node_index}].node-spec.ceph_vol" ${CLUSTER_CONFIG})
+      root_vol=$(yq e ".compute-nodes.[${node_index}].node-spec.root-vol" ${CLUSTER_CONFIG})
       kvm_host=$(yq e ".compute-nodes.[${node_index}].kvm-host" ${CLUSTER_CONFIG})
       # Create the VM
+      if [[ ${ceph_node} == "true" ]]
+      then
+        ceph_vol=$(yq e ".compute-nodes.[${node_index}].ceph.ceph_vol" ${CLUSTER_CONFIG})
+      else
+        ceph_vol=0
+      fi
       createOkdVmNode ${ip_addr} ${host_name} ${kvm_host} worker ${memory} ${cpu} ${root_vol} ${ceph_vol} ".compute-nodes.[${node_index}].mac-addr"
     fi
     # Create the ignition and iPXE boot files
     mac_addr=$(yq e ".compute-nodes.[${node_index}].mac-addr" ${CLUSTER_CONFIG})
     configOkdNode ${ip_addr} ${host_name}.${DOMAIN} ${mac_addr} worker
+    if [[ ${ceph_node} == "true" ]]
+    then
+      ceph_type=$(yq e ".compute-nodes.[${node_index}].ceph.type" ${CLUSTER_CONFIG})
+      if [[ ${ceph_type} == "part" ]]
+      then
+        configCephPart ${mac_addr} ${boot_dev}
+      fi
+    fi
     createPxeFile ${mac_addr} ${platform} ${boot_dev}
     # Create DNS entries
     echo "${host_name}.${DOMAIN}.   IN      A      ${ip_addr} ; ${host_name}-${DOMAIN}-wk" >> ${WORK_DIR}/dns-work-dir/forward.zone
@@ -1000,17 +1015,20 @@ function start() {
   for i in "$@"
   do
     case $i in
-      -b|--bootstrap)
+      -b)
         startBootstrap
       ;;
-      -m|--master)
+      -m)
         startControlPlane
       ;;
-      -w|--worker)
+      -w)
         startWorker
       ;;
-      -u|--uncordon)
+      -u)
         unCordonNode
+      ;;
+      -i)
+        ${OC} patch configs.imageregistry.operator.openshift.io cluster --type merge --patch '{"spec":{"managementState":"Managed"}}'
       ;;
       *)
         # catch all
@@ -1032,6 +1050,14 @@ function monitor() {
       ;;
       -j)
         ${SSH} core@${CLUSTER_NAME}-bootstrap.${SUB_DOMAIN}.${LAB_DOMAIN} "journalctl -b -f -u release-image.service -u bootkube.service"
+      ;;
+      -m=*)
+        CP_INDEX="${i#*=}"
+        ${SSH} core@${CLUSTER_NAME}-master-${CP_INDEX}.${SUB_DOMAIN}.${LAB_DOMAIN} "journalctl -b -f"
+      ;;
+      -w=*)
+        W_INDEX="${i#*=}"
+        ${SSH} core@${CLUSTER_NAME}-worker-${W_INDEX}.${SUB_DOMAIN}.${LAB_DOMAIN} "journalctl -b -f"
       ;;
       *)
         # catch all
@@ -1101,40 +1127,41 @@ function mirrorCeph() {
 
 function installCeph() {
 
-  setKubeConfig
+  ${OC} apply -f ${CEPH_WORK_DIR}/install/crds.yaml
+  ${OC} apply -f ${CEPH_WORK_DIR}/install/common.yaml
+  ${OC} apply -f ${CEPH_WORK_DIR}/install/rbac.yaml
 
-  oc apply -f ${CEPH_WORK_DIR}/install/crds.yaml
-  oc apply -f ${CEPH_WORK_DIR}/install/common.yaml
-  oc apply -f ${CEPH_WORK_DIR}/install/rbac.yaml
+  envsubst < ${CEPH_WORK_DIR}/install/operator-openshift.yaml | ${OC} apply -f -
+}
 
-  envsubst < ${CEPH_WORK_DIR}/install/operator-openshift.yaml | oc apply -f -
+function createCephCluster() {
 
   let NODE_COUNT=$(yq e ".compute-nodes" ${CLUSTER_CONFIG} | yq e 'length' -)
   let node_index=0
   while [[ node_index -lt ${NODE_COUNT} ]]
   do
     node_name=$(yq e ".compute-nodes.[${node_index}].name" ${CLUSTER_CONFIG}).${DOMAIN}
-    CEPH_NODE=$(yq ".compute-nodes.[${node_index}] | has(\"ceph\")" ${CLUSTER_CONFIG})
-    if [[ ${CEPH_NODE} == "true" ]]
+    ceph_node=$(yq ".compute-nodes.[${node_index}] | has(\"ceph\")" ${CLUSTER_CONFIG})
+    if [[ ${ceph_node} == "true" ]]
     then
-      disk=$(yq e ".compute-nodes.[${node_index}].ceph.disk" ${CLUSTER_CONFIG})
+      ceph_dev=$(yq e ".compute-nodes.[${node_index}].ceph.ceph-dev" ${CLUSTER_CONFIG})
       yq e ".spec.storage.nodes.[${node_index}].name = \"${node_name}\"" -i ${CEPH_WORK_DIR}/install/cluster.yaml
-      yq e ".spec.storage.nodes.[${node_index}].devices.[0].name = \"${disk}\"" -i ${CEPH_WORK_DIR}/install/cluster.yaml
+      yq e ".spec.storage.nodes.[${node_index}].devices.[0].name = \"${ceph_dev}\"" -i ${CEPH_WORK_DIR}/install/cluster.yaml
       yq e ".spec.storage.nodes.[${node_index}].devices.[0].config.osdsPerDevice = \"1\"" -i ${CEPH_WORK_DIR}/install/cluster.yaml
+      ${SSH} -o ConnectTimeout=5 core@${node_name} "sudo wipefs -a -f /dev/${ceph_dev} && sudo dd if=/dev/zero of=/dev/${ceph_dev} bs=4096 count=1"
     fi
     node_index=$(( ${node_index} + 1 ))
-    oc label nodes ${node_name} role=storage-node
+    ${OC} label nodes ${node_name} role=storage-node
   done
-  pause 20 "Giving The Operator Time To Start"
-  envsubst < ${CEPH_WORK_DIR}/install/cluster.yaml | oc apply -f -
-  oc apply -f ${CEPH_WORK_DIR}/configure/ceph-storage-class.yaml
-  oc patch configmap rook-ceph-operator-config -n rook-ceph --type merge --patch '"data": {"CSI_PLUGIN_TOLERATIONS": "- key: \"node-role.kubernetes.io/master\"\n  operator: \"Exists\"\n  effect: \"NoSchedule\"\n"}'
+  envsubst < ${CEPH_WORK_DIR}/install/cluster.yaml | ${OC} apply -f -
 }
 
 function regPvc() {
-  oc apply -f ${CEPH_WORK_DIR}/configure/registry-pvc.yaml
-  oc patch configs.imageregistry.operator.openshift.io cluster --type json -p '[{ "op": "remove", "path": "/spec/storage/emptyDir" }]'
-  oc patch configs.imageregistry.operator.openshift.io cluster --type merge --patch '{"spec":{"rolloutStrategy":"Recreate","managementState":"Managed","storage":{"pvc":{"claim":"registry-pvc"}}}}'
+  ${OC} apply -f ${CEPH_WORK_DIR}/configure/ceph-storage-class.yaml
+  ${OC} patch configmap rook-ceph-operator-config -n rook-ceph --type merge --patch '"data": {"CSI_PLUGIN_TOLERATIONS": "- key: \"node-role.kubernetes.io/master\"\n  operator: \"Exists\"\n  effect: \"NoSchedule\"\n"}'
+  ${OC} apply -f ${CEPH_WORK_DIR}/configure/registry-pvc.yaml
+  ${OC} patch configs.imageregistry.operator.openshift.io cluster --type json -p '[{ "op": "remove", "path": "/spec/storage/emptyDir" }]'
+  ${OC} patch configs.imageregistry.operator.openshift.io cluster --type merge --patch '{"spec":{"rolloutStrategy":"Recreate","managementState":"Managed","storage":{"pvc":{"claim":"registry-pvc"}}}}'
 }
 
 function initCephVars() {
@@ -1160,6 +1187,9 @@ function initCephVars() {
       -i)     
         installCeph
       ;;
+      -c)
+        createCephCluster
+      ;;
       -r)
         regPvc
       ;;
@@ -1175,15 +1205,42 @@ function postInstall() {
   do
     case $j in
       -d)
-        oc patch ClusterVersion version --type merge -p '{"spec":{"channel":""}}'
-        oc patch configs.samples.operator.openshift.io cluster --type merge --patch '{"spec":{"managementState":"Removed"}}'
-        oc patch OperatorHub cluster --type json -p '[{"op": "add", "path": "/spec/sources/0/disabled", "value": true}]'
+        ${OC} patch ClusterVersion version --type merge -p '{"spec":{"channel":""}}'
+        ${OC} patch configs.samples.operator.openshift.io cluster --type merge --patch '{"spec":{"managementState":"Removed"}}'
+        ${OC} patch OperatorHub cluster --type json -p '[{"op": "replace", "path": "/spec/sources", "value": []}]'
+        ${OC} patch OperatorHub cluster --type json -p '[{"op": "add", "path": "/spec/disableAllDefaultSources", "value": true}]'
       ;;
       *)
         # catch all
       ;;
     esac
   done
-  oc patch imagepruners.imageregistry.operator.openshift.io/cluster --type merge -p '{"spec":{"schedule":"0 0 * * *","suspend":false,"keepTagRevisions":3,"keepYoungerThan":60,"resources":{},"affinity":{},"nodeSelector":{},"tolerations":[],"startingDeadlineSeconds":60,"successfulJobsHistoryLimit":3,"failedJobsHistoryLimit":3}}'
-  oc delete pod --field-selector=status.phase==Succeeded --all-namespaces
+  ${OC} patch imagepruners.imageregistry.operator.openshift.io/cluster --type merge -p '{"spec":{"schedule":"0 0 * * *","suspend":false,"keepTagRevisions":3,"keepYoungerThan":60,"resources":{},"affinity":{},"nodeSelector":{},"tolerations":[],"startingDeadlineSeconds":60,"successfulJobsHistoryLimit":3,"failedJobsHistoryLimit":3}}'
+  ${OC} delete pod --field-selector=status.phase==Succeeded --all-namespaces
+}
+
+function getNodes() {
+
+  for j in "$@"
+  do
+    case $j in
+      -cp)
+        YQ_PATH="control-plane.okd-hosts"
+        let NODE_COUNT=$(yq e ".control-plane.okd-hosts" ${CLUSTER_CONFIG} | yq e 'length' -)
+      ;;
+      -cn)
+        YQ_PATH="compute-nodes"
+        let NODE_COUNT=$(yq e ".compute-nodes" ${CLUSTER_CONFIG} | yq e 'length' -)
+      ;;
+    esac
+  done
+  
+  let node_index=0
+  while [[ node_index -lt ${NODE_COUNT} ]]
+  do
+    node_name=$(yq e ".${YQ_PATH}.[${node_index}].name" ${CLUSTER_CONFIG}).${DOMAIN}
+    echo ${node_name}
+    node_index=$(( ${node_index} + 1 ))
+  done
+
 }

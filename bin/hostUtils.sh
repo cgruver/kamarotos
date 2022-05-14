@@ -165,9 +165,9 @@ function destroyMetal() {
 
   if [[ ${ceph_dev} != "na" ]] && [[ ${ceph_dev} != "" ]]
   then
-    ${SSH} -o ConnectTimeout=5 ${user}@${hostname}.${DOMAIN} "sudo wipefs -a -f /dev/${ceph_dev} && sudo dd if=/dev/zero of=/dev/${ceph_dev} bs=4096 count=1"
+    ${SSH} -o ConnectTimeout=5 ${user}@${hostname}.${DOMAIN} "sudo wipefs -a -f ${ceph_dev} && sudo dd if=/dev/zero of=${ceph_dev} bs=4096 count=1"
   fi
-  ${SSH} -o ConnectTimeout=5 ${user}@${hostname}.${DOMAIN} "sudo wipefs -a -f /dev/${boot_dev} && sudo dd if=/dev/zero of=/dev/${boot_dev} bs=4096 count=1 && sudo ${p_cmd}"
+  ${SSH} -o ConnectTimeout=5 ${user}@${hostname}.${DOMAIN} "sudo wipefs -a -f ${boot_dev} && sudo dd if=/dev/zero of=${boot_dev} bs=4096 count=1 && sudo ${p_cmd}"
 }
 
 function deletePxeConfig() {
@@ -237,7 +237,7 @@ function configOkdNode() {
   local mac=${3}
   local role=${4}
 
-cat << EOF > ${WORK_DIR}/ipxe-work-dir/ignition/${mac//:/-}.yml
+cat << EOF > ${WORK_DIR}/ipxe-work-dir/${mac//:/-}-config.yml
 variant: fcos
 version: ${BUTANE_SPEC_VERSION}
 ignition:
@@ -249,7 +249,6 @@ kernel_arguments:
     - mitigations=auto
   should_not_exist:
     - mitigations=auto,nosmt
-  should_not_exist:
     - mitigations=off
 storage:
   files:
@@ -303,7 +302,38 @@ storage:
           logdir /var/log/chrony
 EOF
 
-cat ${WORK_DIR}/ipxe-work-dir/ignition/${mac//:/-}.yml | butane -d ${WORK_DIR}/ipxe-work-dir/ -o ${WORK_DIR}/ipxe-work-dir/ignition/${mac//:/-}.ign
+cat ${WORK_DIR}/ipxe-work-dir/${mac//:/-}-config.yml | butane -d ${WORK_DIR}/ipxe-work-dir/ -o ${WORK_DIR}/ipxe-work-dir/ignition/${mac//:/-}.ign
+
+}
+
+function configCephPart() {
+
+local mac=${1}
+local boot_dev=${2}
+
+mv ${WORK_DIR}/ipxe-work-dir/ignition/${mac//:/-}.ign ${WORK_DIR}/ipxe-work-dir/${mac//:/-}.ign
+
+cat << EOF > ${WORK_DIR}/ipxe-work-dir/${mac//:/-}-ceph.yml
+variant: fcos
+version: ${BUTANE_SPEC_VERSION}
+ignition:
+  config:
+    merge:
+      - local: ${mac//:/-}.ign
+storage:
+  disks:
+    - device: ${boot_dev}
+      wipe_table: false
+      partitions:
+        - label: root
+          number: 4
+          size_mib: 102400
+          resize: true
+        - number: 5
+          size_mib: 0
+EOF
+
+cat ${WORK_DIR}/ipxe-work-dir/${mac//:/-}-ceph.yml | butane -d ${WORK_DIR}/ipxe-work-dir/ -o ${WORK_DIR}/ipxe-work-dir/ignition/${mac//:/-}.ign
 
 }
 
@@ -330,7 +360,7 @@ fi
 cat << EOF > ${WORK_DIR}/ipxe-work-dir/${mac//:/-}.ipxe
 #!ipxe
 
-kernel http://${BASTION_HOST}/install/fcos/${OKD_RELEASE}/vmlinuz edd=off net.ifnames=1 rd.neednet=1 coreos.inst.install_dev=/dev/${boot_dev} coreos.inst.ignition_url=http://${BASTION_HOST}/install/fcos/ignition/${CLUSTER_NAME}-${SUB_DOMAIN}/${mac//:/-}.ign coreos.inst.platform_id=${platform} initrd=initrd initrd=rootfs.img ${CONSOLE_OPT}
+kernel http://${BASTION_HOST}/install/fcos/${OKD_RELEASE}/vmlinuz edd=off net.ifnames=1 rd.neednet=1 coreos.inst.install_dev=${boot_dev} coreos.inst.ignition_url=http://${BASTION_HOST}/install/fcos/ignition/${CLUSTER_NAME}-${SUB_DOMAIN}/${mac//:/-}.ign coreos.inst.platform_id=${platform} initrd=initrd initrd=rootfs.img ${CONSOLE_OPT}
 initrd http://${BASTION_HOST}/install/fcos/${OKD_RELEASE}/initrd
 initrd http://${BASTION_HOST}/install/fcos/${OKD_RELEASE}/rootfs.img
 

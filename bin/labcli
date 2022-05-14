@@ -8,6 +8,7 @@
 
 SSH="ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null"
 SCP="scp -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null"
+OC="oc --kubeconfig=${KUBE_INIT_CONFIG}"
 
 for i in "$@"
 do
@@ -114,6 +115,12 @@ do
     ;;
     --post)
       postInstall "$@"
+    ;;
+    --reset-nic)
+      resetNic "$@"
+    ;;
+    --nodes)
+      getNodes "$@"
     ;;
     *)
        # catch all

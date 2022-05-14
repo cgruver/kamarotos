@@ -1,3 +1,10 @@
+export OKD_LAB_PATH=${HOME}/okd-lab
+export PATH=$PATH:${OKD_LAB_PATH}/bin
+if [[ -z ${LAB_CONFIG_FILE} ]]
+then
+  export LAB_CONFIG_FILE=${OKD_LAB_PATH}/lab-config/lab.yaml
+fi
+
 function labenv() {
 
   for i in "$@"
@@ -95,7 +102,6 @@ function labctx() {
     setEdgeEnv
     setDomainEnv
   fi
-  echo "Your shell environment is now set up to control lab domain: ${DOMAIN}"
 }
 
 function mask2cidr() {
