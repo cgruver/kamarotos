@@ -256,7 +256,7 @@ EOF
 }
 
 function getOkdRelease() {
-  OKD_RELEASE=$(curl https://github.com/openshift/okd/releases/latest | cut -d"/" -f8 | cut -d\" -f1)
+  OKD_RELEASE=$(basename $(curl -Ls -o /dev/null -w %{url_effective} https://github.com/openshift/okd/releases/latest))
   echo ${OKD_RELEASE}
   yq e ".cluster.release = \"${OKD_RELEASE}\"" -i ${CLUSTER_CONFIG}
 }
