@@ -113,7 +113,7 @@ mkdir -p /root/bin
 curl -o /root/bin/rebuildhost.sh ${INSTALL_URL}/postinstall/rebuildhost.sh
 chmod 700 /root/bin/rebuildhost.sh
 curl -o /etc/chrony.conf ${INSTALL_URL}/postinstall/chrony.conf
-echo '@reboot root nmcli con mod "br0 slave 1" ethtool.feature-tso off' >> /etc/crontab
+echo '@reboot root nmcli con mod "br0_slave_1" ethtool.feature-tso off' >> /etc/crontab
 %end
 
 reboot

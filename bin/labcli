@@ -86,7 +86,7 @@ do
       getOkdRelease
     ;;
     --console)
-      ocConsole
+      ocConsole "$@"
     ;;
     --login)
       ocLogin

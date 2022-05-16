@@ -266,13 +266,36 @@ function ocLogin() {
 }
 
 function ocConsole() {
+
+  CONSOLE_ALL="false"
   SYS_ARCH=$(uname)
-  if [[ ${SYS_ARCH} == "Darwin" ]]
+  if [[ ${SYS_ARCH} != "Darwin" ]]
   then
-    # open -a Safari $(oc whoami --show-console)
-    open -a Safari https://console-openshift-console.apps.${CLUSTER_NAME}.${SUB_DOMAIN}.${LAB_DOMAIN}
-  else
     echo "Unsupported OS: This function currently supports Darwin OS only"
+    exit 1
+  fi
+
+  for i in "$@"
+  do
+    case $i in
+      -a)
+        CONSOLE_ALL="true"
+      ;;
+    esac
+  done
+
+  if [[ ${CONSOLE_ALL} == "true" ]]
+  then
+    DOMAIN_COUNT=$(yq e ".sub-domain-configs" ${LAB_CONFIG_FILE} | yq e 'length' -)
+    let DOMAIN_INDEX=0
+    while [[ ${DOMAIN_INDEX} -lt ${DOMAIN_COUNT} ]]
+    do
+      labctx $(yq e ".sub-domain-configs.[${DOMAIN_INDEX}].name" ${LAB_CONFIG_FILE})
+      open -a Safari https://console-openshift-console.apps.${CLUSTER_NAME}.${SUB_DOMAIN}.${LAB_DOMAIN}
+      DOMAIN_INDEX=$(( ${DOMAIN_INDEX} + 1 ))
+    done
+  else
+    open -a Safari https://console-openshift-console.apps.${CLUSTER_NAME}.${SUB_DOMAIN}.${LAB_DOMAIN}
   fi
 }
 
