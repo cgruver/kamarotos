@@ -840,7 +840,7 @@ function deployWorkers() {
       # Create the VM
       if [[ ${ceph_node} == "true" ]]
       then
-        ceph_vol=$(yq e ".compute-nodes.[${node_index}].ceph.ceph_vol" ${CLUSTER_CONFIG})
+        ceph_vol=$(yq e ".compute-nodes.[${node_index}].ceph.ceph-vol" ${CLUSTER_CONFIG})
       else
         ceph_vol=0
       fi
