@@ -50,7 +50,7 @@ function configRouter() {
 function initRouter() {
   if [[ ${EDGE} == "true" ]]
   then
-    lab --edge
+    labenv -e
     if [[ ${LAB_CTX_ERROR} == "true" ]]
     then
       exit 1
@@ -85,7 +85,7 @@ function initRouter() {
 function setupRouter() {
   if [[ ${EDGE} == "true" ]]
   then
-    lab --edge
+    labenv -e
     if [[ ${LAB_CTX_ERROR} == "true" ]]
     then
       exit 1
@@ -631,7 +631,7 @@ function getBootFiles() {
 function addWireless() {
   if [[ ${EDGE} == "true" ]]
   then
-    lab --edge
+    labenv -e
     if [[ ${LAB_CTX_ERROR} == "true" ]]
     then
       exit 1
