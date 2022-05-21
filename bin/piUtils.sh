@@ -79,38 +79,47 @@ config timeserver 'ntp'\n
 EOF
 
 echo -e ${FILE} > ${PI_WORK_DIR}/config/system
+SD_DEV=mmcblk1
+SD_PART=mmcblk1p
 
-${SSH} root@${EDGE_ROUTER} "umount /dev/mmcblk1p1 ; \
-  umount /dev/mmcblk1p2 ; \
-  umount /dev/mmcblk1p3 ; \
-  dd if=/dev/zero of=/dev/mmcblk1 bs=4096 count=1 ; \
+GL_MODEL=$(${SSH} root@${EDGE_ROUTER} "uci get glconfig.general.model" )
+if [[ ${GL_MODEL} == "ar750s"  ]]
+then
+  SD_DEV=sda
+  SD_PART=sda
+fi
+
+${SSH} root@${EDGE_ROUTER} "umount /dev/${SD_PART}1 ; \
+  umount /dev/${SD_PART}2 ; \
+  umount /dev/${SD_PART}3 ; \
+  dd if=/dev/zero of=/dev/${SD_DEV} bs=4096 count=1 ; \
   wget https://downloads.openwrt.org/releases/${OPENWRT_VER}/targets/bcm27xx/bcm2711/openwrt-${OPENWRT_VER}-bcm27xx-bcm2711-rpi-4-ext4-factory.img.gz -O /data/openwrt.img.gz ; \
   gunzip /data/openwrt.img.gz ; \
-  dd if=/data/openwrt.img of=/dev/mmcblk1 bs=4M conv=fsync ; \
-  PART_INFO=\$(sfdisk -l /dev/mmcblk1 | grep mmcblk1p2) ; \
+  dd if=/data/openwrt.img of=/dev/${SD_DEV} bs=4M conv=fsync ; \
+  PART_INFO=\$(sfdisk -l /dev/${SD_DEV} | grep ${SD_PART}2) ; \
   let ROOT_SIZE=20971520 ; \
   let P2_START=\$(echo \${PART_INFO} | cut -d\" \" -f2) ; \
   let P3_START=\$(( \${P2_START}+\${ROOT_SIZE}+8192 )) ; \
-  sfdisk --no-reread -f --delete /dev/mmcblk1 2 ; \
-  sfdisk --no-reread -f -d /dev/mmcblk1 > /tmp/part.info ; \
-  echo \"/dev/mmcblk1p2 : start= \${P2_START}, size= \${ROOT_SIZE}, type=83\" >> /tmp/part.info ; \
-  echo \"/dev/mmcblk1p3 : start= \${P3_START}, type=83\" >> /tmp/part.info ; \
-  sfdisk --no-reread -f /dev/mmcblk1 < /tmp/part.info ; \
+  sfdisk --no-reread -f --delete /dev/${SD_DEV} 2 ; \
+  sfdisk --no-reread -f -d /dev/${SD_DEV} > /tmp/part.info ; \
+  echo \"/dev/${SD_PART}2 : start= \${P2_START}, size= \${ROOT_SIZE}, type=83\" >> /tmp/part.info ; \
+  echo \"/dev/${SD_PART}3 : start= \${P3_START}, type=83\" >> /tmp/part.info ; \
+  sfdisk --no-reread -f /dev/${SD_DEV} < /tmp/part.info ; \
   rm /tmp/part.info ; \
   rm /data/openwrt.img ; \
-  e2fsck -f /dev/mmcblk1p2 ; \
-  resize2fs /dev/mmcblk1p2 ; \
-  mkfs.ext4 /dev/mmcblk1p3 ; \
+  e2fsck -f /dev/${SD_PART}2 ; \
+  resize2fs /dev/${SD_PART}2 ; \
+  mkfs.ext4 /dev/${SD_PART}3 ; \
   mkdir -p /tmp/pi ; \
-  mount -t ext4 /dev/mmcblk1p2 /tmp/pi/"
+  mount -t ext4 /dev/${SD_PART}2 /tmp/pi/"
 
 ${SCP} -r ${PI_WORK_DIR}/config/* root@${EDGE_ROUTER}:/tmp/pi/etc/config
 ${SSH} root@${EDGE_ROUTER} "cat /etc/dropbear/authorized_keys >> /tmp/pi/etc/dropbear/authorized_keys ; \
   dropbearkey -y -f /root/.ssh/id_dropbear | grep \"^ssh-\" >> /tmp/pi/etc/dropbear/authorized_keys ; \
   rm -f /tmp/pi/etc/rc.d/*dnsmasq* ; \
-  umount /dev/mmcblk1p1 ; \
-  umount /dev/mmcblk1p2 ; \
-  umount /dev/mmcblk1p3 ; \
+  umount /dev/${SD_PART}1 ; \
+  umount /dev/${SD_PART}2 ; \
+  umount /dev/${SD_PART}3 ; \
   rm -rf /tmp/pi"
 echo "bastion.${LAB_DOMAIN}.         IN      A      ${BASTION_HOST}" | ${SSH} root@${EDGE_ROUTER} "cat >> /etc/bind/db.${LAB_DOMAIN}"
 echo "10    IN      PTR     bastion.${LAB_DOMAIN}."  | ${SSH} root@${EDGE_ROUTER} "cat >> /etc/bind/db.${EDGE_ARPA}"

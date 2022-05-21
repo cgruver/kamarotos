@@ -201,6 +201,15 @@ EOF
 
 function initEdge() {
 
+  WLAN_DEV=wlan0
+  GL_MODEL=$(${SSH} root@${EDGE_ROUTER} "uci get glconfig.general.model" )
+  if [[ ${GL_MODEL} == "ar750s"  ]]
+  then
+    echo "Configuring WWAN & WLAN for AR750S not supported yet.  You will need to manually set up wireless"
+    WWAN=false
+    WLAN=false
+  fi
+
 cat << EOF > ${WORK_DIR}/uci.batch
 set dropbear.@dropbear[0].PasswordAuth="off"
 set dropbear.@dropbear[0].RootPasswordAuth="off"
@@ -214,40 +223,72 @@ set dhcp.lan.limit="30"
 add_list dhcp.lan.dhcp_option="6,${EDGE_ROUTER}"
 EOF
 
-if [[ ${WWAN} == "true" ]]
-then
-  echo "Listing available Wireless Networks:"
-  ${SSH} root@${INIT_IP} "iwinfo wlan0 scan"
-  echo ""
-  echo "Enter the SSID of the Wireless Lan that you are connecting to:"
-  read WIFI_SSID
-  echo "Enter the passphrase of the wireless lan that you are connecting to:"
-  read WIFI_KEY
-  WIFI_ENCRYPT=psk2
-
-  unset zone
-  let i=0
-  let j=1
-  while [[ ${j} -eq 1 ]]
-  do
-    zone=$(${SSH} root@${INIT_IP} "uci get firewall.@zone[${i}].name")
-    let rc=${?}
-    if [[ ${rc} -ne 0 ]]
-    then
-      let j=2
-    elif [[ ${zone} == "wan" ]]
-    then
-      let j=0
-    else
-      let i=${i}+1
-    fi
-  done
-  if [[ ${j} -eq 0 ]]
+  if [[ ${WWAN} == "true" ]]
   then
-    echo "add_list firewall.@zone[${i}].network=wwan" >> ${WORK_DIR}/uci.batch
-  else
-    echo "FIREWALL ZONE NOT FOUND, CCONFIGURE MANUALLY WITH LUCI"
+    echo "Listing available Wireless Networks:"
+    ${SSH} root@${INIT_IP} "iwinfo ${WLAN_DEV} scan"
+    echo ""
+    echo "Enter the SSID of the Wireless Lan that you are connecting to:"
+    read WIFI_SSID
+    echo "Enter the passphrase of the wireless lan that you are connecting to:"
+    read WIFI_KEY
+    WIFI_ENCRYPT=psk2
+
+    unset zone
+    let i=0
+    let j=1
+    while [[ ${j} -eq 1 ]]
+    do
+      zone=$(${SSH} root@${INIT_IP} "uci get firewall.@zone[${i}].name")
+      let rc=${?}
+      if [[ ${rc} -ne 0 ]]
+      then
+        let j=2
+      elif [[ ${zone} == "wan" ]]
+      then
+        let j=0
+      else
+        let i=${i}+1
+      fi
+    done
+    if [[ ${j} -eq 0 ]]
+    then
+      echo "add_list firewall.@zone[${i}].network=wwan" >> ${WORK_DIR}/uci.batch
+    else
+      echo "FIREWALL ZONE NOT FOUND, CCONFIGURE MANUALLY WITH LUCI"
+    fi
+    configWwanMV1000W ${WIFI_SSID} ${WIFI_KEY} ${WIFI_ENCRYPT}
+    # if [[ ${GL_MODEL} == "ar750s"  ]]
+    # then
+    #   configWwanAR750S ${WIFI_SSID} ${WIFI_KEY} ${WIFI_ENCRYPT}
+    # else
+    #   configWwanMV1000W ${WIFI_SSID} ${WIFI_KEY} ${WIFI_ENCRYPT}
+    # fi
   fi
+
+  if [[ ${WLAN} == "true" ]]
+  then
+    echo "Enter an SSID for you Lab Wireless LAN:"
+    read LAB_WIFI_SSID
+    echo "Enter a WPA/PSK 2 Passphrase for your Lab Wireless LAN:"
+    read LAB_WIFI_KEY
+    configWlanMV1000W ${LAB_WIFI_SSID} ${LAB_WIFI_KEY}
+    # if [[ ${GL_MODEL} == "ar750s"  ]]
+    # then
+    #   configWlanAR750S ${LAB_WIFI_SSID} ${LAB_WIFI_KEY}
+    # else
+    #   configWlanMV1000W ${LAB_WIFI_SSID} ${LAB_WIFI_KEY}
+    # fi
+  fi
+
+  echo "commit" >> ${WORK_DIR}/uci.batch
+}
+
+function configWwanMV1000W() {
+
+local wifi_ssid=${1}
+local wifi_key=${2}
+local wifi_encrypt=${3}
 
 cat << EOF >> ${WORK_DIR}/uci.batch
 set wireless.radio2.disabled="0"
@@ -261,21 +302,34 @@ set wireless.sta.mode="sta"
 set wireless.sta.disabled="0"
 set wireless.sta.network="wwan"
 set wireless.sta.wds="0"
-set wireless.sta.ssid="${WIFI_SSID}"  
-set wireless.sta.encryption="${WIFI_ENCRYPT}"      
-set wireless.sta.key="${WIFI_KEY}"    
+set wireless.sta.ssid="${wifi_ssid}"  
+set wireless.sta.encryption="${wifi_encrypt}"      
+set wireless.sta.key="${wifi_key}"    
 set network.wwan=interface
 set network.wwan.proto="dhcp"
 set network.wwan.metric="20"
 EOF
-fi
+}
 
-if [[ ${WLAN} == "true" ]]
-then
-echo "Enter an SSID for you Lab Wireless LAN:"
-read LAB_WIFI_SSID
-echo "Enter a WPA/PSK 2 Passphrase for your Lab Wireless LAN:"
-read LAB_WIFI_KEY
+function configWwanAR750S() {
+# wireless.sta=wifi-iface
+# wireless.sta.device='radio0'
+# wireless.sta.network='wwan'
+# wireless.sta.mode='sta'
+# wireless.sta.ifname='wlan-sta'
+# wireless.sta.ssid='clghome'
+# wireless.sta.bssid='58:D9:D5:21:1A:7E'
+# wireless.sta.channel='40'
+# wireless.sta.encryption='psk-mixed'
+# wireless.sta.key='WelcomeToOurHome'
+# wireless.sta.disabled='0'
+
+}
+
+function configWlanMV1000W() {
+
+local wifi_ssid=${1}
+local wifi_key=${2}
 
 cat << EOF >> ${WORK_DIR}/uci.batch
 delete network.guest
@@ -288,17 +342,19 @@ set wireless.default_radio0.ifname="wlan0"
 set wireless.default_radio0.network="lan"
 set wireless.default_radio0.mode="ap"
 set wireless.default_radio0.disabled="0"
-set wireless.default_radio0.ssid="${LAB_WIFI_SSID}"
-set wireless.default_radio0.key="${LAB_WIFI_KEY}"
+set wireless.default_radio0.ssid="${wifi_ssid}"
+set wireless.default_radio0.key="${wifi_key}"
 set wireless.default_radio0.encryption="psk2"
 set wireless.default_radio0.multi_ap="1"
 set wireless.radio0.legacy_rates="0"
 set wireless.radio0.htmode="HT20"
 set wireless.radio0.channel=${WIFI_CHANNEL}
 EOF
-fi
 
-echo "commit" >> ${WORK_DIR}/uci.batch
+}
+
+function configWlanAR750S() {
+
 }
 
 function setupEdge() {
