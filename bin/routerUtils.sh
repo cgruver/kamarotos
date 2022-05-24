@@ -199,6 +199,79 @@ EOF
   fi
 }
 
+function configWwanMV1000W() {
+
+local wifi_ssid=${1}
+local wifi_key=${2}
+local wifi_encrypt=${3}
+
+cat << EOF >> ${WORK_DIR}/uci.batch
+set wireless.radio2.disabled="0"
+set wireless.radio2.repeater="1"
+set wireless.radio2.legacy_rates="0"
+set wireless.radio2.htmode="HT20"
+set wireless.sta=wifi-iface
+set wireless.sta.device="radio2"
+set wireless.sta.ifname="wlan2"
+set wireless.sta.mode="sta"
+set wireless.sta.disabled="0"
+set wireless.sta.network="wwan"
+set wireless.sta.wds="0"
+set wireless.sta.ssid="${wifi_ssid}"  
+set wireless.sta.encryption="${wifi_encrypt}"      
+set wireless.sta.key="${wifi_key}"    
+set network.wwan=interface
+set network.wwan.proto="dhcp"
+set network.wwan.metric="20"
+EOF
+}
+
+function configWwanAR750S() {
+# wireless.sta=wifi-iface
+# wireless.sta.device='radio0'
+# wireless.sta.network='wwan'
+# wireless.sta.mode='sta'
+# wireless.sta.ifname='wlan-sta'
+# wireless.sta.ssid='clghome'
+# wireless.sta.bssid='58:D9:D5:21:1A:7E'
+# wireless.sta.channel='40'
+# wireless.sta.encryption='psk-mixed'
+# wireless.sta.key='WelcomeToOurHome'
+# wireless.sta.disabled='0'
+
+}
+
+function configWlanMV1000W() {
+
+local wifi_ssid=${1}
+local wifi_key=${2}
+
+cat << EOF >> ${WORK_DIR}/uci.batch
+delete network.guest
+delete dhcp.guest
+delete wireless.guest2g
+delete wireless.sta2
+set wireless.default_radio0=wifi-iface
+set wireless.default_radio0.device="radio0"
+set wireless.default_radio0.ifname="wlan0"
+set wireless.default_radio0.network="lan"
+set wireless.default_radio0.mode="ap"
+set wireless.default_radio0.disabled="0"
+set wireless.default_radio0.ssid="${wifi_ssid}"
+set wireless.default_radio0.key="${wifi_key}"
+set wireless.default_radio0.encryption="psk2"
+set wireless.default_radio0.multi_ap="1"
+set wireless.radio0.legacy_rates="0"
+set wireless.radio0.htmode="HT20"
+set wireless.radio0.channel=${WIFI_CHANNEL}
+EOF
+
+}
+
+function configWlanAR750S() {
+
+}
+
 function initEdge() {
 
   WLAN_DEV=wlan0
@@ -282,79 +355,6 @@ EOF
   fi
 
   echo "commit" >> ${WORK_DIR}/uci.batch
-}
-
-function configWwanMV1000W() {
-
-local wifi_ssid=${1}
-local wifi_key=${2}
-local wifi_encrypt=${3}
-
-cat << EOF >> ${WORK_DIR}/uci.batch
-set wireless.radio2.disabled="0"
-set wireless.radio2.repeater="1"
-set wireless.radio2.legacy_rates="0"
-set wireless.radio2.htmode="HT20"
-set wireless.sta=wifi-iface
-set wireless.sta.device="radio2"
-set wireless.sta.ifname="wlan2"
-set wireless.sta.mode="sta"
-set wireless.sta.disabled="0"
-set wireless.sta.network="wwan"
-set wireless.sta.wds="0"
-set wireless.sta.ssid="${wifi_ssid}"  
-set wireless.sta.encryption="${wifi_encrypt}"      
-set wireless.sta.key="${wifi_key}"    
-set network.wwan=interface
-set network.wwan.proto="dhcp"
-set network.wwan.metric="20"
-EOF
-}
-
-function configWwanAR750S() {
-# wireless.sta=wifi-iface
-# wireless.sta.device='radio0'
-# wireless.sta.network='wwan'
-# wireless.sta.mode='sta'
-# wireless.sta.ifname='wlan-sta'
-# wireless.sta.ssid='clghome'
-# wireless.sta.bssid='58:D9:D5:21:1A:7E'
-# wireless.sta.channel='40'
-# wireless.sta.encryption='psk-mixed'
-# wireless.sta.key='WelcomeToOurHome'
-# wireless.sta.disabled='0'
-
-}
-
-function configWlanMV1000W() {
-
-local wifi_ssid=${1}
-local wifi_key=${2}
-
-cat << EOF >> ${WORK_DIR}/uci.batch
-delete network.guest
-delete dhcp.guest
-delete wireless.guest2g
-delete wireless.sta2
-set wireless.default_radio0=wifi-iface
-set wireless.default_radio0.device="radio0"
-set wireless.default_radio0.ifname="wlan0"
-set wireless.default_radio0.network="lan"
-set wireless.default_radio0.mode="ap"
-set wireless.default_radio0.disabled="0"
-set wireless.default_radio0.ssid="${wifi_ssid}"
-set wireless.default_radio0.key="${wifi_key}"
-set wireless.default_radio0.encryption="psk2"
-set wireless.default_radio0.multi_ap="1"
-set wireless.radio0.legacy_rates="0"
-set wireless.radio0.htmode="HT20"
-set wireless.radio0.channel=${WIFI_CHANNEL}
-EOF
-
-}
-
-function configWlanAR750S() {
-
 }
 
 function setupEdge() {
