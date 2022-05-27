@@ -231,6 +231,7 @@ function configWwanAR750S() {
   local wifi_key=${2}
 
 cat << EOF >> ${WORK_DIR}/uci.batch
+set wireless.radio0.repeater="1"
 set wireless.sta=wifi-iface
 set wireless.sta.device='radio0'
 set wireless.sta.network='wwan'
