@@ -203,7 +203,6 @@ function configWwanMV1000W() {
 
 local wifi_ssid=${1}
 local wifi_key=${2}
-local wifi_encrypt=${3}
 
 cat << EOF >> ${WORK_DIR}/uci.batch
 set wireless.radio2.disabled="0"
@@ -218,7 +217,7 @@ set wireless.sta.disabled="0"
 set wireless.sta.network="wwan"
 set wireless.sta.wds="0"
 set wireless.sta.ssid="${wifi_ssid}"  
-set wireless.sta.encryption="${wifi_encrypt}"      
+set wireless.sta.encryption="psk2"      
 set wireless.sta.key="${wifi_key}"    
 set network.wwan=interface
 set network.wwan.proto="dhcp"
@@ -227,18 +226,24 @@ EOF
 }
 
 function configWwanAR750S() {
-# wireless.sta=wifi-iface
-# wireless.sta.device='radio0'
-# wireless.sta.network='wwan'
-# wireless.sta.mode='sta'
-# wireless.sta.ifname='wlan-sta'
-# wireless.sta.ssid='clghome'
-# wireless.sta.bssid='58:D9:D5:21:1A:7E'
-# wireless.sta.channel='40'
-# wireless.sta.encryption='psk-mixed'
-# wireless.sta.key='WelcomeToOurHome'
-# wireless.sta.disabled='0'
 
+  local wifi_ssid=${1}
+  local wifi_key=${2}
+
+cat << EOF >> ${WORK_DIR}/uci.batch
+set wireless.sta=wifi-iface
+set wireless.sta.device='radio0'
+set wireless.sta.network='wwan'
+set wireless.sta.mode='sta'
+set wireless.sta.ifname='wlan-sta'
+set wireless.sta.ssid="${wifi_ssid}"
+set wireless.sta.encryption='psk-mixed'
+set wireless.sta.key="${wifi_key}"
+set wireless.sta.disabled='0'
+set network.wwan=interface
+set network.wwan.proto='dhcp'
+set network.wwan.metric='20'
+EOF
 }
 
 function configWlanMV1000W() {
@@ -270,17 +275,42 @@ EOF
 
 function configWlanAR750S() {
 
+local wifi_ssid=${1}
+local wifi_key=${2}
+
+cat << EOF >> ${WORK_DIR}/uci.batch
+set wireless.default_radio0=wifi-iface
+set wireless.default_radio0.device='radio0'
+set wireless.default_radio0.network='lan'
+set wireless.default_radio0.mode='ap'
+set wireless.default_radio0.key="${wifi_key}"
+set wireless.default_radio0.disassoc_low_ack='0'
+set wireless.default_radio0.ifname='wlan0'
+set wireless.default_radio0.wds='1'
+set wireless.default_radio0.ssid="${wifi_ssid}"
+set wireless.default_radio0.encryption='sae-mixed'
+set wireless.default_radio1.key="${wifi_key}"
+set wireless.default_radio1.wds='1'
+set wireless.default_radio1.disassoc_low_ack='0'
+set wireless.default_radio1.ifname='wlan1'
+set wireless.default_radio1.ssid="${wifi_ssid}"
+set wireless.default_radio1.encryption='sae-mixed'
+delete wireless.guest5g
+delete wireless.guest2g
+delete network.guest
+delete dhcp.guest
+EOF
 }
 
 function initEdge() {
 
   WLAN_DEV=wlan0
-  GL_MODEL=$(${SSH} root@${EDGE_ROUTER} "uci get glconfig.general.model" )
-  if [[ ${GL_MODEL} == "ar750s"  ]]
+  GL_MODEL=$(${SSH} root@${INIT_IP} "uci get glconfig.general.model" )
+  echo "Detected Router Model: ${GL_MODEL}"
+  if [[ ${GL_MODEL} != "ar750s"  ]] && [[ ${GL_MODEL} != "mv1000"  ]]
   then
-    echo "Configuring WWAN & WLAN for AR750S not supported yet.  You will need to manually set up wireless"
-    WWAN=false
-    WLAN=false
+    echo "Unsupported Router Model Detected.  These scripts only support configuration of GL-iNet AR-750S or MV1000 routers."
+    exit 1
   fi
 
 cat << EOF > ${WORK_DIR}/uci.batch
@@ -305,7 +335,6 @@ EOF
     read WIFI_SSID
     echo "Enter the passphrase of the wireless lan that you are connecting to:"
     read WIFI_KEY
-    WIFI_ENCRYPT=psk2
 
     unset zone
     let i=0
@@ -330,13 +359,12 @@ EOF
     else
       echo "FIREWALL ZONE NOT FOUND, CCONFIGURE MANUALLY WITH LUCI"
     fi
-    configWwanMV1000W ${WIFI_SSID} ${WIFI_KEY} ${WIFI_ENCRYPT}
-    # if [[ ${GL_MODEL} == "ar750s"  ]]
-    # then
-    #   configWwanAR750S ${WIFI_SSID} ${WIFI_KEY} ${WIFI_ENCRYPT}
-    # else
-    #   configWwanMV1000W ${WIFI_SSID} ${WIFI_KEY} ${WIFI_ENCRYPT}
-    # fi
+    if [[ ${GL_MODEL} == "ar750s"  ]]
+    then
+      configWwanAR750S ${WIFI_SSID} ${WIFI_KEY}
+    else
+      configWwanMV1000W ${WIFI_SSID} ${WIFI_KEY}
+    fi
   fi
 
   if [[ ${WLAN} == "true" ]]
@@ -345,13 +373,12 @@ EOF
     read LAB_WIFI_SSID
     echo "Enter a WPA/PSK 2 Passphrase for your Lab Wireless LAN:"
     read LAB_WIFI_KEY
-    configWlanMV1000W ${LAB_WIFI_SSID} ${LAB_WIFI_KEY}
-    # if [[ ${GL_MODEL} == "ar750s"  ]]
-    # then
-    #   configWlanAR750S ${LAB_WIFI_SSID} ${LAB_WIFI_KEY}
-    # else
-    #   configWlanMV1000W ${LAB_WIFI_SSID} ${LAB_WIFI_KEY}
-    # fi
+    if [[ ${GL_MODEL} == "ar750s"  ]]
+    then
+      configWlanAR750S ${LAB_WIFI_SSID} ${LAB_WIFI_KEY}
+    else
+      configWlanMV1000W ${LAB_WIFI_SSID} ${LAB_WIFI_KEY}
+    fi
   fi
 
   echo "commit" >> ${WORK_DIR}/uci.batch
