@@ -8,7 +8,6 @@
 
 SSH="ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null"
 SCP="scp -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null"
-OC="oc --kubeconfig=${KUBE_INIT_CONFIG}"
 
 for i in "$@"
 do
@@ -31,9 +30,11 @@ fi
 
 if [[ ${LAB_CTX_ERROR} == "true" ]]
 then
+  echo "Error processing lab config for domain: ${SUB_DOMAIN}"
   exit 1
 fi
 
+OC="oc --kubeconfig=${KUBE_INIT_CONFIG}"
 DOMAIN="${SUB_DOMAIN}.${LAB_DOMAIN}"
 INSTALL_URL="http://${BASTION_HOST}/install"
 
