@@ -113,7 +113,7 @@ function mask2cidr() {
 
 function setDomainEnv() {
 
-  export CLUSTER_CONFIG=$(yq e ".sub-domain-configs.[${DOMAIN_INDEX}].cluster-config-file" ${LAB_CONFIG_FILE})
+  export CLUSTER_CONFIG=${OKD_LAB_PATH}/lab-config/domain-configs/$(yq e ".sub-domain-configs.[${DOMAIN_INDEX}].cluster-config-file" ${LAB_CONFIG_FILE})
   export SUB_DOMAIN=$(yq e ".sub-domain-configs.[${DOMAIN_INDEX}].name" ${LAB_CONFIG_FILE})
   export DOMAIN="${SUB_DOMAIN}.${LAB_DOMAIN}"
   export DOMAIN_ROUTER=$(yq e ".sub-domain-configs.[${DOMAIN_INDEX}].router-ip" ${LAB_CONFIG_FILE})
@@ -132,7 +132,7 @@ function setDomainEnv() {
   export BUTANE_VERSION=$(yq e ".cluster.butane-version" ${CLUSTER_CONFIG})
   export BUTANE_SPEC_VERSION=$(yq e ".cluster.butane-spec-version" ${CLUSTER_CONFIG})
   export OKD_REGISTRY=$(yq e ".cluster.remote-registry" ${CLUSTER_CONFIG})
-  export PULL_SECRET=$(yq e ".cluster.secret-file" ${CLUSTER_CONFIG})
+  export PULL_SECRET=${OKD_LAB_PATH}/pull-secrets/${CLUSTER_NAME}-pull-secret.json
   IFS="." read -r i1 i2 i3 i4 <<< "${DOMAIN_NETWORK}"
   export DOMAIN_ARPA=${i3}.${i2}.${i1}
   if [[ ! -d ${OKD_LAB_PATH}/okd-cmds/${OKD_RELEASE} ]]

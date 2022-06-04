@@ -197,6 +197,10 @@ function pullSecret() {
   NEXUS_PWD="true"
   NEXUS_PWD_CHK="false"
 
+  if [[ ! -d ${OKD_LAB_PATH}/pull-secrets ]]
+  then
+    mkdir -p ${OKD_LAB_PATH}/pull-secrets
+  fi
   echo "Enter the Nexus user for the pull secret:"
   read NEXUS_USER
   while [[ ${NEXUS_PWD} != ${NEXUS_PWD_CHK} ]]
@@ -262,7 +266,27 @@ function getOkdRelease() {
 }
 
 function ocLogin() {
-  oc login -u admin https://api.${CLUSTER_NAME}.${SUB_DOMAIN}.${LAB_DOMAIN}:6443
+  for i in "$@"
+  do
+    case $i in
+      -a)
+        LOGIN_ALL="true"
+      ;;
+    esac
+  done
+  if [[ ${LOGIN_ALL} == "true" ]]
+  then
+    DOMAIN_COUNT=$(yq e ".sub-domain-configs" ${LAB_CONFIG_FILE} | yq e 'length' -)
+    let DOMAIN_INDEX=0
+    while [[ ${DOMAIN_INDEX} -lt ${DOMAIN_COUNT} ]]
+    do
+      labctx $(yq e ".sub-domain-configs.[${DOMAIN_INDEX}].name" ${LAB_CONFIG_FILE})
+      oc login -u admin https://api.${CLUSTER_NAME}.${SUB_DOMAIN}.${LAB_DOMAIN}:6443
+      DOMAIN_INDEX=$(( ${DOMAIN_INDEX} + 1 ))
+    done
+  else
+    oc login -u admin https://api.${CLUSTER_NAME}.${SUB_DOMAIN}.${LAB_DOMAIN}:6443
+  fi
 }
 
 function ocConsole() {

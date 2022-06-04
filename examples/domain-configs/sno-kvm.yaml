@@ -1,0 +1,35 @@
+cluster:
+  name: okd4
+  cluster-cidr: 10.88.0.0/14
+  service-cidr: 172.20.0.0/16
+  local-registry: nexus.my.awesome.lab:5001
+  proxy-registry: nexus.my.awesome.lab:5000
+  remote-registry: quay.io/openshift/okd
+  butane-version: v0.14.0
+  butane-spec-version: 1.4.0
+  ingress-ip-addr: 10.11.15.2
+kvm-hosts:
+  - host-name: kvm-host01
+    mac-addr: "YOUR_HOST_MAC_HERE"
+    ip-addr: 10.11.15.200
+    disks:
+      disk1: sda
+      disk2: sdb
+bootstrap:
+  metal: false
+  node-spec:
+    memory: 12288
+    cpu: 4
+    root-vol: 50
+  kvm-host: kvm-host01
+  ip-addr: 10.11.15.49
+control-plane:
+  metal: false
+  node-spec:
+    memory: 20480
+    cpu: 6
+    root-vol: 100
+  okd-hosts:
+    - kvm-host: kvm-host01
+      ip-addr: 10.11.15.60
+

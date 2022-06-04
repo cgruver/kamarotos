@@ -1,12 +1,18 @@
 function trustClusterCert() {
+
+  CONSOLE_URL=console-openshift-console.apps.${CLUSTER_NAME}.${DOMAIN}:443
+  API_URL=api.${CLUSTER_NAME}.${DOMAIN}:6443
   SYS_ARCH=$(uname)
   if [[ ${SYS_ARCH} == "Darwin" ]]
   then
-    openssl s_client -showcerts -connect  console-openshift-console.apps.${CLUSTER_NAME}.${SUB_DOMAIN}.${LAB_DOMAIN}:443 </dev/null 2>/dev/null|openssl x509 -outform PEM > /tmp/okd-console.${SUB_DOMAIN}.${LAB_DOMAIN}.crt
+    openssl s_client -showcerts -connect ${CONSOLE_URL} </dev/null 2>/dev/null|openssl x509 -outform PEM > /tmp/okd-console.${SUB_DOMAIN}.${LAB_DOMAIN}.crt
     sudo security add-trusted-cert -d -r trustAsRoot -k "/Library/Keychains/System.keychain" /tmp/okd-console.${SUB_DOMAIN}.${LAB_DOMAIN}.crt
+    openssl s_client -showcerts -connect ${API_URL} </dev/null 2>/dev/null|openssl x509 -outform PEM > /tmp/okd-api.${SUB_DOMAIN}.${LAB_DOMAIN}.crt
+    sudo security add-trusted-cert -d -r trustAsRoot -k "/Library/Keychains/System.keychain" /tmp/okd-api.${SUB_DOMAIN}.${LAB_DOMAIN}.crt
   elif [[ ${SYS_ARCH} == "Linux" ]]
   then
-    sudo openssl s_client -showcerts -connect console-openshift-console.apps.${CLUSTER_NAME}.${SUB_DOMAIN}.${LAB_DOMAIN}:443 </dev/null 2>/dev/null|openssl x509 -outform PEM > /etc/pki/ca-trust/source/anchors/okd-console.${SUB_DOMAIN}.${LAB_DOMAIN}.crt
+    sudo openssl s_client -showcerts -connect ${CONSOLE_URL} </dev/null 2>/dev/null|openssl x509 -outform PEM > /etc/pki/ca-trust/source/anchors/okd-console.${SUB_DOMAIN}.${LAB_DOMAIN}.crt
+    sudo openssl s_client -showcerts -connect ${API_URL} </dev/null 2>/dev/null|openssl x509 -outform PEM > /etc/pki/ca-trust/source/anchors/okd-api.${SUB_DOMAIN}.${LAB_DOMAIN}.crt
     sudo update-ca-trust
   else
     echo "Unsupported OS: Cannot trust openshift cert"

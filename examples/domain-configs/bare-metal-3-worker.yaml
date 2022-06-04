@@ -1,0 +1,55 @@
+cluster:
+  name: okd4
+  cluster-cidr: 10.100.0.0/14
+  service-cidr: 172.30.0.0/16
+  local-registry: nexus.my.awesome.lab:5001
+  proxy-registry: nexus.my.awesome.lab:5000
+  remote-registry: quay.io/openshift/okd
+  butane-version: v0.14.0
+  butane-spec-version: 1.4.0
+  ingress-ip-addr: 10.11.18.2
+bootstrap:
+  metal: true
+  mac-addr: "52:54:00:a1:b2:c3"
+  boot-dev: /dev/sda
+  ip-addr: 10.11.18.49
+  node-spec:
+    memory: 12288
+    cpu: 2
+    root-vol: 50
+  bridge-dev: en13
+  name: okd4-region-01-bootstrap
+control-plane:
+  metal: true
+  okd-hosts:
+    - mac-addr: "YOUR_HOST_MAC_HERE"
+      boot-dev: /dev/sda
+      ip-addr: 10.11.18.60
+    - mac-addr: "YOUR_HOST_MAC_HERE"
+      boot-dev: /dev/sda
+      ip-addr: 10.11.18.61
+    - mac-addr: "YOUR_HOST_MAC_HERE"
+      boot-dev: /dev/sda
+      ip-addr: 10.11.18.62
+compute-nodes:
+  - metal: true
+    mac-addr: "YOUR_HOST_MAC_HERE"
+    boot-dev: /dev/nvme0n1
+    ceph:
+      type: part
+      ceph-dev: nvme0n1p5
+    ip-addr: 10.11.18.70
+  - metal: true
+    mac-addr: "YOUR_HOST_MAC_HERE"
+    boot-dev: /dev/nvme0n1
+    ceph:
+      type: part
+      ceph-dev: nvme0n1p5
+    ip-addr: 10.11.18.71
+  - metal: true
+    mac-addr: "YOUR_HOST_MAC_HERE"
+    boot-dev: /dev/nvme0n1
+    ceph:
+      type: part
+      ceph-dev: nvme0n1p5
+    ip-addr: 10.11.18.72
