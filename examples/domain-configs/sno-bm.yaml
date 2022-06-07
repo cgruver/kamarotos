@@ -2,8 +2,8 @@ cluster:
   name: okd4
   cluster-cidr: 10.88.0.0/14
   service-cidr: 172.20.0.0/16
-  local-registry: nexus.clg.lab:5001
-  proxy-registry: nexus.clg.lab:5000
+  local-registry: nexus.my.awesome.lab:5001
+  proxy-registry: nexus.my.awesome.lab:5000
   remote-registry: quay.io/openshift/okd
   butane-version: v0.14.0
   butane-spec-version: 1.4.0
