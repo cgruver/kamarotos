@@ -232,6 +232,8 @@ function configWwanAR750S() {
 
 cat << EOF >> ${WORK_DIR}/uci.batch
 set wireless.radio0.repeater="1"
+set wireless.radio0.org_htmode='VHT80'
+set wireless.radio0.htmode='HT20'
 set wireless.sta=wifi-iface
 set wireless.sta.device='radio0'
 set wireless.sta.network='wwan'
