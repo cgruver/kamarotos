@@ -87,15 +87,26 @@ if [[ ${GL_MODEL} == "ar750s"  ]]
 then
   SD_DEV=sda
   SD_PART=sda
+  ${SSH} root@${EDGE_ROUTER} "for i in $(mount | grep /dev/sdb | while read line ; do echo $line | cut -d' ' -f1 ; done) ; \
+  do umount ${i} ; done ;\
+  dd if=/dev/zero of=/dev/sdb bs=4096 count=1 ; \
+  echo \"/dev/sdb1 : start=1, type=83\" >> /tmp/part.info ; \
+  sfdisk --no-reread -f /dev/sdb < /tmp/part.info ; \
+  rm /tmp/part.info ; \
+  mkfs.ext4 /dev/sdb1 ; \
+  mkdir -p /data/openwrt ; \
+  mount -t ext4 /dev/sdb1 /data/openwrt"
 fi
 
-${SSH} root@${EDGE_ROUTER} "umount /dev/${SD_PART}1 ; \
+${SSH} root@${EDGE_ROUTER} "echo \"unmounting ${SD_PART} - Safe to ignore errors for non-existent mounts\" ; \
+  umount /dev/${SD_PART}1 ; \
   umount /dev/${SD_PART}2 ; \
   umount /dev/${SD_PART}3 ; \
   dd if=/dev/zero of=/dev/${SD_DEV} bs=4096 count=1 ; \
-  wget https://downloads.openwrt.org/releases/${OPENWRT_VER}/targets/bcm27xx/bcm2711/openwrt-${OPENWRT_VER}-bcm27xx-bcm2711-rpi-4-ext4-factory.img.gz -O /data/openwrt.img.gz ; \
-  gunzip /data/openwrt.img.gz ; \
-  dd if=/data/openwrt.img of=/dev/${SD_DEV} bs=4M conv=fsync ; \
+  mkdir -p /data/openwrt ; \
+  wget https://downloads.openwrt.org/releases/${OPENWRT_VER}/targets/bcm27xx/bcm2711/openwrt-${OPENWRT_VER}-bcm27xx-bcm2711-rpi-4-ext4-factory.img.gz -O /data/openwrt/openwrt.img.gz ; \
+  gunzip /data/openwrt/openwrt.img.gz ; \
+  dd if=/data/openwrt/openwrt.img of=/dev/${SD_DEV} bs=4M conv=fsync ; \
   PART_INFO=\$(sfdisk -l /dev/${SD_DEV} | grep ${SD_PART}2) ; \
   let ROOT_SIZE=20971520 ; \
   let P2_START=\$(echo \${PART_INFO} | cut -d\" \" -f2) ; \
@@ -106,7 +117,9 @@ ${SSH} root@${EDGE_ROUTER} "umount /dev/${SD_PART}1 ; \
   echo \"/dev/${SD_PART}3 : start= \${P3_START}, type=83\" >> /tmp/part.info ; \
   sfdisk --no-reread -f /dev/${SD_DEV} < /tmp/part.info ; \
   rm /tmp/part.info ; \
-  rm /data/openwrt.img ; \
+  echo \"unmount /data/openwrt - ignore error if not AR750S\" ; \
+  umount /data/openwrt ; \
+  rm -rf /data/openwrt ; \
   e2fsck -f /dev/${SD_PART}2 ; \
   resize2fs /dev/${SD_PART}2 ; \
   mkfs.ext4 /dev/${SD_PART}3 ; \
