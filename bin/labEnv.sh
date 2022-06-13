@@ -125,7 +125,6 @@ function setDomainEnv() {
   export CLUSTER_NAME=$(yq e ".cluster.name" ${CLUSTER_CONFIG})
   export KUBE_INIT_CONFIG=${OKD_LAB_PATH}/lab-config/${CLUSTER_NAME}-${SUB_DOMAIN}-${LAB_DOMAIN}/kubeconfig
   export INSTALL_DIR=${OKD_LAB_PATH}/${CLUSTER_NAME}-${SUB_DOMAIN}-${LAB_DOMAIN}/okd-install-dir
-  export OKD_RELEASE=$(yq e ".cluster.release" ${CLUSTER_CONFIG})
   export DOMAIN_CIDR=$(mask2cidr ${DOMAIN_NETMASK})
   export CLUSTER_CIDR=$(yq e ".cluster.cluster-cidr" ${CLUSTER_CONFIG})
   export SERVICE_CIDR=$(yq e ".cluster.service-cidr" ${CLUSTER_CONFIG})
@@ -135,16 +134,21 @@ function setDomainEnv() {
   export PULL_SECRET=${OKD_LAB_PATH}/pull-secrets/${CLUSTER_NAME}-pull-secret.json
   IFS="." read -r i1 i2 i3 i4 <<< "${DOMAIN_NETWORK}"
   export DOMAIN_ARPA=${i3}.${i2}.${i1}
-  if [[ ! -d ${OKD_LAB_PATH}/okd-cmds/${OKD_RELEASE} ]]
+  release_set=$(yq ".cluster | has(\"release\")" ${CLUSTER_CONFIG})
+  if [[ ${release_set} == "true" ]]
   then
-    getOkdCmds
+    export OKD_RELEASE=$(yq e ".cluster.release" ${CLUSTER_CONFIG})
+    if [[ ! -d ${OKD_LAB_PATH}/okd-cmds/${OKD_RELEASE} ]]
+    then
+      getOkdCmds
+    fi
+    for i in $(ls ${OKD_LAB_PATH}/okd-cmds/${OKD_RELEASE})
+    do
+      rm -f ${OKD_LAB_PATH}/bin/${i}
+      ln -s ${OKD_LAB_PATH}/okd-cmds/${OKD_RELEASE}/${i} ${OKD_LAB_PATH}/bin/${i}
+    done
+    i=""
   fi
-  for i in $(ls ${OKD_LAB_PATH}/okd-cmds/${OKD_RELEASE})
-  do
-    rm -f ${OKD_LAB_PATH}/bin/${i}
-    ln -s ${OKD_LAB_PATH}/okd-cmds/${OKD_RELEASE}/${i} ${OKD_LAB_PATH}/bin/${i}
-  done
-  i=""
 }
 
 function setEdgeEnv() {

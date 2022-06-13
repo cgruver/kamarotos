@@ -13,8 +13,8 @@ kvm-hosts:
     mac-addr: "YOUR_HOST_MAC_HERE"
     ip-addr: 10.11.13.200
     disks:
-      disk1: sda
-      disk2: sdb
+      disk1: nvme0n1
+      disk2: NA
 bootstrap:
   metal: false
   node-spec:

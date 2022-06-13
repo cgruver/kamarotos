@@ -124,8 +124,18 @@ function setupRouter() {
       mkdir -p /data/haproxy ; \
       chown -R haproxy:haproxy /data/haproxy ; \
       rm -f /etc/init.d/haproxy ; \
-      /etc/init.d/uhttpd enable"
+      /etc/init.d/uhttpd enable ; \
+      mkdir -p /data/tftpboot/ipxe ; \
+      mkdir /data/tftpboot/networkboot"
     cat ${WORK_DIR}/edge-zone | ${SSH} root@${EDGE_ROUTER} "cat >> /etc/bind/named.conf"
+    if [[ ! -d ${OKD_LAB_PATH}/boot-files ]]
+    then
+      getBootFiles
+    fi
+    ${SCP} ${OKD_LAB_PATH}/boot-files/ipxe.efi root@${DOMAIN_ROUTER}:/data/tftpboot/ipxe.efi
+    ${SCP} ${OKD_LAB_PATH}/boot-files/vmlinuz root@${DOMAIN_ROUTER}:/data/tftpboot/networkboot/vmlinuz
+    ${SCP} ${OKD_LAB_PATH}/boot-files/initrd.img root@${DOMAIN_ROUTER}:/data/tftpboot/networkboot/initrd.img
+    ${SCP} ${WORK_DIR}/boot.ipxe root@${DOMAIN_ROUTER}:/data/tftpboot/boot.ipxe
     setupRouterCommon ${DOMAIN_ROUTER}
   fi
 }
@@ -133,40 +143,6 @@ function setupRouter() {
 function setupRouterCommon() {
 
   local router_ip=${1}
-
-cat << EOF > ${WORK_DIR}/boot.ipxe
-#!ipxe
-   
-echo ========================================================
-echo UUID: \${uuid}
-echo Manufacturer: \${manufacturer}
-echo Product name: \${product}
-echo Hostname: \${hostname}
-echo
-echo MAC address: \${net0/mac}
-echo IP address: \${net0/ip}
-echo IPv6 address: \${net0.ndp.0/ip6:ipv6}
-echo Netmask: \${net0/netmask}
-echo
-echo Gateway: \${gateway}
-echo DNS: \${dns}
-echo IPv6 DNS: \${dns6}
-echo Domain: \${domain}
-echo ========================================================
-   
-chain --replace --autofree ipxe/\${mac:hexhyp}.ipxe
-EOF
-
-# cat << "EOF" > /etc/hotplug.d/iface/30-named
-# if [ "${ACTION}" = "ifup" -o "${ACTION}" = "ifupdate" ]
-# then /etc/init.d/named restart
-# fi
-# EOF
-
-  if [[ ! -d ${OKD_LAB_PATH}/boot-files ]]
-  then
-    getBootFiles
-  fi
 
   ${SCP} -r ${WORK_DIR}/dns/* root@${router_ip}:/etc/bind/
   ${SSH} root@${router_ip} "mkdir -p /data/var/named/dynamic ; \
@@ -183,13 +159,7 @@ EOF
     then uci set network.wwan.dns=${router_ip} ; \
       uci set network.wwan.peerdns=0 ; \
     fi ; \
-    uci commit ; \
-    mkdir -p /data/tftpboot/ipxe ; \
-    mkdir /data/tftpboot/networkboot"
-  ${SCP} ${OKD_LAB_PATH}/boot-files/ipxe.efi root@${router_ip}:/data/tftpboot/ipxe.efi
-  ${SCP} ${OKD_LAB_PATH}/boot-files/vmlinuz root@${router_ip}:/data/tftpboot/networkboot/vmlinuz
-  ${SCP} ${OKD_LAB_PATH}/boot-files/initrd.img root@${router_ip}:/data/tftpboot/networkboot/initrd.img
-  ${SCP} ${WORK_DIR}/boot.ipxe root@${router_ip}:/data/tftpboot/boot.ipxe
+    uci commit"
   ${SCP} ${WORK_DIR}/uci.batch root@${router_ip}:/tmp/uci.batch
   ${SSH} root@${router_ip} "cat /tmp/uci.batch | uci batch ; reboot"
 
@@ -233,7 +203,7 @@ function configWwanAR750S() {
 cat << EOF >> ${WORK_DIR}/uci.batch
 set wireless.radio0.repeater="1"
 set wireless.radio0.org_htmode='VHT80'
-set wireless.radio0.htmode='HT20'
+set wireless.radio0.htmode='VHT80'
 set wireless.sta=wifi-iface
 set wireless.sta.device='radio0'
 set wireless.sta.network='wwan'
@@ -550,6 +520,29 @@ echo "commit" >> ${WORK_DIR}/uci.batch
 }
 
 function setupDomain() {
+
+cat << EOF > ${WORK_DIR}/boot.ipxe
+#!ipxe
+   
+echo ========================================================
+echo UUID: \${uuid}
+echo Manufacturer: \${manufacturer}
+echo Product name: \${product}
+echo Hostname: \${hostname}
+echo
+echo MAC address: \${net0/mac}
+echo IP address: \${net0/ip}
+echo IPv6 address: \${net0.ndp.0/ip6:ipv6}
+echo Netmask: \${net0/netmask}
+echo
+echo Gateway: \${gateway}
+echo DNS: \${dns}
+echo IPv6 DNS: \${dns6}
+echo Domain: \${domain}
+echo ========================================================
+   
+chain --replace --autofree ipxe/\${mac:hexhyp}.ipxe
+EOF
 
 cat << EOF > ${WORK_DIR}/uci.batch
 add_list dhcp.lan.dhcp_option="6,${DOMAIN_ROUTER}"

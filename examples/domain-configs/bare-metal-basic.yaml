@@ -17,17 +17,17 @@ bootstrap:
     memory: 12288
     cpu: 2
     root-vol: 50
-  bridge-dev: en13
+  bridge-dev: "BOOTSTRAP_BRIDGE"
   name: okd4-region-01-bootstrap
 control-plane:
   metal: true
   okd-hosts:
     - mac-addr: "YOUR_HOST_MAC_HERE"
-      boot-dev: /dev/sda
+      boot-dev: /dev/nvme0n1
       ip-addr: 10.11.17.60
     - mac-addr: "YOUR_HOST_MAC_HERE"
-      boot-dev: /dev/sda
+      boot-dev: /dev/nvme0n1
       ip-addr: 10.11.17.61
     - mac-addr: "YOUR_HOST_MAC_HERE"
-      boot-dev: /dev/sda
+      boot-dev: /dev/nvme0n1
       ip-addr: 10.11.17.62

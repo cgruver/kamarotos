@@ -17,11 +17,11 @@ bootstrap:
     memory: 12288
     cpu: 2
     root-vol: 50
-  bridge-dev: en13
+  bridge-dev: "BOOTSTRAP_BRIDGE"
 control-plane:
   metal: true
   okd-hosts:
     - mac-addr: "YOUR_HOST_MAC_HERE"
-      boot-dev: /dev/sda
-      sno-install-dev: /dev/sda
+      boot-dev: /dev/nvme0n1
+      sno-install-dev: /dev/nvme0n1
       ip-addr: 10.11.16.200

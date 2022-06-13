@@ -5,6 +5,7 @@
 . ${OKD_LAB_PATH}/bin/routerUtils.sh
 . ${OKD_LAB_PATH}/bin/clusterUtils.sh
 . ${OKD_LAB_PATH}/bin/hostUtils.sh
+. ${OKD_LAB_PATH}/bin/devTools.sh
 
 SSH="ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null"
 SCP="scp -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null"
@@ -122,6 +123,9 @@ do
     ;;
     --nodes)
       getNodes "$@"
+    ;;
+    --dev-tools)
+      devTools "$@"
     ;;
     *)
        # catch all
