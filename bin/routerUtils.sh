@@ -113,8 +113,8 @@ function setupRouter() {
       uci set network.\${ROUTE}.gateway=${DOMAIN_ROUTER_EDGE} ; \
       uci commit network ; \
       /etc/init.d/network restart"
-    pause 5 "Give the Router network time to restart"
-    ${SSH} root@${EDGE_ROUTER} "/etc/init.d/named restart"
+    pause 15 "Give the Router network time to restart"
+    ${SSH} root@${EDGE_ROUTER} "/etc/init.d/named stop && /etc/init.d/named start"
     ${SSH} root@${DOMAIN_ROUTER} "opkg update && opkg install ip-full procps-ng-ps bind-server bind-tools haproxy bash shadow uhttpd wget ; \
       mv /etc/haproxy.cfg /etc/haproxy.cfg.orig ; \
       /etc/init.d/lighttpd disable ; \
@@ -165,7 +165,7 @@ function setupRouterCommon() {
 
   if [[ ${EDGE} == "false" ]]
   then
-    ${SSH} root@${EDGE_ROUTER} "/etc/init.d/named restart"
+    ${SSH} root@${EDGE_ROUTER} "/etc/init.d/named stop && /etc/init.d/named start"
   fi
 }
 

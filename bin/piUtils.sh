@@ -88,6 +88,7 @@ then
   echo \"/dev/sdb1 : start=1, type=83\" > /tmp/part.info ; \
   sfdisk --no-reread -f /dev/sdb < /tmp/part.info ; \
   rm /tmp/part.info ; \
+  umount /dev/sdb1 ; \
   mkfs.ext4 /dev/sdb1 ; \
   mkdir -p /data/openwrt ; \
   umount /dev/sdb1 ; \
@@ -116,8 +117,10 @@ ${SSH} root@${EDGE_ROUTER} "echo \"unmounting ${SD_PART} - Safe to ignore errors
   echo \"unmount /data/openwrt - ignore error if not AR750S\" ; \
   umount /data/openwrt ; \
   rm -rf /data/openwrt ; \
+  umount /dev/${SD_PART}2 ; \
   e2fsck -f /dev/${SD_PART}2 ; \
   resize2fs /dev/${SD_PART}2 ; \
+  umount /dev/${SD_PART}3 ; \
   mkfs.ext4 /dev/${SD_PART}3 ; \
   mkdir -p /tmp/pi ; \
   mount -t ext4 /dev/${SD_PART}2 /tmp/pi/"

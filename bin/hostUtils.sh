@@ -408,9 +408,24 @@ function prepNodeFiles() {
 }
 
 function deployKvmHosts() {
+
+  KVM_EDGE=false
+
+  for i in "$@"
+  do
+    case $i in
+      -e)
+        KVM_EDGE=true
+      ;;
+      -h=*)
+        HOST_NAME="${i#*=}"
+      ;;
+    esac
+  done
+
   if [[ ${KVM_EDGE} == "true" ]]
   then
-    lab --edge
+    labenv -e
     DOMAIN=${LAB_DOMAIN}
     ROUTER=${EDGE_ROUTER}
     NETWORK=${EDGE_NETWORK}
