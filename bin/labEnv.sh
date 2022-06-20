@@ -51,7 +51,11 @@ function setDomainIndex() {
   else
     DONE=false
     DOMAIN_COUNT=$(yq e ".sub-domain-configs" ${LAB_CONFIG_FILE} | yq e 'length' -)
-    if [[ -z ${sub_domain} ]]
+    if [[ ${DOMAIN_COUNT} -eq 0 ]]
+    then
+      INDEX=""
+      DONE="true"
+    elif [[ -z ${sub_domain} ]]
     then
       let array_index=0
       while [[ array_index -lt ${DOMAIN_COUNT} ]]
@@ -100,7 +104,10 @@ function labctx() {
   if [[ ${LAB_CTX_ERROR} == "false" ]]
   then
     setEdgeEnv
-    setDomainEnv
+    if [[ ${DOMAIN_INDEX} != "" ]]
+    then
+      setDomainEnv
+    fi
   fi
 }
 

@@ -37,7 +37,6 @@ fi
 
 OC="oc --kubeconfig=${KUBE_INIT_CONFIG}"
 DOMAIN="${SUB_DOMAIN}.${LAB_DOMAIN}"
-INSTALL_URL="http://${BASTION_HOST}/install"
 
 for i in "$@"
 do
@@ -70,7 +69,7 @@ do
       addUser "$@"
     ;;
     --trust)
-      trustClusterCert
+      trustCerts "$@"
     ;;
     --config-infra)
         configInfraNodes

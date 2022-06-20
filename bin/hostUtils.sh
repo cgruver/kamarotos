@@ -19,6 +19,8 @@ fi
 }
 
 function buildHostConfig() {
+
+  install_url="http://${BASTION_HOST}/install"
   local index=${1}
 
   hostname=$(yq e ".kvm-hosts.[${index}].host-name" ${CONFIG_FILE})
@@ -34,8 +36,8 @@ function buildHostConfig() {
 cat << EOF > ${WORK_DIR}/${mac_addr//:/-}.ipxe
 #!ipxe
 
-kernel ${INSTALL_URL}/repos/BaseOS/x86_64/os/isolinux/vmlinuz net.ifnames=1 ifname=nic0:${mac_addr} ip=${ip_addr}::${ROUTER}:${NETMASK}:${hostname}.${DOMAIN}:nic0:none nameserver=${ROUTER} inst.ks=${INSTALL_URL}/kickstart/${mac_addr//:/-}.ks inst.repo=${INSTALL_URL}/repos/BaseOS/x86_64/os initrd=initrd.img
-initrd ${INSTALL_URL}/repos/BaseOS/x86_64/os/isolinux/initrd.img
+kernel ${install_url}/repos/BaseOS/x86_64/os/isolinux/vmlinuz net.ifnames=1 ifname=nic0:${mac_addr} ip=${ip_addr}::${ROUTER}:${NETMASK}:${hostname}.${DOMAIN}:nic0:none nameserver=${ROUTER} inst.ks=${install_url}/kickstart/${mac_addr//:/-}.ks inst.repo=${install_url}/repos/BaseOS/x86_64/os initrd=initrd.img
+initrd ${install_url}/repos/BaseOS/x86_64/os/isolinux/initrd.img
 
 boot
 EOF
@@ -52,8 +54,8 @@ cat << EOF > ${WORK_DIR}/${mac_addr//:/-}.ks
 cmdline
 keyboard --vckeymap=us --xlayouts='us'
 lang en_US.UTF-8
-repo --name="install" --baseurl=${INSTALL_URL}/repos/BaseOS/x86_64/os/
-url --url="${INSTALL_URL}/repos/BaseOS/x86_64/os"
+repo --name="install" --baseurl=${install_url}/repos/BaseOS/x86_64/os/
+url --url="${install_url}/repos/BaseOS/x86_64/os"
 rootpw --iscrypted ${LAB_PWD}
 firstboot --disable
 skipx
@@ -94,14 +96,14 @@ pwpolicy luks --minlen=6 --minquality=1 --notstrict --nochanges --notempty
 %end
 
 %post
-dnf config-manager --add-repo ${INSTALL_URL}/postinstall/local-repos.repo
+dnf config-manager --add-repo ${install_url}/postinstall/local-repos.repo
 dnf config-manager  --disable appstream
 dnf config-manager  --disable baseos
 dnf config-manager  --disable extras-common
 
 mkdir -p /root/.ssh
 chmod 700 /root/.ssh
-curl -o /root/.ssh/authorized_keys ${INSTALL_URL}/postinstall/authorized_keys
+curl -o /root/.ssh/authorized_keys ${install_url}/postinstall/authorized_keys
 chmod 600 /root/.ssh/authorized_keys
 dnf -y install wget git net-tools bind-utils bash-completion nfs-utils rsync libguestfs-tools virt-install iscsi-initiator-utils
 dnf -y update
@@ -110,9 +112,9 @@ echo "options kvm_intel nested=1" >> /etc/modprobe.d/kvm.conf
 systemctl enable libvirtd
 mkdir /VirtualMachines
 mkdir -p /root/bin
-curl -o /root/bin/rebuildhost.sh ${INSTALL_URL}/postinstall/rebuildhost.sh
+curl -o /root/bin/rebuildhost.sh ${install_url}/postinstall/rebuildhost.sh
 chmod 700 /root/bin/rebuildhost.sh
-curl -o /etc/chrony.conf ${INSTALL_URL}/postinstall/chrony.conf
+curl -o /etc/chrony.conf ${install_url}/postinstall/chrony.conf
 echo '@reboot root nmcli con mod "br0_slave_1" ethtool.feature-tso off' >> /etc/crontab
 %end
 

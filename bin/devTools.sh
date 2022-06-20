@@ -236,8 +236,6 @@ stop() {
 }
 EOF
 
-  ${SCP} ${PI_WORK_DIR}/keycloak.conf root@${BASTION_HOST}:/usr/local/keycloak/keycloak-server/conf/keycloak.conf
-  ${SCP} ${PI_WORK_DIR}/keycloak root@${BASTION_HOST}:/etc/init.d/keycloak
   ${SSH} root@${BASTION_HOST} "mkdir -p /usr/local/keycloak ; \
     cd /usr/local/keycloak ; \
     wget -O keycloak-${KEYCLOAK_VER}.zip https://github.com/keycloak/keycloak/releases/download/${KEYCLOAK_VER}/keycloak-${KEYCLOAK_VER}.zip ; \
@@ -247,11 +245,12 @@ EOF
     mv /usr/local/keycloak/keycloak-server/conf/keycloak.conf /usr/local/keycloak/keycloak-server/conf/keycloak.conf.orig ; \
     mkdir -p /usr/local/keycloak/home ; \
     groupadd keycloak ; \
-    useradd -g keycloak -d /usr/local/keycloak/home keycloak ; \
-    chown -R keycloak:keycloak /usr/local/keycloak ; \
-    chmod 750 /etc/init.d/keycloak"
+    useradd -g keycloak -d /usr/local/keycloak/home keycloak"
   echo "keycloak.${LAB_DOMAIN}.           IN      A      ${BASTION_HOST}" | ${SSH} root@${EDGE_ROUTER} "cat >> /etc/bind/db.${LAB_DOMAIN}"
   ${SSH} root@${EDGE_ROUTER} "/etc/init.d/named stop && /etc/init.d/named start"
+  ${SCP} ${PI_WORK_DIR}/keycloak.conf root@${BASTION_HOST}:/usr/local/keycloak/keycloak-server/conf/keycloak.conf
+  ${SCP} ${PI_WORK_DIR}/keycloak root@${BASTION_HOST}:/etc/init.d/keycloak
+  ${SSH} root@${BASTION_HOST} "chown -R keycloak:keycloak /usr/local/keycloak && chmod 750 /etc/init.d/keycloak && /etc/init.d/keycloak enable"
 }
 
 function installApicurio() {
@@ -264,7 +263,7 @@ STOP=80
 SERVICE_USE_PID=0
 
 start() {
-   service_start /usr/bin/su - apicurio -c \'PATH=/usr/local/java-11-openjdk/bin:\${PATH} /usr/local/apicurio/apicurio-studio/bin/standalone.sh -c standalone-apicurio.xml -Djboss.bind.address=${BASTION_HOST} -Djboss.socket.binding.port-offset=1000 -Dapicurio.kc.auth.rootUrl="https://keycloak.${LAB_DOMAIN}:7443" -Dapicurio.kc.auth.realm="apicurio" -Dapicurio-ui.hub-api.url="https://apicurio.${LAB_DOMAIN}:9443/hub-api" > /dev/null 2>&1 &\'
+   service_start /usr/bin/su - apicurio -c 'PATH=/usr/local/java-11-openjdk/bin:\${PATH} /usr/local/apicurio/apicurio-studio/bin/standalone.sh -c standalone-apicurio.xml -Djboss.bind.address=${BASTION_HOST} -Djboss.socket.binding.port-offset=1000 -Dapicurio.kc.auth.rootUrl="https://keycloak.${LAB_DOMAIN}:7443" -Dapicurio.kc.auth.realm="apicurio" -Dapicurio-ui.hub-api.url="https://apicurio.${LAB_DOMAIN}:9443/hub-api" > /dev/null 2>&1 &'
 }
 
 stop() {
@@ -278,11 +277,19 @@ EOF
     cd /usr/local/apicurio ; \
     wget -O apicurio-studio-${APICURIO_VER}-quickstart.zip https://github.com/Apicurio/apicurio-studio/releases/download/${APICURIO_VER}/apicurio-studio-${APICURIO_VER}-quickstart.zip ; \
     unzip apicurio-studio-${APICURIO_VER}-quickstart.zip ; \
-    ln -s apicurio-studio-${APICURIO_VER}-quickstart apicurio-studio ; \
+    ln -s apicurio-studio-${APICURIO_VER} apicurio-studio ; \
+    rm -f apicurio-studio-${APICURIO_VER}-quickstart.zip ; \
+    cat /usr/local/apicurio/apicurio-studio/standalone/configuration/standalone-apicurio.xml | grep -v apicurio.kc.auth > /tmp/standalone-apicurio.xml ; \
+    mv /usr/local/apicurio/apicurio-studio/standalone/configuration/standalone-apicurio.xml /usr/local/apicurio/apicurio-studio/standalone/configuration/standalone-apicurio.xml.orig ; \
+    mv /tmp/standalone-apicurio.xml /usr/local/apicurio/apicurio-studio/standalone/configuration/standalone-apicurio.xml ; \
+    sed -i \"s|generate-self-signed-certificate-host=\\\"localhost\\\"||g\" /usr/local/apicurio/apicurio-studio/standalone/configuration/standalone-apicurio.xml ; \
+    mv /usr/local/apicurio/apicurio-studio/standalone/configuration/application.keystore /usr/local/apicurio/apicurio-studio/standalone/configuration/application.keystore.orig ; \
+    /usr/local/java-11-openjdk/bin/keytool -genkeypair -keystore /usr/local/apicurio/apicurio-studio/standalone/configuration/application.keystore -deststoretype pkcs12 -storepass password -keypass password -alias server -keyalg RSA -keysize 4096 -validity 5000 -dname \"CN=apicurio.${LAB_DOMAIN}, OU=okd4-lab, O=okd4-lab, L=City, ST=State, C=US\" -ext \"SAN=DNS:apicurio.${LAB_DOMAIN},IP:${BASTION_HOST}\" -ext \"BC=ca:true\" ; \
     groupadd apicurio ; \
     useradd -g apicurio -d /usr/local/apicurio/home apicurio ; \
     chown -R apicurio:apicurio /usr/local/apicurio ; \
-    chmod 750 /etc/init.d/apicurio"
+    chmod 750 /etc/init.d/apicurio ; \
+    /etc/init.d/apicurio enable"
   echo "apicurio.${LAB_DOMAIN}.           IN      A      ${BASTION_HOST}" | ${SSH} root@${EDGE_ROUTER} "cat >> /etc/bind/db.${LAB_DOMAIN}"
   ${SSH} root@${EDGE_ROUTER} "/etc/init.d/named stop && /etc/init.d/named start"
 }
