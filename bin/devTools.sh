@@ -251,7 +251,7 @@ EOF
   ${SSH} root@${EDGE_ROUTER} "/etc/init.d/named stop && /etc/init.d/named start"
   ${SCP} ${PI_WORK_DIR}/keycloak.conf root@${BASTION_HOST}:/usr/local/keycloak/keycloak-server/conf/keycloak.conf
   ${SCP} ${PI_WORK_DIR}/keycloak root@${BASTION_HOST}:/etc/init.d/keycloak
-  ${SSH} root@${BASTION_HOST} "chown -R keycloak:keycloak /usr/local/keycloak && chmod 750 /etc/init.d/keycloak && /etc/init.d/keycloak enable"
+  ${SSH} root@${BASTION_HOST} "chown -R keycloak:keycloak /usr/local/keycloak ; chmod 750 /etc/init.d/keycloak ; /etc/init.d/keycloak enable"
 }
 
 function installApicurio() {
