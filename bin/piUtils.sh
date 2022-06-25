@@ -1,4 +1,3 @@
-
 function configPi() {
   PI_WORK_DIR=${OKD_LAB_PATH}/work-dir-pi
   rm -rf ${PI_WORK_DIR}
@@ -72,70 +71,73 @@ config timeserver 'ntp'\n
 \tlist server '3.openwrt.pool.ntp.org'\n
 EOF
 
-echo -e ${FILE} > ${PI_WORK_DIR}/config/system
-SD_DEV=mmcblk1
-SD_PART=mmcblk1p
+  echo -e ${FILE} > ${PI_WORK_DIR}/config/system
+  SD_DEV=mmcblk1
+  SD_PART=mmcblk1p
 
-GL_MODEL=$(${SSH} root@${EDGE_ROUTER} "uci get glconfig.general.model" )
-echo "Detected Router Model: ${GL_MODEL}"
-if [[ ${GL_MODEL} == "ar750s"  ]]
-then
-  SD_DEV=sda
-  SD_PART=sda
-  ${SSH} root@${EDGE_ROUTER} "for i in $(mount | grep /dev/sdb | while read line ; do echo $line | cut -d' ' -f1 ; done) ; \
-  do umount ${i} ; done ;\
-  dd if=/dev/zero of=/dev/sdb bs=4096 count=1 ; \
-  echo \"/dev/sdb1 : start=1, type=83\" > /tmp/part.info ; \
-  sfdisk --no-reread -f /dev/sdb < /tmp/part.info ; \
-  rm /tmp/part.info ; \
-  umount /dev/sdb1 ; \
-  mkfs.ext4 /dev/sdb1 ; \
-  mkdir -p /data/openwrt ; \
-  umount /dev/sdb1 ; \
-  mount -t ext4 /dev/sdb1 /data/openwrt"
-fi
+  GL_MODEL=$(${SSH} root@${EDGE_ROUTER} "uci get glconfig.general.model" )
+  echo "Detected Router Model: ${GL_MODEL}"
+  if [[ ${GL_MODEL} == "ar750s"  ]]
+  then
+    SD_DEV=sda
+    SD_PART=sda
+    ${SSH} root@${EDGE_ROUTER} "mount | grep /dev/sdb | while read line ; \
+    do echo \${line} | cut -d' ' -f1 ; \
+    done | while read fs ; \
+    do umount \${fs} ;  \
+    done ; \
+    dd if=/dev/zero of=/dev/sdb bs=4096 count=1 ; \
+    echo \"/dev/sdb1 : start=1, type=83\" > /tmp/part.info ; \
+    sfdisk --no-reread -f /dev/sdb < /tmp/part.info ; \
+    rm /tmp/part.info ; \
+    umount /dev/sdb1 ; \
+    mkfs.ext4 /dev/sdb1 ; \
+    mkdir -p /data/openwrt ; \
+    umount /dev/sdb1 ; \
+    mount -t ext4 /dev/sdb1 /data/openwrt"
+  fi
 
-${SSH} root@${EDGE_ROUTER} "echo \"unmounting ${SD_PART} - Safe to ignore errors for non-existent mounts\" ; \
-  umount /dev/${SD_PART}1 ; \
-  umount /dev/${SD_PART}2 ; \
-  umount /dev/${SD_PART}3 ; \
-  dd if=/dev/zero of=/dev/${SD_DEV} bs=4096 count=1 ; \
-  mkdir -p /data/openwrt ; \
-  wget https://downloads.openwrt.org/releases/${OPENWRT_VER}/targets/bcm27xx/bcm2711/openwrt-${OPENWRT_VER}-bcm27xx-bcm2711-rpi-4-ext4-factory.img.gz -O /data/openwrt/openwrt.img.gz ; \
-  gunzip /data/openwrt/openwrt.img.gz ; \
-  dd if=/data/openwrt/openwrt.img of=/dev/${SD_DEV} bs=4M conv=fsync ; \
-  PART_INFO=\$(sfdisk -l /dev/${SD_DEV} | grep ${SD_PART}2) ; \
-  let ROOT_SIZE=20971520 ; \
-  let P2_START=\$(echo \${PART_INFO} | cut -d\" \" -f2) ; \
-  let P3_START=\$(( \${P2_START}+\${ROOT_SIZE}+8192 )) ; \
-  sfdisk --no-reread -f --delete /dev/${SD_DEV} 2 ; \
-  sfdisk --no-reread -f -d /dev/${SD_DEV} > /tmp/part.info ; \
-  echo \"/dev/${SD_PART}2 : start= \${P2_START}, size= \${ROOT_SIZE}, type=83\" >> /tmp/part.info ; \
-  echo \"/dev/${SD_PART}3 : start= \${P3_START}, type=83\" >> /tmp/part.info ; \
-  sfdisk --no-reread -f /dev/${SD_DEV} < /tmp/part.info ; \
-  rm /tmp/part.info ; \
-  echo \"unmount /data/openwrt - ignore error if not AR750S\" ; \
-  umount /data/openwrt ; \
-  rm -rf /data/openwrt ; \
-  umount /dev/${SD_PART}2 ; \
-  e2fsck -f /dev/${SD_PART}2 ; \
-  resize2fs /dev/${SD_PART}2 ; \
-  umount /dev/${SD_PART}3 ; \
-  mkfs.ext4 /dev/${SD_PART}3 ; \
-  mkdir -p /tmp/pi ; \
-  mount -t ext4 /dev/${SD_PART}2 /tmp/pi/"
+  ${SSH} root@${EDGE_ROUTER} "echo \"unmounting ${SD_PART} - Safe to ignore errors for non-existent mounts\" ; \
+    umount /dev/${SD_PART}1 ; \
+    umount /dev/${SD_PART}2 ; \
+    umount /dev/${SD_PART}3 ; \
+    dd if=/dev/zero of=/dev/${SD_DEV} bs=4096 count=1 ; \
+    mkdir -p /data/openwrt ; \
+    wget https://downloads.openwrt.org/releases/${OPENWRT_VER}/targets/bcm27xx/bcm2711/openwrt-${OPENWRT_VER}-bcm27xx-bcm2711-rpi-4-ext4-factory.img.gz -O /data/openwrt/openwrt.img.gz ; \
+    gunzip /data/openwrt/openwrt.img.gz ; \
+    dd if=/data/openwrt/openwrt.img of=/dev/${SD_DEV} bs=4M conv=fsync ; \
+    PART_INFO=\$(sfdisk -l /dev/${SD_DEV} | grep ${SD_PART}2) ; \
+    let ROOT_SIZE=20971520 ; \
+    let P2_START=\$(echo \${PART_INFO} | cut -d\" \" -f2) ; \
+    let P3_START=\$(( \${P2_START}+\${ROOT_SIZE}+8192 )) ; \
+    sfdisk --no-reread -f --delete /dev/${SD_DEV} 2 ; \
+    sfdisk --no-reread -f -d /dev/${SD_DEV} > /tmp/part.info ; \
+    echo \"/dev/${SD_PART}2 : start= \${P2_START}, size= \${ROOT_SIZE}, type=83\" >> /tmp/part.info ; \
+    echo \"/dev/${SD_PART}3 : start= \${P3_START}, type=83\" >> /tmp/part.info ; \
+    sfdisk --no-reread -f /dev/${SD_DEV} < /tmp/part.info ; \
+    rm /tmp/part.info ; \
+    echo \"unmount /data/openwrt - ignore error if not AR750S\" ; \
+    umount /data/openwrt ; \
+    rm -rf /data/openwrt ; \
+    umount /dev/${SD_PART}2 ; \
+    e2fsck -f /dev/${SD_PART}2 ; \
+    resize2fs /dev/${SD_PART}2 ; \
+    umount /dev/${SD_PART}3 ; \
+    mkfs.ext4 /dev/${SD_PART}3 ; \
+    mkdir -p /tmp/pi ; \
+    mount -t ext4 /dev/${SD_PART}2 /tmp/pi/"
 
-${SCP} -r ${PI_WORK_DIR}/config/* root@${EDGE_ROUTER}:/tmp/pi/etc/config
-${SSH} root@${EDGE_ROUTER} "cat /etc/dropbear/authorized_keys >> /tmp/pi/etc/dropbear/authorized_keys ; \
-  dropbearkey -y -f /root/.ssh/id_dropbear | grep \"^ssh-\" >> /tmp/pi/etc/dropbear/authorized_keys ; \
-  rm -f /tmp/pi/etc/rc.d/*dnsmasq* ; \
-  umount /dev/${SD_PART}1 ; \
-  umount /dev/${SD_PART}2 ; \
-  umount /dev/${SD_PART}3 ; \
-  rm -rf /tmp/pi"
-echo "bastion.${LAB_DOMAIN}.         IN      A      ${BASTION_HOST}" | ${SSH} root@${EDGE_ROUTER} "cat >> /etc/bind/db.${LAB_DOMAIN}"
-echo "10    IN      PTR     bastion.${LAB_DOMAIN}."  | ${SSH} root@${EDGE_ROUTER} "cat >> /etc/bind/db.${EDGE_ARPA}"
-${SSH} root@${EDGE_ROUTER} "/etc/init.d/named stop && /etc/init.d/named start"
+  ${SCP} -r ${PI_WORK_DIR}/config/* root@${EDGE_ROUTER}:/tmp/pi/etc/config
+  ${SSH} root@${EDGE_ROUTER} "cat /etc/dropbear/authorized_keys >> /tmp/pi/etc/dropbear/authorized_keys ; \
+    dropbearkey -y -f /root/.ssh/id_dropbear | grep \"^ssh-\" >> /tmp/pi/etc/dropbear/authorized_keys ; \
+    rm -f /tmp/pi/etc/rc.d/*dnsmasq* ; \
+    umount /dev/${SD_PART}1 ; \
+    umount /dev/${SD_PART}2 ; \
+    umount /dev/${SD_PART}3 ; \
+    rm -rf /tmp/pi"
+  echo "bastion.${LAB_DOMAIN}.         IN      A      ${BASTION_HOST}" | ${SSH} root@${EDGE_ROUTER} "cat >> /etc/bind/db.${LAB_DOMAIN}"
+  echo "10    IN      PTR     bastion.${LAB_DOMAIN}."  | ${SSH} root@${EDGE_ROUTER} "cat >> /etc/bind/db.${EDGE_ARPA}"
+  ${SSH} root@${EDGE_ROUTER} "/etc/init.d/named stop && /etc/init.d/named start"
 
 }
 
@@ -223,6 +225,30 @@ EOF
     done ;\
     dropbearkey -y -f /root/.ssh/id_dropbear | grep \"ssh-\" > /usr/local/www/install/postinstall/authorized_keys ;\
     mkdir -p /root/bin"
+
+  echo "Installing Java 8 and 11"
+  ${SSH} root@${BASTION_HOST} "mkdir /tmp/work-dir ; \
+    cd /tmp/work-dir; \
+    PKG=\"openjdk8-8 openjdk8-jre-8 openjdk8-jre-lib-8 openjdk8-jre-base-8 java-cacerts openjdk11-11 openjdk11-jdk-11 openjdk11-jre-headless-11\" ; \
+    for package in \${PKG}; 
+    do FILE=\$(lftp -e \"cls -1 alpine/edge/community/aarch64/\${package}*; quit\" http://dl-cdn.alpinelinux.org) ; \
+      curl -LO http://dl-cdn.alpinelinux.org/\${FILE} ; \
+    done ; \
+    for i in \$(ls) ; \
+    do tar xzf \${i} ; \
+    done ; \
+    mv ./usr/lib/jvm/java-1.8-openjdk /usr/local/java-1.8-openjdk ; \
+    mv ./usr/lib/jvm/java-11-openjdk /usr/local/java-11-openjdk ; \
+    opkg update  ; \
+    opkg install ca-certificates  ; \
+    rm -f /usr/local/java-1.8-openjdk/jre/lib/security/cacerts  ; \
+    /usr/local/java-1.8-openjdk/bin/keytool -noprompt -importcert -file /etc/ssl/certs/ca-certificates.crt -keystore /usr/local/java-1.8-openjdk/jre/lib/security/cacerts -keypass changeit -storepass changeit ; \
+    for i in \$(find /etc/ssl/certs -type f) ; \
+    do ALIAS=\$(echo \${i} | cut -d\"/\" -f5) ; \
+      /usr/local/java-1.8-openjdk/bin/keytool -noprompt -importcert -file \${i} -alias \${ALIAS}  -keystore /usr/local/java-1.8-openjdk/jre/lib/security/cacerts -keypass changeit -storepass changeit ; \
+    done ; \
+    cd ; \
+    rm -rf /tmp/work-dir"
 
   ${SCP} ${PI_WORK_DIR}/local-repos.repo root@${BASTION_HOST}:/usr/local/www/install/postinstall/local-repos.repo
   ${SCP} ${PI_WORK_DIR}/chrony.conf root@${BASTION_HOST}:/usr/local/www/install/postinstall/chrony.conf

@@ -1,13 +1,15 @@
 function devTools() {
+  
+  LATEST=false
   PI_WORK_DIR=${OKD_LAB_PATH}/work-dir-pi
   rm -rf ${PI_WORK_DIR}
   mkdir -p ${PI_WORK_DIR}
   for i in "$@"
   do
     case ${i} in
-      -j)
-        installJava
-      ;;
+      # -p)
+      #   installPostgreSQL
+      # ;;
       -n)
         instalNexus
       ;;
@@ -20,37 +22,21 @@ function devTools() {
       -a)
         installApicurio
       ;;
+      --all)
+        # installPostgreSQL
+        instalNexus
+        installGitea
+        installKeyCloak
+        installApicurio
+      ;;
+      --latest)
+        LATEST=true
+      ;;
       *)
         # catch all
       ;;
     esac
   done
-}
-
-function installJava() {
-
-  ${SSH} root@${BASTION_HOST} "mkdir /tmp/work-dir ; \
-    cd /tmp/work-dir; \
-    PKG=\"openjdk8-8 openjdk8-jre-8 openjdk8-jre-lib-8 openjdk8-jre-base-8 java-cacerts openjdk11-11 openjdk11-jdk-11 openjdk11-jre-headless-11\" ; \
-    for package in \${PKG}; 
-    do FILE=\$(lftp -e \"cls -1 alpine/edge/community/aarch64/\${package}*; quit\" http://dl-cdn.alpinelinux.org) ; \
-      curl -LO http://dl-cdn.alpinelinux.org/\${FILE} ; \
-    done ; \
-    for i in \$(ls) ; \
-    do tar xzf \${i} ; \
-    done ; \
-    mv ./usr/lib/jvm/java-1.8-openjdk /usr/local/java-1.8-openjdk ; \
-    mv ./usr/lib/jvm/java-11-openjdk /usr/local/java-11-openjdk ; \
-    opkg update  ; \
-    opkg install ca-certificates  ; \
-    rm -f /usr/local/java-1.8-openjdk/jre/lib/security/cacerts  ; \
-    /usr/local/java-1.8-openjdk/bin/keytool -noprompt -importcert -file /etc/ssl/certs/ca-certificates.crt -keystore /usr/local/java-1.8-openjdk/jre/lib/security/cacerts -keypass changeit -storepass changeit ; \
-    for i in \$(find /etc/ssl/certs -type f) ; \
-    do ALIAS=\$(echo \${i} | cut -d\"/\" -f5) ; \
-      /usr/local/java-1.8-openjdk/bin/keytool -noprompt -importcert -file \${i} -alias \${ALIAS}  -keystore /usr/local/java-1.8-openjdk/jre/lib/security/cacerts -keypass changeit -storepass changeit ; \
-    done ; \
-    cd ; \
-    rm -rf /tmp/work-dir"
 }
 
 function instalNexus() {
@@ -101,20 +87,26 @@ EOF
     chown nexus:nexus /usr/local/nexus/nexus-3/etc/ssl/keystore.jks  ; \
     mkdir -p /usr/local/nexus/sonatype-work/nexus3/etc"
   cat ${PI_WORK_DIR}/nexus.properties | ${SSH} root@${BASTION_HOST} "cat >> /usr/local/nexus/sonatype-work/nexus3/etc/nexus.properties"
-  ${SSH} root@${BASTION_HOST} "chown -R nexus:nexus /usr/local/nexus/sonatype-work/nexus3/etc ; /etc/init.d/nexus enable ; reboot"
+  ${SSH} root@${BASTION_HOST} "chown -R nexus:nexus /usr/local/nexus/sonatype-work/nexus3/etc ; /etc/init.d/nexus enable"
   echo "nexus.${LAB_DOMAIN}.           IN      A      ${BASTION_HOST}" | ${SSH} root@${EDGE_ROUTER} "cat >> /etc/bind/db.${LAB_DOMAIN}"
   ${SSH} root@${EDGE_ROUTER} "/etc/init.d/named stop && /etc/init.d/named start"
 }
 
 function installGitea() {
 
+  # wget -O /usr/local/gitea/bin/gitea https://dl.gitea.io/gitea/${GITEA_VERSION}/gitea-${GITEA_VERSION}-linux-arm64
+  if [[ ${LATEST} == "true" ]]
+  then
+    GITEA_VERSION=$(basename $(curl -Ls -o /dev/null -w %{url_effective} https://github.com/go-gitea/gitea/releases/latest) | cut -d'v' -f2)
+    yq e ".gitea-version = \"${GITEA_VERSION}\"" -i ${LAB_CONFIG_FILE}
+  fi
   GITEA_VERSION=$(yq e ".gitea-version" ${LAB_CONFIG_FILE})
   ${SSH} root@${BASTION_HOST} "opkg update && opkg install sqlite3-cli openssh-keygen ; \
     mkdir -p /usr/local/gitea ; \
     for i in bin etc custom data db git ; \
     do mkdir /usr/local/gitea/\${i} ; \
     done ; \
-    wget -O /usr/local/gitea/bin/gitea https://dl.gitea.io/gitea/${GITEA_VERSION}/gitea-${GITEA_VERSION}-linux-arm64 ; \
+    wget -O /usr/local/gitea/bin/gitea https://github.com/go-gitea/gitea/releases/download/v${GITEA_VERSION}/gitea-${GITEA_VERSION}-linux-arm64 ; \
     chmod 750 /usr/local/gitea/bin/gitea ; \
     cd /usr/local/gitea/custom ; \
     /usr/local/gitea/bin/gitea cert --host gitea.${LAB_DOMAIN} ; \
@@ -169,6 +161,9 @@ PROVIDER = file
 ROOT_PATH = /usr/local/gitea/log
 MODE = file
 LEVEL = Info
+
+[webhook]
+ALLOWED_HOST_LIST = *
 EOF
 
 cat <<EOF > ${PI_WORK_DIR}/gitea
@@ -200,14 +195,19 @@ EOF
   ${SCP} ${PI_WORK_DIR}/app.ini root@${BASTION_HOST}:/usr/local/gitea/etc/app.ini
   ${SCP} ${PI_WORK_DIR}/gitea root@${BASTION_HOST}:/etc/init.d/gitea
   ${SCP} ${PI_WORK_DIR}/giteaInit.sh root@${BASTION_HOST}:/tmp/giteaInit.sh
-  ${SSH} root@${BASTION_HOST} "chown -R gitea:gitea /usr/local/gitea ; chmod 755 /etc/init.d/gitea ; chmod 755 /tmp/giteaInit.sh ; /tmp/giteaInit.sh ; /etc/init.d/gitea enable ; /etc/init.d/gitea start"
+  ${SSH} root@${BASTION_HOST} "chown -R gitea:gitea /usr/local/gitea ; chmod 755 /etc/init.d/gitea ; chmod 755 /tmp/giteaInit.sh ; /tmp/giteaInit.sh ; /etc/init.d/gitea enable"
   echo "gitea.${LAB_DOMAIN}.           IN      A      ${BASTION_HOST}" | ${SSH} root@${EDGE_ROUTER} "cat >> /etc/bind/db.${LAB_DOMAIN}"
   ${SSH} root@${EDGE_ROUTER} "/etc/init.d/named stop && /etc/init.d/named start"
 }
 
 function installKeyCloak() {
 
-  KEYCLOAK_VER=$(basename $(curl -Ls -o /dev/null -w %{url_effective} https://github.com/keycloak/keycloak/releases/latest))
+  if [[ ${LATEST} == "true" ]]
+  then
+    KEYCLOAK_VER=$(basename $(curl -Ls -o /dev/null -w %{url_effective} https://github.com/keycloak/keycloak/releases/latest))
+    yq e ".keycloak-version = \"${KEYCLOAK_VER}\"" -i ${LAB_CONFIG_FILE}
+  fi
+  KEYCLOAK_VER=$(yq e ".keycloak-version" ${LAB_CONFIG_FILE})
 
 cat << EOF > ${PI_WORK_DIR}/keycloak.conf
 hostname=keycloak.${LAB_DOMAIN}
@@ -228,11 +228,12 @@ start() {
 }
 
 restart() {
-   /usr/bin/su - keycloak -c 'PATH=/usr/local/java-11-openjdk/bin:\${PATH} /usr/local/keycloak/keycloak-server/bin/kc.sh start > /dev/null 2>&1 &'
+   /usr/bin/su - keycloak -c 'kill \$(ps -x | grep keycloak | grep java | cut -d" " -f2)'
+   service_start /usr/bin/su - keycloak -c 'PATH=/usr/local/java-11-openjdk/bin:\${PATH} /usr/local/keycloak/keycloak-server/bin/kc.sh start > /dev/null 2>&1 &'
 }
 
 stop() {
-   /usr/bin/su - keycloak -c 'PATH=/usr/local/java-11-openjdk/bin:\${PATH} /usr/local/keycloak/keycloak-server/bin/kc.sh stop'
+   /usr/bin/su - keycloak -c 'kill \$(ps -x | grep keycloak | grep java | cut -d" " -f2)'
 }
 EOF
 
@@ -263,7 +264,12 @@ STOP=80
 SERVICE_USE_PID=0
 
 start() {
-   service_start /usr/bin/su - apicurio -c 'PATH=/usr/local/java-11-openjdk/bin:\${PATH} /usr/local/apicurio/apicurio-studio/bin/standalone.sh -c standalone-apicurio.xml -Djboss.bind.address=${BASTION_HOST} -Djboss.socket.binding.port-offset=1000 -Dapicurio.kc.auth.rootUrl="https://keycloak.${LAB_DOMAIN}:7443" -Dapicurio.kc.auth.realm="apicurio" -Dapicurio-ui.hub-api.url="https://apicurio.${LAB_DOMAIN}:9443/hub-api" > /dev/null 2>&1 &'
+  service_start /usr/bin/su - apicurio -c 'PATH=/usr/local/java-11-openjdk/bin:${PATH} /usr/local/apicurio/apicurio-studio/bin/standalone.sh -c standalone-apicurio.xml -Djboss.bind.address=${BASTION_HOST} -Djboss.socket.binding.port-offset=1000 -Dapicurio.kc.auth.rootUrl="https://keycloak.${LAB_DOMAIN}:7443" -Dapicurio.kc.auth.realm="apicurio" -Dapicurio-ui.editing.url="wss://apicurio.${LAB_DOMAIN}:9443/api-editing" -Dapicurio-ui.hub-api.url="https://apicurio.${LAB_DOMAIN}:9443/api-hub" -Dapicurio-ui.url="https://apicurio.${LAB_DOMAIN}:9443/studio" > /dev/null 2>&1 &'
+}
+
+restart() {
+  /usr/bin/su - apicurio -c 'kill \$(ps -x | grep apicurio | grep java | cut -d" " -f2)'
+  service_start /usr/bin/su - apicurio -c 'PATH=/usr/local/java-11-openjdk/bin:${PATH} /usr/local/apicurio/apicurio-studio/bin/standalone.sh -c standalone-apicurio.xml -Djboss.bind.address=${BASTION_HOST} -Djboss.socket.binding.port-offset=1000 -Dapicurio.kc.auth.rootUrl="https://keycloak.${LAB_DOMAIN}:7443" -Dapicurio.kc.auth.realm="apicurio" -Dapicurio-ui.editing.url="wss://apicurio.${LAB_DOMAIN}:9443/api-editing" -Dapicurio-ui.hub-api.url="https://apicurio.${LAB_DOMAIN}:9443/api-hub" -Dapicurio-ui.url="https://apicurio.${LAB_DOMAIN}:9443/studio" > /dev/null 2>&1 &'
 }
 
 stop() {
@@ -271,7 +277,12 @@ stop() {
 }
 EOF
 
-  APICURIO_VER=$(basename $(curl -Ls -o /dev/null -w %{url_effective} https://github.com/Apicurio/apicurio-studio/releases/latest))
+  if [[ ${LATEST} == "true" ]]
+  then
+    APICURIO_VER=$(basename $(curl -Ls -o /dev/null -w %{url_effective} https://github.com/Apicurio/apicurio-studio/releases/latest))
+    yq e ".apicurio-version = \"${APICURIO_VER}\"" -i ${LAB_CONFIG_FILE}
+  fi
+  APICURIO_VER=$(yq e ".apicurio-version" ${LAB_CONFIG_FILE})
   ${SCP} ${PI_WORK_DIR}/apicurio root@${BASTION_HOST}:/etc/init.d/apicurio
   ${SSH} root@${BASTION_HOST} "mkdir -p /usr/local/apicurio/home ; \
     cd /usr/local/apicurio ; \
@@ -283,7 +294,6 @@ EOF
     mv /usr/local/apicurio/apicurio-studio/standalone/configuration/standalone-apicurio.xml /usr/local/apicurio/apicurio-studio/standalone/configuration/standalone-apicurio.xml.orig ; \
     mv /tmp/standalone-apicurio.xml /usr/local/apicurio/apicurio-studio/standalone/configuration/standalone-apicurio.xml ; \
     sed -i \"s|generate-self-signed-certificate-host=\\\"localhost\\\"||g\" /usr/local/apicurio/apicurio-studio/standalone/configuration/standalone-apicurio.xml ; \
-    mv /usr/local/apicurio/apicurio-studio/standalone/configuration/application.keystore /usr/local/apicurio/apicurio-studio/standalone/configuration/application.keystore.orig ; \
     /usr/local/java-11-openjdk/bin/keytool -genkeypair -keystore /usr/local/apicurio/apicurio-studio/standalone/configuration/application.keystore -deststoretype pkcs12 -storepass password -keypass password -alias server -keyalg RSA -keysize 4096 -validity 5000 -dname \"CN=apicurio.${LAB_DOMAIN}, OU=okd4-lab, O=okd4-lab, L=City, ST=State, C=US\" -ext \"SAN=DNS:apicurio.${LAB_DOMAIN},IP:${BASTION_HOST}\" -ext \"BC=ca:true\" ; \
     groupadd apicurio ; \
     useradd -g apicurio -d /usr/local/apicurio/home apicurio ; \
