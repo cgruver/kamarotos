@@ -127,6 +127,9 @@ do
     --dev-tools)
       devTools "$@"
     ;;
+    --quarkus)
+      createQuarkusProject "$@"
+    ;;
     *)
        # catch all
     ;;
