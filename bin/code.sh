@@ -2,7 +2,7 @@ function createQuarkusProject() {
 
   # GIT_API=${GIT_API:-https://api.github.com/user/repos}
   # GIT_KEYS=${GIT_KEYS:-${HOME}/.git_token}
-  BASE_EXTENSIONS="quarkus-resteasy-jackson,quarkus-config-yaml,quarkus-rest-client,quarkus-smallrye-health"
+  BASE_EXTENSIONS="resteasy-reactive-jackson,config-yaml,rest-client-reactive-jackson,smallrye-health"
   ADD_EXTENSIONS=""
   
   for i in "$@"
