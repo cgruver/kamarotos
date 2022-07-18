@@ -128,7 +128,7 @@ do
       devTools "$@"
     ;;
     --quarkus)
-      createQuarkusProject "$@"
+      quarkusProject "$@"
     ;;
     *)
        # catch all

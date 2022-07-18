@@ -1,3 +1,21 @@
+function quarkusProject() {
+
+  for i in "$@"
+  do
+    case $i in
+      --create)
+        createQuarkusProject "$@"
+      ;;
+      --property)
+        addProperty "$@"
+      ;;
+      --dependency)
+        addDependency "$@"
+      ;;
+    esac
+  done
+}
+
 function createQuarkusProject() {
 
   # GIT_API=${GIT_API:-https://api.github.com/user/repos}
@@ -52,3 +70,41 @@ function gitInit(){
     git branch -M main
     git push -u origin main
 }
+
+function addProperty() {
+
+  for i in "$@"
+    do
+      case $i in
+        -p=*|--property=*)
+          PROPERTY="${i#*=}"
+        ;;
+        -v=*|--value=*)
+          VALUE="${i#*=}"
+        ;;
+      esac
+    done
+
+    mv pom.xml pom.xml.orig
+    yq -p=xml ".project.properties += {\"${PROPERTY}\":\"${VALUE}\"}" pom.xml.orig | yq -o=xml > pom.xml
+}
+
+function addDependency() {
+  for i in "$@"
+  do
+    case $i in
+      -g=*|--groupid=*)
+        GROUP_ID="${i#*=}"
+      ;;
+      -a=*|--artifactid=*)
+        ARTIFACT_ID="${i#*=}"
+      ;;
+      -v=*|--version=*)
+        VERSION="${i#*=}"
+      ;;
+    esac
+  done
+  mv pom.xml pom.xml.orig
+  yq -p=xml ".project.dependencies.dependency += [{\"groupId\":\"${GROUP_ID}\",\"artifactId\":\"${ARTIFACT_ID}\",\"version\":\"${VERSION}\"}]" pom.xml.orig | yq -o=xml > pom.xml
+}
+
