@@ -3,7 +3,7 @@ network: 10.11.12.0
 router-ip: 10.11.12.1
 bastion-ip: 10.11.12.10
 netmask: 255.255.255.0
-centos-mirror: rsync://mirror.facebook.net/centos-stream
+centos-mirror: rsync://mirror.facebook.net/centos-stream/
 gitea-version: 1.15.9
 openwrt-version: 21.02.1
 git-url: https://gitea.my.awesome.lab:3000
