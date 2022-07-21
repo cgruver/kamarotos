@@ -79,7 +79,7 @@ function initRouter() {
   cat ${OKD_LAB_PATH}/ssh_key.pub | ${SSH} root@${INIT_IP} "cat >> /etc/dropbear/authorized_keys"
   echo "Applying UCI config"
   ${SCP} ${WORK_DIR}/uci.batch root@${INIT_IP}:/tmp/uci.batch
-  ${SSH} root@${INIT_IP} "cat /tmp/uci.batch | uci batch ; passwd -l root ; reboot"
+  ${SSH} root@${INIT_IP} "cat /tmp/uci.batch | uci batch ; passwd -l root ; poweroff"
 }
 
 function setupRouter() {
@@ -397,8 +397,6 @@ memstatistics-file "/data/var/named/data/named_mem_stats.txt";
 allow-query     { trusted; };
 
 recursion yes;
-
-forwarders { 8.8.8.8; 8.8.4.4; };
 
 dnssec-validation yes;
 
