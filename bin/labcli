@@ -6,7 +6,6 @@
 . ${OKD_LAB_PATH}/bin/clusterUtils.sh
 . ${OKD_LAB_PATH}/bin/hostUtils.sh
 . ${OKD_LAB_PATH}/bin/devTools.sh
-. ${OKD_LAB_PATH}/bin/code.sh
 
 SSH="ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null"
 SCP="scp -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null"
@@ -126,9 +125,6 @@ do
     ;;
     --dev-tools)
       devTools "$@"
-    ;;
-    --quarkus)
-      quarkusProject "$@"
     ;;
     *)
        # catch all

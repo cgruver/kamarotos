@@ -153,7 +153,7 @@ function deleteKvmHost() {
   mac_addr=$(yq e ".kvm-hosts.[${index}].mac-addr" ${CLUSTER_CONFIG})
   host_name=$(yq e ".kvm-hosts.[${index}].host-name" ${CLUSTER_CONFIG})
   boot_dev=$(yq e ".kvm-hosts.[${index}].disks.disk1" ${CLUSTER_CONFIG})
-  destroyMetal root ${host_name} ${boot_dev} na ${p_cmd}
+  destroyMetal root ${host_name} "/dev/${boot_dev}" na ${p_cmd}
   deletePxeConfig ${mac_addr}
   deleteDns ${host_name}-${DOMAIN}-kvm
 }

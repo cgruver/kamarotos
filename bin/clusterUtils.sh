@@ -1264,6 +1264,7 @@ function postInstall() {
   done
   ${OC} patch imagepruners.imageregistry.operator.openshift.io/cluster --type merge -p '{"spec":{"schedule":"0 0 * * *","suspend":false,"keepTagRevisions":3,"keepYoungerThan":60,"resources":{},"affinity":{},"nodeSelector":{},"tolerations":[],"startingDeadlineSeconds":60,"successfulJobsHistoryLimit":3,"failedJobsHistoryLimit":3}}'
   ${OC} delete pod --field-selector=status.phase==Succeeded --all-namespaces
+  ${OC} patch OperatorHub cluster --type json -p '[{"op": "replace", "path": "/spec/sources", "value": [{"disabled":true,"name":"certified-operators"},{"disabled":true,"name":"redhat-marketplace"},{"disabled":true,"name":"redhat-operators"}]}]'
 }
 
 function getNodes() {
@@ -1291,3 +1292,4 @@ function getNodes() {
   done
 
 }
+

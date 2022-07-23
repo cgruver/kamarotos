@@ -1,20 +1,4 @@
-function quarkusProject() {
-
-  for i in "$@"
-  do
-    case $i in
-      --create)
-        createQuarkusProject "$@"
-      ;;
-      --property)
-        addProperty "$@"
-      ;;
-      --dependency)
-        addDependency "$@"
-      ;;
-    esac
-  done
-}
+#!/bin/bash
 
 function createQuarkusProject() {
 
@@ -55,7 +39,7 @@ function createQuarkusProject() {
   mkdir -p ./src/test/java/${GROUP_ID//.//}/${PROJECT}
   touch ./src/test/java/${GROUP_ID//.//}/.gitignore
   mkdir -p ./src/main/java/${GROUP_ID//.//}/${PROJECT}/{aop,api,dto,colaborators,event,mapper,model,service}
-  touch ./src/main/java/${GROUP_ID//.//}/${PROJECT}/{aop,api,dto,colaborators,event,mapper,model,service}/.gitignore
+  touch ./src/main/java/${GROUP_ID//.//}/${PROJECT}/{aop,api,dto,colaborators,event,mapper,model,service}/.gitkeep
   cd -
   # gitInit ${PROJECT}
 }
@@ -108,3 +92,17 @@ function addDependency() {
   yq -p=xml ".project.dependencies.dependency += [{\"groupId\":\"${GROUP_ID}\",\"artifactId\":\"${ARTIFACT_ID}\",\"version\":\"${VERSION}\"}]" pom.xml.orig | yq -o=xml > pom.xml
 }
 
+for i in "$@"
+do
+  case $i in
+    --create)
+      createQuarkusProject "$@"
+    ;;
+    --property)
+      addProperty "$@"
+    ;;
+    --dependency)
+      addDependency "$@"
+    ;;
+  esac
+done
