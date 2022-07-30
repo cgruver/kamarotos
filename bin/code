@@ -6,12 +6,13 @@ function createQuarkusProject() {
   # GIT_KEYS=${GIT_KEYS:-${HOME}/.git_token}
   BASE_EXTENSIONS="resteasy-reactive-jackson,config-yaml,rest-client-reactive-jackson,smallrye-health"
   ADD_EXTENSIONS=""
+  GITEA="false"
   
   for i in "$@"
   do
     case $i in
-      -p=*|--project=*)
-        PROJECT="${i#*=}"
+      -a=*|--app=*)
+        APP_NAME="${i#*=}"
       ;;
       -g=*|--group-id=*)
         GROUP_ID="${i#*=}"
@@ -21,6 +22,10 @@ function createQuarkusProject() {
       ;;
       -x=*|--extensions=*)
         ADD_EXTENSIONS=",${i#*=}"
+      ;;
+      -j=*|--java=*)
+        JAVA_VER="${i#*=}"
+      ;;
       # -u=*|--git-url=*)
       #   GIT_URL="${i#*=}"
       # ;;
@@ -32,26 +37,28 @@ function createQuarkusProject() {
 
   JAVA_VER=${JAVA_VER:-17}
 
-  quarkus create app --maven --java=${JAVA_VER} --no-wrapper --no-code --package-name=${GROUP_ID}.${PROJECT} --extensions=${BASE_EXTENSIONS}${ADD_EXTENSIONS}  ${GROUP_ID}:${PROJECT}:0.1
+  quarkus create app --maven --java=${JAVA_VER} --no-wrapper --no-code --package-name=${GROUP_ID}.${APP_NAME} --extensions=${BASE_EXTENSIONS}${ADD_EXTENSIONS}  ${GROUP_ID}:${APP_NAME}:0.1
   
-  cd ${PROJECT}
+  cd ${APP_NAME}
   touch README.md
-  mkdir -p ./src/test/java/${GROUP_ID//.//}/${PROJECT}
+  mkdir -p ./src/test/java/${GROUP_ID//.//}/${APP_NAME}
   touch ./src/test/java/${GROUP_ID//.//}/.gitignore
-  mkdir -p ./src/main/java/${GROUP_ID//.//}/${PROJECT}/{aop,api,dto,colaborators,event,mapper,model,service}
-  touch ./src/main/java/${GROUP_ID//.//}/${PROJECT}/{aop,api,dto,colaborators,event,mapper,model,service}/.gitkeep
+  mkdir -p ./src/main/java/${GROUP_ID//.//}/${APP_NAME}/{aop,api,dto,colaborators,event,mapper,model,service}
+  touch ./src/main/java/${GROUP_ID//.//}/${APP_NAME}/{aop,api,dto,colaborators,event,mapper,model,service}/.gitkeep
+  git init
+  git branch -M main
+  git add .
+  git commit -m "create repo"
   cd -
-  # gitInit ${PROJECT}
+  # gitInit ${APP_NAME}
 }
 
 function gitInit(){
     local project=${1}
-    git init
-    git add .
-    git commit -m "create repo"
+    
     curl -u ${GIT_USER}:${ACCESS_TOKEN} -X POST ${GIT_API} -d "{\"name\":\"${project}\",\"private\":false}"
     git remote add origin ${GIT_URL}/${project}.git
-    git branch -M main
+    
     git push -u origin main
 }
 
@@ -92,6 +99,16 @@ function addDependency() {
   yq -p=xml ".project.dependencies.dependency += [{\"groupId\":\"${GROUP_ID}\",\"artifactId\":\"${ARTIFACT_ID}\",\"version\":\"${VERSION}\"}]" pom.xml.orig | yq -o=xml > pom.xml
 }
 
+function printHelp() {
+  echo "Usage:"
+  echo "  code --create -a=<application name> -g=<group id> [-q=<Quarkus Version>] [-x=<comma delimeted list of Quarkus extensions.]"
+  echo "    The --create subcommand will create the scaffolding for a new Quarkus project with the Maven build tool."
+  echo "  code --property -p=<property name> -v=<property value>"
+  echo "    The --property subcommand adds a property to your pom.xml"
+  echo "  code --dependency -g=<group ID> -a=<artifact ID> -v=<version>"
+  echo "    The --dependency subcommand adds a new dependency to your pom.xml"
+}
+
 for i in "$@"
 do
   case $i in
@@ -103,6 +120,9 @@ do
     ;;
     --dependency)
       addDependency "$@"
+    ;;
+    --help)
+      printHelp
     ;;
   esac
 done
