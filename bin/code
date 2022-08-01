@@ -4,9 +4,10 @@ function createQuarkusProject() {
 
   # GIT_API=${GIT_API:-https://api.github.com/user/repos}
   # GIT_KEYS=${GIT_KEYS:-${HOME}/.git_token}
-  BASE_EXTENSIONS="resteasy-reactive-jackson,config-yaml,rest-client-reactive-jackson,smallrye-health"
+  BASE_EXTENSIONS="resteasy-reactive-jackson,rest-client-reactive-jackson,smallrye-health,config-yaml"
   ADD_EXTENSIONS=""
   GITEA="false"
+  QUARKUS_VERSION=""
   
   for i in "$@"
   do
@@ -18,7 +19,7 @@ function createQuarkusProject() {
         GROUP_ID="${i#*=}"
       ;;
       -q=*|--quarkus-ver=*)
-        QUARKUS_VERSION="${i#*=}"
+        QUARKUS_VERSION="--platform-bom=io.quarkus.platform:quarkus-bom:${i#*=}.Final"
       ;;
       -x=*|--extensions=*)
         ADD_EXTENSIONS=",${i#*=}"
@@ -37,29 +38,31 @@ function createQuarkusProject() {
 
   JAVA_VER=${JAVA_VER:-17}
 
-  quarkus create app --maven --java=${JAVA_VER} --no-wrapper --no-code --package-name=${GROUP_ID}.${APP_NAME} --extensions=${BASE_EXTENSIONS}${ADD_EXTENSIONS}  ${GROUP_ID}:${APP_NAME}:0.1
+  quarkus create app --maven --java=${JAVA_VER} --no-wrapper --no-code --package-name=${GROUP_ID}.${APP_NAME} --extensions=${BASE_EXTENSIONS}${ADD_EXTENSIONS} ${QUARKUS_VERSION} ${GROUP_ID}:${APP_NAME}:0.1
   
   cd ${APP_NAME}
+  rm README.md
   touch README.md
   mkdir -p ./src/test/java/${GROUP_ID//.//}/${APP_NAME}
-  touch ./src/test/java/${GROUP_ID//.//}/.gitignore
-  mkdir -p ./src/main/java/${GROUP_ID//.//}/${APP_NAME}/{aop,api,dto,colaborators,event,mapper,model,service}
-  touch ./src/main/java/${GROUP_ID//.//}/${APP_NAME}/{aop,api,dto,colaborators,event,mapper,model,service}/.gitkeep
-  git init
-  git branch -M main
+  touch ./src/test/java/${GROUP_ID//.//}/.gitkeep
+  mkdir -p ./src/main/java/${GROUP_ID//.//}/${APP_NAME}/{aop,api,dto,collaborators,event,mapper,model,service}
+  touch ./src/main/java/${GROUP_ID//.//}/${APP_NAME}/{aop,api,dto,collaborators,event,mapper,model,service}/.gitkeep
+  git init -b main
   git add .
   git commit -m "create repo"
   cd -
-  # gitInit ${APP_NAME}
 }
 
 function gitInit(){
-    local project=${1}
-    
-    curl -u ${GIT_USER}:${ACCESS_TOKEN} -X POST ${GIT_API} -d "{\"name\":\"${project}\",\"private\":false}"
-    git remote add origin ${GIT_URL}/${project}.git
-    
-    git push -u origin main
+
+  # Unused right now.
+
+  local project=${1}
+  
+  curl -u ${GIT_USER}:${ACCESS_TOKEN} -X POST ${GIT_API} -d "{\"name\":\"${project}\",\"private\":false}"
+  git remote add origin ${GIT_URL}/${project}.git
+  
+  git push -u origin main
 }
 
 function addProperty() {
@@ -77,7 +80,8 @@ function addProperty() {
     done
 
     mv pom.xml pom.xml.orig
-    yq -p=xml ".project.properties += {\"${PROPERTY}\":\"${VALUE}\"}" pom.xml.orig | yq -o=xml > pom.xml
+    echo '<?xml version="1.0"?>' > pom.xml
+    yq -p=xml ".project.properties += {\"${PROPERTY}\":\"${VALUE}\"}" pom.xml.orig | yq -o=xml >> pom.xml
 }
 
 function addDependency() {
@@ -96,7 +100,8 @@ function addDependency() {
     esac
   done
   mv pom.xml pom.xml.orig
-  yq -p=xml ".project.dependencies.dependency += [{\"groupId\":\"${GROUP_ID}\",\"artifactId\":\"${ARTIFACT_ID}\",\"version\":\"${VERSION}\"}]" pom.xml.orig | yq -o=xml > pom.xml
+  echo '<?xml version="1.0"?>' > pom.xml
+  yq -p=xml ".project.dependencies.dependency += [{\"groupId\":\"${GROUP_ID}\",\"artifactId\":\"${ARTIFACT_ID}\",\"version\":\"${VERSION}\"}]" pom.xml.orig | yq -o=xml >> pom.xml
 }
 
 function printHelp() {
