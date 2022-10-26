@@ -6,30 +6,30 @@ function trustCerts() {
       -c)
         CERT_URL=console-openshift-console.apps.${CLUSTER_NAME}.${DOMAIN}:443
         CERT_NAME=okd-console.${SUB_DOMAIN}.${LAB_DOMAIN}.crt
-        trustCert ${CERT_URL} ${CERT_NAME} root
+        trustCert ${CERT_URL} ${CERT_NAME} root ""
         CERT_URL=api.${CLUSTER_NAME}.${DOMAIN}:6443
         CERT_NAME=okd-api.${SUB_DOMAIN}.${LAB_DOMAIN}.crt
-        trustCert ${CERT_URL} ${CERT_NAME} root
+        trustCert ${CERT_URL} ${CERT_NAME} root "-servername api.${CLUSTER_NAME}.${DOMAIN}"
       ;;
       -n)
         CERT_URL=nexus.${LAB_DOMAIN}:8443
         CERT_NAME=nexus.${LAB_DOMAIN}.crt
-        trustCert ${CERT_URL} ${CERT_NAME} na
+        trustCert ${CERT_URL} ${CERT_NAME} na ""
       ;;
       -g)
         CERT_URL=gitea.${LAB_DOMAIN}:3000
         CERT_NAME=gitea.${LAB_DOMAIN}.crt
-        trustCert ${CERT_URL} ${CERT_NAME} na
+        trustCert ${CERT_URL} ${CERT_NAME} na ""
       ;;
       -k)
         CERT_URL=keycloak.${LAB_DOMAIN}:7443
         CERT_NAME=keycloak.${LAB_DOMAIN}.crt
-        trustCert ${CERT_URL} ${CERT_NAME} na
+        trustCert ${CERT_URL} ${CERT_NAME} na ""
       ;;
       -a)
         CERT_URL=apicurio.${LAB_DOMAIN}:9443
         CERT_NAME=apicurio.${LAB_DOMAIN}.crt
-        trustCert ${CERT_URL} ${CERT_NAME} na
+        trustCert ${CERT_URL} ${CERT_NAME} na ""
       ;;
     esac
   done
@@ -40,6 +40,7 @@ function trustCert() {
   local url=${1}
   local cert_name=${2}
   local cert_type=${3}
+  local sni_fix=${4}
   CERT_CMD=trustRoot
 
   if [[ ${cert_type} == "root" ]]
@@ -49,11 +50,11 @@ function trustCert() {
   SYS_ARCH=$(uname)
   if [[ ${SYS_ARCH} == "Darwin" ]]
   then
-    openssl s_client -showcerts -connect ${url} </dev/null 2>/dev/null|openssl x509 -outform PEM > /tmp/${cert_name}
+    openssl s_client -showcerts ${sni_fix} -connect ${url} </dev/null 2>/dev/null|openssl x509 -outform PEM > /tmp/${cert_name}
     sudo security add-trusted-cert -d -r ${CERT_CMD} -k "/Library/Keychains/System.keychain" /tmp/${cert_name}
   elif [[ ${SYS_ARCH} == "Linux" ]]
   then
-    sudo openssl s_client -showcerts -connect ${url} </dev/null 2>/dev/null|openssl x509 -outform PEM > /etc/pki/ca-trust/source/anchors/${cert_name}
+    sudo openssl s_client -showcerts ${sni_fix} -connect ${url} </dev/null 2>/dev/null|openssl x509 -outform PEM > /etc/pki/ca-trust/source/anchors/${cert_name}
     sudo update-ca-trust
   else
     echo "Unsupported OS: Cannot trust cert with this utility"
