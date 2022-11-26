@@ -180,10 +180,18 @@ function getOkdCmds() {
   CONTINUE="true"
   local sub_domain=${1}
   SYS_ARCH=$(uname)
+  PROC_ARCH=x86_64
   if [[ ${SYS_ARCH} == "Darwin" ]]
   then
-    OS_VER=mac
     BUTANE_DLD=apple-darwin
+    if [[ $(uname -m) == "arm64" ]]
+    then
+      OS_VER=mac-arm64
+      PROC_ARCH=aarch64
+      CONTINUE="false"
+    else
+      OS_VER=mac
+    fi
   elif [[ ${SYS_ARCH} == "Linux" ]]
   then
     OS_VER=linux
@@ -198,7 +206,7 @@ function getOkdCmds() {
     mkdir -p ${OKD_LAB_PATH}/tmp
     wget -O ${OKD_LAB_PATH}/tmp/oc.tar.gz https://github.com/openshift/okd/releases/download/${OKD_RELEASE}/openshift-client-${OS_VER}-${OKD_RELEASE}.tar.gz
     wget -O ${OKD_LAB_PATH}/tmp/oc-install.tar.gz https://github.com/openshift/okd/releases/download/${OKD_RELEASE}/openshift-install-${OS_VER}-${OKD_RELEASE}.tar.gz
-    wget -O ${OKD_LAB_PATH}/okd-cmds/${OKD_RELEASE}/butane https://github.com/coreos/butane/releases/download/${BUTANE_VERSION}/butane-x86_64-${BUTANE_DLD}
+    wget -O ${OKD_LAB_PATH}/okd-cmds/${OKD_RELEASE}/butane https://github.com/coreos/butane/releases/download/${BUTANE_VERSION}/butane-${PROC_ARCH}-${BUTANE_DLD}
     tar -xzf ${OKD_LAB_PATH}/tmp/oc.tar.gz -C ${OKD_LAB_PATH}/okd-cmds/${OKD_RELEASE}
     tar -xzf ${OKD_LAB_PATH}/tmp/oc-install.tar.gz -C ${OKD_LAB_PATH}/okd-cmds/${OKD_RELEASE}
     chmod 700 ${OKD_LAB_PATH}/okd-cmds/${OKD_RELEASE}/*
