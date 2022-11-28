@@ -176,6 +176,16 @@ function setEdgeEnv() {
   fi
 }
 
+function fixMacArmCodeSign() {
+
+  if [[ $(uname) == "Darwin" ]] && [[ $(uname -m) == "arm64" ]]
+  then
+    echo "Applying workaround for corrupt signiture on OpenShift CLI binaries"
+    codesign --force -s - ${OKD_LAB_PATH}/okd-cmds/${OKD_RELEASE}/oc
+    codesign --force -s - ${OKD_LAB_PATH}/okd-cmds/${OKD_RELEASE}/openshift-install
+  fi
+}
+
 function getOkdCmds() {
   CONTINUE="true"
   local sub_domain=${1}
@@ -188,7 +198,6 @@ function getOkdCmds() {
     then
       OS_VER=mac-arm64
       PROC_ARCH=aarch64
-      CONTINUE="false"
     else
       OS_VER=mac
     fi
@@ -211,6 +220,7 @@ function getOkdCmds() {
     tar -xzf ${OKD_LAB_PATH}/tmp/oc-install.tar.gz -C ${OKD_LAB_PATH}/okd-cmds/${OKD_RELEASE}
     chmod 700 ${OKD_LAB_PATH}/okd-cmds/${OKD_RELEASE}/*
     rm -rf ${OKD_LAB_PATH}/tmp
+    fixMacArmCodeSign
     for i in $(ls ${OKD_LAB_PATH}/okd-cmds/${OKD_RELEASE})
     do
       rm -f ${OKD_LAB_PATH}/bin/${i}
