@@ -1,11 +1,22 @@
 #!/bin/bash
 
+function addExtensions() {
+  local extensions=${1}
+
+  if [[ ${EXTENSIONS} == "" ]]
+  then
+    EXTENSIONS="${extensions}"
+  else
+    EXTENSIONS="${EXTENSIONS},${extensions}"
+  fi
+}
+
 function createQuarkusProject() {
 
   # GIT_API=${GIT_API:-https://api.github.com/user/repos}
   # GIT_KEYS=${GIT_KEYS:-${HOME}/.git_token}
+  EXTENSIONS=""
   BASE_EXTENSIONS="resteasy-reactive-jackson,rest-client-reactive-jackson,smallrye-health,config-yaml"
-  ADD_EXTENSIONS=""
   GITEA="false"
   QUARKUS_VERSION=""
   
@@ -22,11 +33,13 @@ function createQuarkusProject() {
         QUARKUS_VERSION="--platform-bom=io.quarkus.platform:quarkus-bom:${i#*=}.Final"
       ;;
       -x=*|--extensions=*)
-        ADD_EXTENSIONS=",${i#*=}"
+        addExtensions "${i#*=}"
       ;;
       -j=*|--java=*)
         JAVA_VER="${i#*=}"
       ;;
+      -b|--base)
+        addExtensions "${BASE_EXTENSIONS}"
       # -u=*|--git-url=*)
       #   GIT_URL="${i#*=}"
       # ;;
@@ -38,7 +51,7 @@ function createQuarkusProject() {
 
   JAVA_VER=${JAVA_VER:-17}
 
-  quarkus create app --maven --java=${JAVA_VER} --no-wrapper --no-code --package-name=${GROUP_ID}.${APP_NAME} --extensions=${BASE_EXTENSIONS}${ADD_EXTENSIONS} ${QUARKUS_VERSION} ${GROUP_ID}:${APP_NAME}:0.1
+  quarkus create app --maven --java=${JAVA_VER} --no-wrapper --no-code --package-name=${GROUP_ID}.${APP_NAME} --extensions=${EXTENSIONS} ${QUARKUS_VERSION} ${GROUP_ID}:${APP_NAME}:0.1
   
   cd ${APP_NAME}
   rm README.md
@@ -78,10 +91,9 @@ function addProperty() {
         ;;
       esac
     done
-
-    mv pom.xml pom.xml.orig
-    echo '<?xml version="1.0"?>' > pom.xml
-    yq -p=xml ".project.properties += {\"${PROPERTY}\":\"${VALUE}\"}" pom.xml.orig | yq -o=xml >> pom.xml
+    mv pom.xml pom.xml.tmp
+    yq -p=xml ".project.properties += {\"${PROPERTY}\":\"${VALUE}\"}" pom.xml.tmp | yq -o=xml >> pom.xml
+    rm pom.xml.tmp
 }
 
 function addDependency() {
@@ -99,9 +111,9 @@ function addDependency() {
       ;;
     esac
   done
-  mv pom.xml pom.xml.orig
-  echo '<?xml version="1.0"?>' > pom.xml
-  yq -p=xml ".project.dependencies.dependency += [{\"groupId\":\"${GROUP_ID}\",\"artifactId\":\"${ARTIFACT_ID}\",\"version\":\"${VERSION}\"}]" pom.xml.orig | yq -o=xml >> pom.xml
+  mv pom.xml pom.xml.tmp
+  yq -p=xml ".project.dependencies.dependency += [{\"groupId\":\"${GROUP_ID}\",\"artifactId\":\"${ARTIFACT_ID}\",\"version\":\"${VERSION}\"}]" pom.xml.tmp | yq -o=xml >> pom.xml
+  rm pom.xml.tmp
 }
 
 function printHelp() {
