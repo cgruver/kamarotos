@@ -7,8 +7,8 @@
 . ${OKD_LAB_PATH}/bin/hostUtils.sh
 . ${OKD_LAB_PATH}/bin/devTools.sh
 
-SSH="ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null"
-SCP="scp -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null"
+SSH="ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -oHostKeyAlgorithms=+ssh-rsa -oPubkeyAcceptedAlgorithms=+ssh-rsa"
+SCP="scp -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -oHostKeyAlgorithms=+ssh-rsa -oPubkeyAcceptedAlgorithms=+ssh-rsa"
 
 for i in "$@"
 do
