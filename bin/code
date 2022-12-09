@@ -118,8 +118,9 @@ function addDependency() {
 
 function printHelp() {
   echo "Usage:"
-  echo "  code --create -a=<application name> -g=<group id> [-q=<Quarkus Version>] [-x=<comma delimeted list of Quarkus extensions.]"
+  echo "  code --create [-b] -a=<application name> -g=<group id> [-q=<Quarkus Version>] [-x=<comma delimeted list of Quarkus extensions.]"
   echo "    The --create subcommand will create the scaffolding for a new Quarkus project with the Maven build tool."
+  echo "    The -b option will include dependencies for a basic REST service/client."
   echo "  code --property -p=<property name> -v=<property value>"
   echo "    The --property subcommand adds a property to your pom.xml"
   echo "  code --dependency -g=<group ID> -a=<artifact ID> -v=<version>"

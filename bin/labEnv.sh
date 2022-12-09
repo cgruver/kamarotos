@@ -147,7 +147,12 @@ function setDomainEnv() {
     export OKD_RELEASE=$(yq e ".cluster.release" ${CLUSTER_CONFIG})
     if [[ ! -d ${OKD_LAB_PATH}/okd-cmds/${OKD_RELEASE} ]]
     then
-      getOkdCmds
+      if [[ $(yq ".cluster | has(\"scos\")" ${CLUSTER_CONFIG}) == "true" ]] && [[ $(yq e ".cluster.scos" ${CLUSTER_CONFIG}) == "true" ]]
+      then
+        getOkdCmds okd-scos
+      else
+        getOkdCmds okd
+      fi
     fi
     for i in $(ls ${OKD_LAB_PATH}/okd-cmds/${OKD_RELEASE})
     do
@@ -188,7 +193,7 @@ function fixMacArmCodeSign() {
 
 function getOkdCmds() {
   CONTINUE="true"
-  local sub_domain=${1}
+  local okd_type=${1}
   SYS_ARCH=$(uname)
   PROC_ARCH=x86_64
   if [[ ${SYS_ARCH} == "Darwin" ]]
@@ -213,8 +218,8 @@ function getOkdCmds() {
   then
     mkdir -p ${OKD_LAB_PATH}/okd-cmds/${OKD_RELEASE}
     mkdir -p ${OKD_LAB_PATH}/tmp
-    wget -O ${OKD_LAB_PATH}/tmp/oc.tar.gz https://github.com/openshift/okd/releases/download/${OKD_RELEASE}/openshift-client-${OS_VER}-${OKD_RELEASE}.tar.gz
-    wget -O ${OKD_LAB_PATH}/tmp/oc-install.tar.gz https://github.com/openshift/okd/releases/download/${OKD_RELEASE}/openshift-install-${OS_VER}-${OKD_RELEASE}.tar.gz
+    wget -O ${OKD_LAB_PATH}/tmp/oc.tar.gz https://github.com/okd-project/${okd_type}/releases/download/${OKD_RELEASE}/openshift-client-${OS_VER}-${OKD_RELEASE}.tar.gz
+    wget -O ${OKD_LAB_PATH}/tmp/oc-install.tar.gz https://github.com/okd-project/${okd_type}/releases/download/${OKD_RELEASE}/openshift-install-${OS_VER}-${OKD_RELEASE}.tar.gz
     wget -O ${OKD_LAB_PATH}/okd-cmds/${OKD_RELEASE}/butane https://github.com/coreos/butane/releases/download/${BUTANE_VERSION}/butane-${PROC_ARCH}-${BUTANE_DLD}
     tar -xzf ${OKD_LAB_PATH}/tmp/oc.tar.gz -C ${OKD_LAB_PATH}/okd-cmds/${OKD_RELEASE}
     tar -xzf ${OKD_LAB_PATH}/tmp/oc-install.tar.gz -C ${OKD_LAB_PATH}/okd-cmds/${OKD_RELEASE}

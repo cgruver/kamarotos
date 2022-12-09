@@ -260,7 +260,20 @@ EOF
 }
 
 function getOkdRelease() {
-  OKD_RELEASE=$(basename $(curl -Ls -o /dev/null -w %{url_effective} https://github.com/openshift/okd/releases/latest))
+  OKD_BASE="okd"
+  for i in "$@"
+  do
+    case $i in
+      --scos)
+        OKD_BASE="okd-scos"
+        yq e ".cluster.scos = \"true\"" -i ${CLUSTER_CONFIG}
+        yq e ".cluster.remote-registry = \"quay.io/okd/scos-release\"" -i ${CLUSTER_CONFIG}
+        export OKD_REGISTRY=$(yq e ".cluster.remote-registry" ${CLUSTER_CONFIG})
+      ;;
+    esac
+  done
+
+  OKD_RELEASE=$(basename $(curl -Ls -o /dev/null -w %{url_effective} https://github.com/okd-project/${OKD_BASE}/releases/latest))
   echo ${OKD_RELEASE}
   yq e ".cluster.release = \"${OKD_RELEASE}\"" -i ${CLUSTER_CONFIG}
 }

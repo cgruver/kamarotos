@@ -84,7 +84,7 @@ do
       gitSecret "$@"
     ;;
     --latest)
-      getOkdRelease
+      getOkdRelease "$@"
     ;;
     --console)
       ocConsole "$@"
