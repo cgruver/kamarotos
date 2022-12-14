@@ -127,11 +127,11 @@ function deleteNodeVm() {
   local host_name=${1}
   local kvm_host=${2}
 
-  ${SSH} root@${kvm_host}.${DOMAIN} "virsh destroy ${host_name}"
-  ${SSH} root@${kvm_host}.${DOMAIN} "virsh undefine ${host_name}"
-  ${SSH} root@${kvm_host}.${DOMAIN} "virsh pool-destroy ${host_name}"
-  ${SSH} root@${kvm_host}.${DOMAIN} "virsh pool-undefine ${host_name}"
-  ${SSH} root@${kvm_host}.${DOMAIN} "rm -rf /VirtualMachines/${host_name}"
+  ${SSH} root@${kvm_host} "virsh destroy ${host_name}"
+  ${SSH} root@${kvm_host} "virsh undefine ${host_name}"
+  ${SSH} root@${kvm_host} "virsh pool-destroy ${host_name}"
+  ${SSH} root@${kvm_host} "virsh pool-undefine ${host_name}"
+  ${SSH} root@${kvm_host} "rm -rf /VirtualMachines/${host_name}"
 }
 
 function stopKvmHosts() {
@@ -239,8 +239,13 @@ function configOkdNode() {
   local mac=${3}
   local role=${4}
 
+  if [[ ${role} == "bootstrap" ]]
+  then
+    sed -i 's|Pivot bootstrap to the OpenShift Release Image\\nWants=release-image.service\\nAfter=release-image.service\\n\\n|Pivot bootstrap to the OpenShift Release Image\\nWants=release-image.service\\nAfter=release-image.service\\nBefore=bootkube.service\\n\\n|g' ${WORK_DIR}/ipxe-work-dir/bootstrap.ign
+  fi
+
 cat << EOF > ${WORK_DIR}/ipxe-work-dir/${mac//:/-}-config.yml
-variant: fcos
+variant: ${BUTANE_VARIANT}
 version: ${BUTANE_SPEC_VERSION}
 ignition:
   config:
@@ -316,7 +321,7 @@ local boot_dev=${2}
 mv ${WORK_DIR}/ipxe-work-dir/ignition/${mac//:/-}.ign ${WORK_DIR}/ipxe-work-dir/${mac//:/-}.ign
 
 cat << EOF > ${WORK_DIR}/ipxe-work-dir/${mac//:/-}-ceph.yml
-variant: fcos
+variant: ${BUTANE_VARIANT}
 version: ${BUTANE_SPEC_VERSION}
 ignition:
   config:
@@ -389,11 +394,11 @@ function createOkdVmNode() {
   then
     DISK_CONFIG="${DISK_CONFIG} --disk size=${ceph_vol},path=/VirtualMachines/${host_name}/datavol,bus=sata"
   fi
-  ${SSH} root@${kvm_host}.${DOMAIN} "mkdir -p /VirtualMachines/${host_name} ; \
+  ${SSH} root@${kvm_host} "mkdir -p /VirtualMachines/${host_name} ; \
     virt-install --print-xml 1 --name ${host_name} --memory ${memory} --vcpus ${cpu} --boot=hd,network,menu=on,useserial=on ${DISK_CONFIG} --network bridge=br0 --graphics none --noautoconsole --os-variant centos7.0 --cpu host-passthrough,match=exact > /VirtualMachines/${host_name}.xml ; \
     virsh define /VirtualMachines/${host_name}.xml"
   # Get the MAC address for eth0 in the new VM  
-  var=$(${SSH} root@${kvm_host}.${DOMAIN} "virsh -q domiflist ${host_name} | grep br0")
+  var=$(${SSH} root@${kvm_host} "virsh -q domiflist ${host_name} | grep br0")
   mac_addr=$(echo ${var} | cut -d" " -f5)
   yq e "${yq_loc} = \"${mac_addr}\"" -i ${CLUSTER_CONFIG}
 }
