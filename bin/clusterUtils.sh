@@ -61,7 +61,7 @@ function startWorker() {
         pause 15 "Pause to stagger node start up"
       fi
       kvm_host=$(yq e ".compute-nodes.[${node_index}].kvm-host" ${CLUSTER_CONFIG})  
-      startNode ${kvm_host} ${host_name}
+      startNode ${kvm_host}.${DOMAIN} ${host_name}
     fi
     node_index=$(( ${node_index} + 1 ))
   done
@@ -98,7 +98,7 @@ function deleteWorker() {
     destroyMetal core ${host_name} ${boot_dev} "/dev/${ceph_dev}" ${p_cmd}
   else
     kvm_host=$(yq e ".compute-nodes.[${index}].kvm-host" ${CLUSTER_CONFIG})
-    deleteNodeVm ${host_name} ${kvm_host}
+    deleteNodeVm ${host_name} ${kvm_host}.${DOMAIN}
   fi
   deleteDns ${host_name}-${DOMAIN}
   deletePxeConfig ${mac_addr}
@@ -260,7 +260,22 @@ EOF
 }
 
 function getOkdRelease() {
-  OKD_RELEASE=$(basename $(curl -Ls -o /dev/null -w %{url_effective} https://github.com/openshift/okd/releases/latest))
+  OKD_BASE="okd"
+  yq e ".cluster.scos = \"false\"" -i ${CLUSTER_CONFIG}
+  yq e ".cluster.remote-registry = \"quay.io/openshift/okd\"" -i ${CLUSTER_CONFIG}
+  for i in "$@"
+  do
+    case $i in
+      --scos)
+        OKD_BASE="okd-scos"
+        yq e ".cluster.scos = \"true\"" -i ${CLUSTER_CONFIG}
+        yq e ".cluster.remote-registry = \"quay.io/okd/scos-release\"" -i ${CLUSTER_CONFIG}
+        export OKD_REGISTRY=$(yq e ".cluster.remote-registry" ${CLUSTER_CONFIG})
+      ;;
+    esac
+  done
+
+  OKD_RELEASE=$(basename $(curl -Ls -o /dev/null -w %{url_effective} https://github.com/okd-project/${OKD_BASE}/releases/latest))
   echo ${OKD_RELEASE}
   yq e ".cluster.release = \"${OKD_RELEASE}\"" -i ${CLUSTER_CONFIG}
 }
@@ -453,7 +468,7 @@ function deleteControlPlane() {
       destroyMetal core ${host_name} ${install_dev} na ${p_cmd}
     else
       kvm_host=$(yq e ".control-plane.okd-hosts.[0].kvm-host" ${CLUSTER_CONFIG})
-      deleteNodeVm ${host_name} ${kvm_host}
+      deleteNodeVm ${host_name} ${kvm_host}.${DOMAIN}
     fi
     deletePxeConfig ${mac_addr}
   else
@@ -467,7 +482,7 @@ function deleteControlPlane() {
         destroyMetal core ${host_name} ${boot_dev} na ${p_cmd}
       else
         kvm_host=$(yq e ".control-plane.okd-hosts.[${node_index}].kvm-host" ${CLUSTER_CONFIG})
-        deleteNodeVm ${host_name} ${kvm_host}
+        deleteNodeVm ${host_name} ${kvm_host}.${DOMAIN}
       fi
       deletePxeConfig ${mac_addr}
     done
@@ -621,7 +636,7 @@ ${SSH} root@${DOMAIN_ROUTER} "uci set network.${INTERFACE}_lb=interface ; \
 function startNode() {
   local kvm_host=${1}
   local host_name=${2}
-  ${SSH} root@${kvm_host}.${DOMAIN} "virsh start ${host_name}"
+  ${SSH} root@${kvm_host} "virsh start ${host_name}"
 }
 
 function startBootstrap() {
@@ -639,7 +654,7 @@ function startBootstrap() {
     qemu-system-x86_64 -accel accel=hvf -m ${memory}M -smp ${cpu} -display none -nographic -drive file=${WORK_DIR}/bootstrap/bootstrap-node.qcow2,if=none,id=disk1  -device ide-hd,bus=ide.0,drive=disk1,id=sata0-0-0,bootindex=1 -boot n -netdev vde,id=nic0,sock=/var/run/vde.bridged.${bridge_dev}.ctl -device virtio-net-pci,netdev=nic0,mac=52:54:00:a1:b2:c3
   else
     kvm_host=$(yq e ".bootstrap.kvm-host" ${CLUSTER_CONFIG})
-    startNode ${kvm_host} ${host_name}
+    startNode ${kvm_host}.${BOOTSTRAP_KVM_DOMAIN} ${host_name}
   fi
 }
 
@@ -656,7 +671,7 @@ function startControlPlane() {
       fi
       kvm_host=$(yq e ".control-plane.okd-hosts.[${node_index}].kvm-host" ${CLUSTER_CONFIG})
       host_name=$(yq e ".control-plane.okd-hosts.[${node_index}].name" ${CLUSTER_CONFIG})
-      startNode ${kvm_host} ${host_name}
+      startNode ${kvm_host}.${DOMAIN} ${host_name}
     done
   fi
 }
@@ -718,7 +733,7 @@ function deployCluster() {
     host_name=${CLUSTER_NAME}-bootstrap
     yq e ".bootstrap.name = \"${host_name}\"" -i ${CLUSTER_CONFIG}
     bs_ip_addr=$(yq e ".bootstrap.ip-addr" ${CLUSTER_CONFIG})
-    boot_dev=sda
+    boot_dev=/dev/sda
     platform=qemu
     if [[ $(yq e ".bootstrap.metal" ${CLUSTER_CONFIG}) == "false" ]]
     then
@@ -726,7 +741,7 @@ function deployCluster() {
       memory=$(yq e ".bootstrap.node-spec.memory" ${CLUSTER_CONFIG})
       cpu=$(yq e ".bootstrap.node-spec.cpu" ${CLUSTER_CONFIG})
       root_vol=$(yq e ".bootstrap.node-spec.root-vol" ${CLUSTER_CONFIG})
-      createOkdVmNode ${bs_ip_addr} ${host_name} ${kvm_host} bootstrap ${memory} ${cpu} ${root_vol} 0 ".bootstrap.mac-addr"
+      createOkdVmNode ${bs_ip_addr} ${host_name} ${kvm_host}.${BOOTSTRAP_KVM_DOMAIN} bootstrap ${memory} ${cpu} ${root_vol} 0 ".bootstrap.mac-addr"
     fi
     # Create the ignition and iPXE boot files
     mac_addr=$(yq e ".bootstrap.mac-addr" ${CLUSTER_CONFIG})
@@ -755,7 +770,7 @@ function deployCluster() {
       root_vol=$(yq e ".control-plane.node-spec.root-vol" ${CLUSTER_CONFIG})
       kvm_host=$(yq e ".control-plane.okd-hosts.[0].kvm-host" ${CLUSTER_CONFIG})
       # Create the VM
-      createOkdVmNode ${ip_addr} ${host_name} ${kvm_host} sno ${memory} ${cpu} ${root_vol} 0 ".control-plane.okd-hosts.[0].mac-addr"
+      createOkdVmNode ${ip_addr} ${host_name} ${kvm_host}.${DOMAIN} sno ${memory} ${cpu} ${root_vol} 0 ".control-plane.okd-hosts.[0].mac-addr"
     fi
     # Create the ignition and iPXE boot files
     mac_addr=$(yq e ".control-plane.okd-hosts.[0].mac-addr" ${CLUSTER_CONFIG})
@@ -796,9 +811,9 @@ function deployCluster() {
         cpu=$(yq e ".control-plane.node-spec.cpu" ${CLUSTER_CONFIG})
         root_vol=$(yq e ".control-plane.node-spec.root-vol" ${CLUSTER_CONFIG})
         kvm_host=$(yq e ".control-plane.okd-hosts.[${node_index}].kvm-host" ${CLUSTER_CONFIG})
-        boot_dev="sda"
+        boot_dev="/dev/sda"
         # Create the VM
-        createOkdVmNode ${ip_addr} ${host_name} ${kvm_host} master ${memory} ${cpu} ${root_vol} 0 ".control-plane.okd-hosts.[${node_index}].mac-addr"
+        createOkdVmNode ${ip_addr} ${host_name} ${kvm_host}.${DOMAIN} master ${memory} ${cpu} ${root_vol} 0 ".control-plane.okd-hosts.[${node_index}].mac-addr"
       fi
       # Create the ignition and iPXE boot files
       mac_addr=$(yq e ".control-plane.okd-hosts.[${node_index}].mac-addr" ${CLUSTER_CONFIG})
@@ -856,7 +871,7 @@ function deployWorkers() {
       boot_dev=$(yq e ".compute-nodes.[${node_index}].boot-dev" ${CLUSTER_CONFIG})
     else
       platform=qemu
-      boot_dev="sda"
+      boot_dev="/dev/sda"
       memory=$(yq e ".compute-nodes.[${node_index}].node-spec.memory" ${CLUSTER_CONFIG})
       cpu=$(yq e ".compute-nodes.[${node_index}].node-spec.cpu" ${CLUSTER_CONFIG})
       root_vol=$(yq e ".compute-nodes.[${node_index}].node-spec.root-vol" ${CLUSTER_CONFIG})
@@ -868,7 +883,7 @@ function deployWorkers() {
       else
         ceph_vol=0
       fi
-      createOkdVmNode ${ip_addr} ${host_name} ${kvm_host} worker ${memory} ${cpu} ${root_vol} ${ceph_vol} ".compute-nodes.[${node_index}].mac-addr"
+      createOkdVmNode ${ip_addr} ${host_name} ${kvm_host}.${DOMAIN} worker ${memory} ${cpu} ${root_vol} ${ceph_vol} ".compute-nodes.[${node_index}].mac-addr"
     fi
     # Create the ignition and iPXE boot files
     mac_addr=$(yq e ".compute-nodes.[${node_index}].mac-addr" ${CLUSTER_CONFIG})
@@ -902,7 +917,7 @@ function deploy() {
         deployWorkers
       ;;
       -k|--kvm-hosts)
-        deployKvmHosts
+        deployKvmHosts "$@"
       ;;
       *)
         # catch all
@@ -1036,7 +1051,7 @@ function destroy() {
     else
       host_name="${CLUSTER_NAME}-bootstrap"
       kvm_host=$(yq e ".bootstrap.kvm-host" ${CLUSTER_CONFIG})
-      deleteNodeVm ${host_name} ${kvm_host}
+      deleteNodeVm ${host_name} ${kvm_host}.${BOOTSTRAP_KVM_DOMAIN}
     fi
     deletePxeConfig $(yq e ".bootstrap.mac-addr" ${CLUSTER_CONFIG})
     deleteDns ${CLUSTER_NAME}-${DOMAIN}-bs

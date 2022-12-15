@@ -231,8 +231,8 @@ EOF
     cd /tmp/work-dir; \
     PKG=\"openjdk8-8 openjdk8-jre-8 openjdk8-jre-lib-8 openjdk8-jre-base-8 java-cacerts openjdk11-11 openjdk11-jdk-11 openjdk11-jre-headless-11\" ; \
     for package in \${PKG}; 
-    do FILE=\$(lftp -e \"cls -1 alpine/edge/community/aarch64/\${package}*; quit\" http://dl-cdn.alpinelinux.org) ; \
-      curl -LO http://dl-cdn.alpinelinux.org/\${FILE} ; \
+    do FILE=\$(lftp -e \"cls -1 edge/community/aarch64/\${package}*; quit\" http://dl-cdn.alpinelinux.org) ; \
+      curl -LO http://dl-cdn.alpinelinux.org/alpine/\${FILE} ; \
     done ; \
     for i in \$(ls) ; \
     do tar xzf \${i} ; \
