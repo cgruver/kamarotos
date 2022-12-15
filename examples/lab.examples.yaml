@@ -4,8 +4,8 @@ router-ip: 10.11.12.1
 bastion-ip: 10.11.12.10
 netmask: 255.255.255.0
 centos-mirror: rsync://mirror.facebook.net/centos-stream/
-gitea-version: 1.15.9
-openwrt-version: 21.02.1
+gitea-version: 1.17.3
+openwrt-version: 22.03.2
 git-url: https://gitea.my.awesome.lab:3000
 sub-domain-configs:
 - name: kvm-basic

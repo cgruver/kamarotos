@@ -654,8 +654,7 @@ function startBootstrap() {
     qemu-system-x86_64 -accel accel=hvf -m ${memory}M -smp ${cpu} -display none -nographic -drive file=${WORK_DIR}/bootstrap/bootstrap-node.qcow2,if=none,id=disk1  -device ide-hd,bus=ide.0,drive=disk1,id=sata0-0-0,bootindex=1 -boot n -netdev vde,id=nic0,sock=/var/run/vde.bridged.${bridge_dev}.ctl -device virtio-net-pci,netdev=nic0,mac=52:54:00:a1:b2:c3
   else
     kvm_host=$(yq e ".bootstrap.kvm-host" ${CLUSTER_CONFIG})
-    kvm_domain=$(yq e ".bootstrap.kvm-domain" ${CLUSTER_CONFIG})
-    startNode ${kvm_host}.${kvm_domain} ${host_name}
+    startNode ${kvm_host}.${BOOTSTRAP_KVM_DOMAIN} ${host_name}
   fi
 }
 
@@ -739,11 +738,10 @@ function deployCluster() {
     if [[ $(yq e ".bootstrap.metal" ${CLUSTER_CONFIG}) == "false" ]]
     then
       kvm_host=$(yq e ".bootstrap.kvm-host" ${CLUSTER_CONFIG})
-      kvm_domain=$(yq e ".bootstrap.kvm-domain" ${CLUSTER_CONFIG})
       memory=$(yq e ".bootstrap.node-spec.memory" ${CLUSTER_CONFIG})
       cpu=$(yq e ".bootstrap.node-spec.cpu" ${CLUSTER_CONFIG})
       root_vol=$(yq e ".bootstrap.node-spec.root-vol" ${CLUSTER_CONFIG})
-      createOkdVmNode ${bs_ip_addr} ${host_name} ${kvm_host}.${kvm_domain} bootstrap ${memory} ${cpu} ${root_vol} 0 ".bootstrap.mac-addr"
+      createOkdVmNode ${bs_ip_addr} ${host_name} ${kvm_host}.${BOOTSTRAP_KVM_DOMAIN} bootstrap ${memory} ${cpu} ${root_vol} 0 ".bootstrap.mac-addr"
     fi
     # Create the ignition and iPXE boot files
     mac_addr=$(yq e ".bootstrap.mac-addr" ${CLUSTER_CONFIG})
@@ -1053,8 +1051,7 @@ function destroy() {
     else
       host_name="${CLUSTER_NAME}-bootstrap"
       kvm_host=$(yq e ".bootstrap.kvm-host" ${CLUSTER_CONFIG})
-      kvm_domain=$(yq e ".bootstrap.kvm-domain" ${CLUSTER_CONFIG})
-      deleteNodeVm ${host_name} ${kvm_host}.${kvm_domain}
+      deleteNodeVm ${host_name} ${kvm_host}.${BOOTSTRAP_KVM_DOMAIN}
     fi
     deletePxeConfig $(yq e ".bootstrap.mac-addr" ${CLUSTER_CONFIG})
     deleteDns ${CLUSTER_NAME}-${DOMAIN}-bs

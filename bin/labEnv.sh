@@ -162,6 +162,15 @@ function setDomainEnv() {
     done
     i=""
   fi
+  if [[ $(yq e ".bootstrap.metal" ${CLUSTER_CONFIG}) != "true" ]]
+  then
+    if [[ $(yq ".bootstrap | has(\"kvm-domain\")" ${CLUSTER_CONFIG}) == "true" ]]
+    then
+      export BOOTSTRAP_KVM_DOMAIN=$(yq e ".bootstrap.kvm-domain" ${CLUSTER_CONFIG})
+    else
+      export BOOTSTRAP_KVM_DOMAIN=${DOMAIN}
+    fi
+  fi
 }
 
 function setEdgeEnv() {
