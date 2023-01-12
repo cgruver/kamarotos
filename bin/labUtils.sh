@@ -54,7 +54,8 @@ function trustCert() {
     sudo security add-trusted-cert -d -r ${CERT_CMD} -k "/Library/Keychains/System.keychain" /tmp/${cert_name}
   elif [[ ${SYS_ARCH} == "Linux" ]]
   then
-    sudo openssl s_client -showcerts ${sni_fix} -connect ${url} </dev/null 2>/dev/null|openssl x509 -outform PEM > /etc/pki/ca-trust/source/anchors/${cert_name}
+    sudo openssl s_client -showcerts ${sni_fix} -connect ${url} </dev/null 2>/dev/null|openssl x509 -outform PEM > > /tmp/${cert_name}
+    sudo mv /tmp/${cert_name} /etc/pki/ca-trust/source/anchors/${cert_name}
     sudo update-ca-trust
   else
     echo "Unsupported OS: Cannot trust cert with this utility"
