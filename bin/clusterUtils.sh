@@ -158,14 +158,13 @@ function addUser() {
       ;;
     esac
   done
-  PASSWD_FILE=${OKD_LAB_PATH}/lab-config/${CLUSTER_NAME}-${SUB_DOMAIN}-${LAB_DOMAIN}/htpasswd
-  if [[ ! -d ${OKD_LAB_PATH}/lab-config/${CLUSTER_NAME}-${SUB_DOMAIN}-${LAB_DOMAIN} ]]
-  then
-    mkdir -p ${OKD_LAB_PATH}/lab-config/${CLUSTER_NAME}-${SUB_DOMAIN}-${LAB_DOMAIN}
-  fi
-  if [[ ! -f  ${PASSWD_FILE} ]]
+  PWD_WORK_DIR=$(mktemp -d)
+  PASSWD_FILE=${PWD_WORK_DIR}/htpasswd
+  if [[ ${OAUTH_INIT} == "true" ]]
   then
     touch ${PASSWD_FILE}
+  else
+    ${OC} get secret okd-htpasswd-secret -n openshift-config -o jsonpath='{.data.htpasswd}' | base64 -d > ${PASSWD_FILE}
   fi
   if [[ -z ${USER} ]]
   then
@@ -183,6 +182,7 @@ function addUser() {
     ${OC} patch oauth cluster --type merge --patch '{"spec":{"identityProviders":[{"name":"okd_htpasswd_idp","mappingMethod":"claim","type":"HTPasswd","htpasswd":{"fileData":{"name":"okd-htpasswd-secret"}}}]}}'
     ${OC} delete secrets kubeadmin -n kube-system
   fi
+  rm -rf ${PWD_WORK_DIR}
 }
 
 function setKubeConfig() {
