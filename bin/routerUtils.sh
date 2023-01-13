@@ -348,9 +348,9 @@ EOF
     fi
     if [[ ${GL_MODEL} == "ar750s"  ]]
     then
-      configWwanAR750S ${WIFI_SSID} ${WIFI_KEY} ${WWAN_CHANNEL}
+      configWwanAR750S "${WIFI_SSID}" "${WIFI_KEY}" ${WWAN_CHANNEL}
     else
-      configWwanMV1000W ${WIFI_SSID} ${WIFI_KEY} ${WWAN_CHANNEL}
+      configWwanMV1000W "${WIFI_SSID}" "${WIFI_KEY}" ${WWAN_CHANNEL}
     fi
   fi
 
@@ -362,9 +362,9 @@ EOF
     read LAB_WIFI_KEY
     if [[ ${GL_MODEL} == "ar750s"  ]]
     then
-      configWlanAR750S ${LAB_WIFI_SSID} ${LAB_WIFI_KEY} ${WWAN_CHANNEL} ${WIFI_CHANNEL}
+      configWlanAR750S "${LAB_WIFI_SSID}" "${LAB_WIFI_KEY}" ${WWAN_CHANNEL} ${WIFI_CHANNEL}
     else
-      configWlanMV1000W ${LAB_WIFI_SSID} ${LAB_WIFI_KEY} ${WWAN_CHANNEL}
+      configWlanMV1000W "${LAB_WIFI_SSID}" "${LAB_WIFI_KEY}" ${WWAN_CHANNEL}
     fi
   fi
 
@@ -744,8 +744,8 @@ function addWireless() {
   echo "Enter a WPA/PSK 2 Passphrase for your Lab Wireless LAN:"
   read LAB_WIFI_KEY
 
-  ${SSH} root@${ROUTER} "uci set wireless.default_radio0.ssid=${LAB_WIFI_SSID} ; \
-    uci set wireless.default_radio0.key=${LAB_WIFI_KEY} ; \
+  ${SSH} root@${ROUTER} "uci set wireless.default_radio0.ssid=\"${LAB_WIFI_SSID}\" ; \
+    uci set wireless.default_radio0.key=\"${LAB_WIFI_KEY}\" ; \
     uci set wireless.default_radio0.encryption=psk2 ; \
     uci set wireless.radio0.band=2G_5G ; \
     uci set wireless.radio0.channel=153 ; \
