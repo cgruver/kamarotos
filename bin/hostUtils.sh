@@ -358,7 +358,7 @@ fi
 # cat << EOF > ${WORK_DIR}/ipxe-work-dir/${mac//:/-}.ipxe
 # #!ipxe
 
-# kernel http://${BASTION_HOST}/install/fcos/${OKD_RELEASE}/vmlinuz edd=off net.ifnames=1 rd.neednet=1 ignition.firstboot ignition.config.url=http://${BASTION_HOST}/install/fcos/ignition/${CLUSTER_NAME}-${SUB_DOMAIN}/${mac//:/-}.ign ignition.platform.id=${platform} initrd=initrd initrd=rootfs.img ${CONSOLE_OPT}
+# kernel http://${BASTION_HOST}/install/fcos/${OKD_RELEASE}/vmlinuz edd=off net.ifnames=1 rd.neednet=1 ignition.firstboot ignition.config.url=http://${BASTION_HOST}/install/fcos/ignition/${CLUSTER_NAME}.${DOMAIN}/${mac//:/-}.ign ignition.platform.id=${platform} initrd=initrd initrd=rootfs.img ${CONSOLE_OPT}
 # initrd http://${BASTION_HOST}/install/fcos/${OKD_RELEASE}/initrd
 # initrd http://${BASTION_HOST}/install/fcos/${OKD_RELEASE}/rootfs.img
 
@@ -367,7 +367,7 @@ fi
 cat << EOF > ${WORK_DIR}/ipxe-work-dir/${mac//:/-}.ipxe
 #!ipxe
 
-kernel http://${BASTION_HOST}/install/fcos/${OKD_RELEASE}/vmlinuz edd=off net.ifnames=1 rd.neednet=1 coreos.inst.install_dev=${boot_dev} coreos.inst.ignition_url=http://${BASTION_HOST}/install/fcos/ignition/${CLUSTER_NAME}-${SUB_DOMAIN}/${mac//:/-}.ign coreos.inst.platform_id=${platform} initrd=initrd initrd=rootfs.img ${CONSOLE_OPT}
+kernel http://${BASTION_HOST}/install/fcos/${OKD_RELEASE}/vmlinuz edd=off net.ifnames=1 rd.neednet=1 coreos.inst.install_dev=${boot_dev} coreos.inst.ignition_url=http://${BASTION_HOST}/install/fcos/ignition/${CLUSTER_NAME}.${DOMAIN}/${mac//:/-}.ign coreos.inst.platform_id=${platform} initrd=initrd initrd=rootfs.img ${CONSOLE_OPT}
 initrd http://${BASTION_HOST}/install/fcos/${OKD_RELEASE}/initrd
 initrd http://${BASTION_HOST}/install/fcos/${OKD_RELEASE}/rootfs.img
 
@@ -408,9 +408,9 @@ function prepNodeFiles() {
   cat ${WORK_DIR}/dns-work-dir/reverse.zone | ${SSH} root@${DOMAIN_ROUTER} "cat >> /etc/bind/db.${DOMAIN_ARPA}"
   ${SSH} root@${DOMAIN_ROUTER} "/etc/init.d/named stop && sleep 2 && /etc/init.d/named start && sleep 2"
   ${SSH} root@${EDGE_ROUTER} "/etc/init.d/named stop && sleep 2 && /etc/init.d/named start"
-  ${SSH} root@${BASTION_HOST} "mkdir -p /usr/local/www/install/fcos/ignition/${CLUSTER_NAME}-${SUB_DOMAIN}"
-  ${SCP} -r ${WORK_DIR}/ipxe-work-dir/ignition/*.ign root@${BASTION_HOST}:/usr/local/www/install/fcos/ignition/${CLUSTER_NAME}-${SUB_DOMAIN}/
-  ${SSH} root@${BASTION_HOST} "chmod 644 /usr/local/www/install/fcos/ignition/${CLUSTER_NAME}-${SUB_DOMAIN}/*"
+  ${SSH} root@${BASTION_HOST} "mkdir -p /usr/local/www/install/fcos/ignition/${CLUSTER_NAME}.${DOMAIN}"
+  ${SCP} -r ${WORK_DIR}/ipxe-work-dir/ignition/*.ign root@${BASTION_HOST}:/usr/local/www/install/fcos/ignition/${CLUSTER_NAME}.${DOMAIN}/
+  ${SSH} root@${BASTION_HOST} "chmod 644 /usr/local/www/install/fcos/ignition/${CLUSTER_NAME}.${DOMAIN}/*"
   ${SCP} -r ${WORK_DIR}/ipxe-work-dir/*.ipxe root@${DOMAIN_ROUTER}:/data/tftpboot/ipxe/
 }
 
@@ -432,7 +432,6 @@ function deployKvmHosts() {
 
   if [[ ${KVM_EDGE} == "true" ]]
   then
-    labenv -e
     DOMAIN=${LAB_DOMAIN}
     ROUTER=${EDGE_ROUTER}
     NETWORK=${EDGE_NETWORK}
@@ -440,7 +439,6 @@ function deployKvmHosts() {
     CONFIG_FILE=${LAB_CONFIG_FILE}
     ARPA=${EDGE_ARPA}
   else
-    DOMAIN="${SUB_DOMAIN}.${LAB_DOMAIN}"
     ROUTER=${DOMAIN_ROUTER}
     NETWORK=${DOMAIN_NETWORK}
     NETMASK=${DOMAIN_NETMASK}

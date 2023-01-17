@@ -130,8 +130,8 @@ function setDomainEnv() {
   export LOCAL_REGISTRY=$(yq e ".cluster.local-registry" ${CLUSTER_CONFIG})
   export PROXY_REGISTRY=$(yq e ".cluster.proxy-registry" ${CLUSTER_CONFIG})
   export CLUSTER_NAME=$(yq e ".cluster.name" ${CLUSTER_CONFIG})
-  export KUBE_INIT_CONFIG=${OKD_LAB_PATH}/lab-config/${CLUSTER_NAME}-${SUB_DOMAIN}-${LAB_DOMAIN}/kubeconfig
-  export INSTALL_DIR=${OKD_LAB_PATH}/${CLUSTER_NAME}-${SUB_DOMAIN}-${LAB_DOMAIN}/okd-install-dir
+  export KUBE_INIT_CONFIG=${OKD_LAB_PATH}/lab-config/${CLUSTER_NAME}.${DOMAIN}/kubeconfig
+  export INSTALL_DIR=${OKD_LAB_PATH}/${CLUSTER_NAME}.${DOMAIN}/okd-install-dir
   export DOMAIN_CIDR=$(mask2cidr ${DOMAIN_NETMASK})
   export CLUSTER_CIDR=$(yq e ".cluster.cluster-cidr" ${CLUSTER_CONFIG})
   export SERVICE_CIDR=$(yq e ".cluster.service-cidr" ${CLUSTER_CONFIG})

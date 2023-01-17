@@ -50,23 +50,8 @@ function configRouter() {
 function initRouter() {
   if [[ ${EDGE} == "true" ]]
   then
-    labenv -e
-    if [[ ${LAB_CTX_ERROR} == "true" ]]
-    then
-      exit 1
-    fi
     initEdge
   else
-    if [[ -z ${SUB_DOMAIN} ]]
-    then
-      labctx
-    else
-      labctx ${SUB_DOMAIN}
-    fi
-    if [[ ${LAB_CTX_ERROR} == "true" ]]
-    then
-      exit 1
-    fi
     initDomain
     ${SSH} root@${INIT_IP} "FW=\$(uci add firewall forwarding) ; \
       uci set firewall.\${FW}.src=wan ; \
@@ -85,25 +70,10 @@ function initRouter() {
 function setupRouter() {
   if [[ ${EDGE} == "true" ]]
   then
-    labenv -e
-    if [[ ${LAB_CTX_ERROR} == "true" ]]
-    then
-      exit 1
-    fi
     setupEdge
     ${SSH} root@${EDGE_ROUTER} "opkg update && opkg install ip-full procps-ng-ps bind-server bind-tools sfdisk rsync resize2fs wget"
     setupRouterCommon ${EDGE_ROUTER}
   else
-    if [[ -z ${SUB_DOMAIN} ]]
-    then
-      labctx
-    else
-      labctx ${SUB_DOMAIN}
-    fi
-    if [[ ${LAB_CTX_ERROR} == "true" ]]
-    then
-      exit 1
-    fi
     setupDomain
     ${SSH} root@${EDGE_ROUTER} "unset ROUTE ; \
       ROUTE=\$(uci add network route) ; \
@@ -492,14 +462,14 @@ set network.wan.proto=static
 set network.wan.ipaddr=${DOMAIN_ROUTER_EDGE}
 set network.wan.netmask=${EDGE_NETMASK}
 set network.wan.gateway=${EDGE_ROUTER}
-set network.wan.hostname=router.${SUB_DOMAIN}.${LAB_DOMAIN}
+set network.wan.hostname=router.${DOMAIN}
 set network.wan.dns=${EDGE_ROUTER}
 set network.lan.ipaddr=${DOMAIN_ROUTER}
 set network.lan.netmask=${DOMAIN_NETMASK}
-set network.lan.hostname=router.${SUB_DOMAIN}.${LAB_DOMAIN}
+set network.lan.hostname=router.${DOMAIN}
 delete network.guest
 delete network.wan6
-set system.@system[0].hostname=router.${SUB_DOMAIN}.${LAB_DOMAIN}
+set system.@system[0].hostname=router.${DOMAIN}
 EOF
 
 unset zone
@@ -580,7 +550,7 @@ set dhcp.ipxe.filename='tag:ipxe,boot.ipxe'
 set dhcp.ipxe.serveraddress="${DOMAIN_ROUTER}"
 set dhcp.ipxe.servername='pxe'
 set dhcp.ipxe.force='1'
-set dhcp.@dnsmasq[0].domain=${SUB_DOMAIN}.${LAB_DOMAIN}
+set dhcp.@dnsmasq[0].domain=${DOMAIN}
 set dhcp.@dnsmasq[0].localuse=0
 set dhcp.@dnsmasq[0].cachelocal=0
 set dhcp.@dnsmasq[0].port=0
@@ -596,10 +566,10 @@ commit
 EOF
 
 cat << EOF > ${WORK_DIR}/edge-zone
-zone "${SUB_DOMAIN}.${LAB_DOMAIN}" {
+zone "${DOMAIN}" {
     type stub;
     masters { ${DOMAIN_ROUTER}; };
-    file "stub.${SUB_DOMAIN}.${LAB_DOMAIN}";
+    file "stub.${DOMAIN}";
 };
 
 EOF
@@ -643,9 +613,9 @@ logging {
         };
 };
 
-zone "${SUB_DOMAIN}.${LAB_DOMAIN}" {
+zone "${DOMAIN}" {
     type master;
-    file "/etc/bind/db.${SUB_DOMAIN}.${LAB_DOMAIN}"; # zone file path
+    file "/etc/bind/db.${DOMAIN}"; # zone file path
 };
 
 zone "${DOMAIN_ARPA}.in-addr.arpa" {
@@ -675,8 +645,8 @@ zone "255.in-addr.arpa" {
 
 EOF
 
-cat << EOF > ${WORK_DIR}/dns/db.${SUB_DOMAIN}.${LAB_DOMAIN}
-@       IN      SOA     router.${SUB_DOMAIN}.${LAB_DOMAIN}. admin.${SUB_DOMAIN}.${LAB_DOMAIN}. (
+cat << EOF > ${WORK_DIR}/dns/db.${DOMAIN}
+@       IN      SOA     router.${DOMAIN}. admin.${DOMAIN}. (
              3          ; Serial
              604800     ; Refresh
               86400     ; Retry
@@ -684,16 +654,16 @@ cat << EOF > ${WORK_DIR}/dns/db.${SUB_DOMAIN}.${LAB_DOMAIN}
              604800 )   ; Negative Cache TTL
 ;
 ; name servers - NS records
-    IN      NS     router.${SUB_DOMAIN}.${LAB_DOMAIN}.
+    IN      NS     router.${DOMAIN}.
 
 ; name servers - A records
-router.${SUB_DOMAIN}.${LAB_DOMAIN}.         IN      A      ${DOMAIN_ROUTER}
+router.${DOMAIN}.         IN      A      ${DOMAIN_ROUTER}
 
 ; ${DOMAIN_NETWORK}/${DOMAIN_CIDR} - A records
 EOF
 
 cat << EOF > ${WORK_DIR}/dns/db.${DOMAIN_ARPA}
-@       IN      SOA     router.${SUB_DOMAIN}.${LAB_DOMAIN}. admin.${SUB_DOMAIN}.${LAB_DOMAIN}. (
+@       IN      SOA     router.${DOMAIN}. admin.${DOMAIN}. (
                             3         ; Serial
                         604800         ; Refresh
                         86400         ; Retry
@@ -701,10 +671,10 @@ cat << EOF > ${WORK_DIR}/dns/db.${DOMAIN_ARPA}
                         604800 )       ; Negative Cache TTL
 
 ; name servers - NS records
-    IN      NS      router.${SUB_DOMAIN}.${LAB_DOMAIN}.
+    IN      NS      router.${DOMAIN}.
 
 ; PTR Records
-1    IN      PTR     router.${SUB_DOMAIN}.${LAB_DOMAIN}.
+1    IN      PTR     router.${DOMAIN}.
 EOF
 
 }
@@ -719,23 +689,8 @@ function getBootFiles() {
 function addWireless() {
   if [[ ${EDGE} == "true" ]]
   then
-    labenv -e
-    if [[ ${LAB_CTX_ERROR} == "true" ]]
-    then
-      exit 1
-    fi
     ROUTER=${EDGE_ROUTER}
   else
-    if [[ -z ${SUB_DOMAIN} ]]
-    then
-      labctx
-    else
-      labctx ${SUB_DOMAIN}
-    fi
-    if [[ ${LAB_CTX_ERROR} == "true" ]]
-    then
-      exit 1
-    fi
     ROUTER=${DOMAIN_ROUTER}
   fi
 

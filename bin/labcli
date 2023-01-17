@@ -36,7 +36,6 @@ then
 fi
 
 OC="oc --kubeconfig=${KUBE_INIT_CONFIG}"
-DOMAIN="${SUB_DOMAIN}.${LAB_DOMAIN}"
 
 for i in "$@"
 do

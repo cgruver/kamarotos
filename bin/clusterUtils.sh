@@ -1,15 +1,6 @@
 function createInstallConfig() {
 
-  local install_dev=${1}
   PULL_SECRET_TXT=$(cat ${PULL_SECRET})
-
-if [[ ${BIP} == "true" ]]
-then
-read -r -d '' SNO_BIP << EOF
-BootstrapInPlace:
-  InstallationDisk: "--copy-network ${install_dev}"
-EOF
-fi
 
 cat << EOF > ${WORK_DIR}/install-config-upi.yaml
 apiVersion: v1
@@ -42,7 +33,6 @@ imageContentSources:
 - mirrors:
   - ${PROXY_REGISTRY}/okd
   source: quay.io/openshift/okd-content
-${SNO_BIP}
 EOF
 }
 
@@ -296,11 +286,11 @@ function ocLogin() {
     while [[ ${DOMAIN_INDEX} -lt ${DOMAIN_COUNT} ]]
     do
       labctx $(yq e ".sub-domain-configs.[${DOMAIN_INDEX}].name" ${LAB_CONFIG_FILE})
-      oc login -u admin https://api.${CLUSTER_NAME}.${SUB_DOMAIN}.${LAB_DOMAIN}:6443
+      oc login -u admin https://api.${CLUSTER_NAME}.${DOMAIN}:6443
       DOMAIN_INDEX=$(( ${DOMAIN_INDEX} + 1 ))
     done
   else
-    oc login -u admin https://api.${CLUSTER_NAME}.${SUB_DOMAIN}.${LAB_DOMAIN}:6443
+    oc login -u admin https://api.${CLUSTER_NAME}.${DOMAIN}:6443
   fi
 }
 
@@ -330,11 +320,11 @@ function ocConsole() {
     while [[ ${DOMAIN_INDEX} -lt ${DOMAIN_COUNT} ]]
     do
       labctx $(yq e ".sub-domain-configs.[${DOMAIN_INDEX}].name" ${LAB_CONFIG_FILE})
-      open -a Safari https://console-openshift-console.apps.${CLUSTER_NAME}.${SUB_DOMAIN}.${LAB_DOMAIN}
+      open -a Safari https://console-openshift-console.apps.${CLUSTER_NAME}.${DOMAIN}
       DOMAIN_INDEX=$(( ${DOMAIN_INDEX} + 1 ))
     done
   else
-    open -a Safari https://console-openshift-console.apps.${CLUSTER_NAME}.${SUB_DOMAIN}.${LAB_DOMAIN}
+    open -a Safari https://console-openshift-console.apps.${CLUSTER_NAME}.${DOMAIN}
   fi
 }
 
@@ -342,7 +332,7 @@ function configInfraNodes() {
   
   for node_index in 0 1 2
   do
-    ${OC} label nodes ${CLUSTER_NAME}-master-${node_index}.${SUB_DOMAIN}.${LAB_DOMAIN} node-role.kubernetes.io/infra=""
+    ${OC} label nodes ${CLUSTER_NAME}-master-${node_index}.${DOMAIN} node-role.kubernetes.io/infra=""
   done
   ${OC} patch scheduler cluster --patch '{"spec":{"mastersSchedulable":false}}' --type=merge
   ${OC} patch -n openshift-ingress-operator ingresscontroller default --patch '{"spec":{"nodePlacement":{"nodeSelector":{"matchLabels":{"node-role.kubernetes.io/infra":""}},"tolerations":[{"key":"node.kubernetes.io/unschedulable","effect":"NoSchedule"},{"key":"node-role.kubernetes.io/master","effect":"NoSchedule"}]}}}' --type=merge
@@ -648,7 +638,7 @@ function startBootstrap() {
     cpu=$(yq e ".bootstrap.node-spec.cpu" ${CLUSTER_CONFIG})
     root_vol=$(yq e ".bootstrap.node-spec.root-vol" ${CLUSTER_CONFIG})
     bridge_dev=$(yq e ".bootstrap.bridge-dev" ${CLUSTER_CONFIG})
-    WORK_DIR=${OKD_LAB_PATH}/${CLUSTER_NAME}-${SUB_DOMAIN}-${LAB_DOMAIN}
+    WORK_DIR=${OKD_LAB_PATH}/${CLUSTER_NAME}.${DOMAIN}
     mkdir -p ${WORK_DIR}/bootstrap
     qemu-img create -f qcow2 ${WORK_DIR}/bootstrap/bootstrap-node.qcow2 ${root_vol}G
     qemu-system-x86_64 -accel accel=hvf -m ${memory}M -smp ${cpu} -display none -nographic -drive file=${WORK_DIR}/bootstrap/bootstrap-node.qcow2,if=none,id=disk1  -device ide-hd,bus=ide.0,drive=disk1,id=sata0-0-0,bootindex=1 -boot n -netdev vde,id=nic0,sock=/var/run/vde.bridged.${bridge_dev}.ctl -device virtio-net-pci,netdev=nic0,mac=52:54:00:a1:b2:c3
@@ -687,21 +677,21 @@ function stopControlPlane() {
   done
 }
 
+
+
 function deployCluster() {
-  WORK_DIR=${OKD_LAB_PATH}/${CLUSTER_NAME}-${SUB_DOMAIN}-${LAB_DOMAIN}
+  WORK_DIR=${OKD_LAB_PATH}/${CLUSTER_NAME}.${DOMAIN}
   rm -rf ${WORK_DIR}
   mkdir -p ${WORK_DIR}/ipxe-work-dir/ignition
   mkdir ${WORK_DIR}/dns-work-dir
   mkdir ${WORK_DIR}/okd-install-dir
   CP_REPLICAS="3"
-  SNO_BIP=""
   SNO="false"
-  BIP="false"
-  if [[ -d ${OKD_LAB_PATH}/lab-config/${CLUSTER_NAME}-${SUB_DOMAIN}-${LAB_DOMAIN} ]]
+  if [[ -d ${OKD_LAB_PATH}/lab-config/${CLUSTER_NAME}.${DOMAIN} ]]
   then
-    rm -rf ${OKD_LAB_PATH}/lab-config/${CLUSTER_NAME}-${SUB_DOMAIN}-${LAB_DOMAIN}
+    rm -rf ${OKD_LAB_PATH}/lab-config/${CLUSTER_NAME}.${DOMAIN}
   fi
-  mkdir -p ${OKD_LAB_PATH}/lab-config/${CLUSTER_NAME}-${SUB_DOMAIN}-${LAB_DOMAIN}
+  mkdir -p ${OKD_LAB_PATH}/lab-config/${CLUSTER_NAME}.${DOMAIN}
   SSH_KEY=$(cat ${OKD_LAB_PATH}/ssh_key.pub)
   NEXUS_CERT=$(openssl s_client -showcerts -connect ${PROXY_REGISTRY} </dev/null 2>/dev/null|openssl x509 -outform PEM | while read line; do echo "  ${line}"; done)
   CP_REPLICAS=$(yq e ".control-plane.okd-hosts" ${CLUSTER_CONFIG} | yq e 'length' -)
@@ -713,41 +703,11 @@ function deployCluster() {
     echo "There must be 3 host entries for the control plane for a full cluster, or 1 entry for a Single Node cluster."
     exit 1
   fi
-
-  # Create and deploy ignition files single-node-ignition-config
-  
-
-  if [[ $(yq e ". | has(\"bootstrap\")" ${CLUSTER_CONFIG}) == "false" ]]
-  then
-    BIP="true"
-  fi
-
-  if [[ ${BIP} == "false" ]] # Create Bootstrap Node
-  then
-    # Create ignition files
-    createInstallConfig "null"
-    cp ${WORK_DIR}/install-config-upi.yaml ${WORK_DIR}/okd-install-dir/install-config.yaml
-    openshift-install --dir=${WORK_DIR}/okd-install-dir create ignition-configs
-    cp ${WORK_DIR}/okd-install-dir/*.ign ${WORK_DIR}/ipxe-work-dir/
-    # Create Bootstrap Node:
-    host_name=${CLUSTER_NAME}-bootstrap
-    yq e ".bootstrap.name = \"${host_name}\"" -i ${CLUSTER_CONFIG}
-    bs_ip_addr=$(yq e ".bootstrap.ip-addr" ${CLUSTER_CONFIG})
-    boot_dev=/dev/sda
-    platform=qemu
-    if [[ $(yq e ".bootstrap.metal" ${CLUSTER_CONFIG}) == "false" ]]
-    then
-      kvm_host=$(yq e ".bootstrap.kvm-host" ${CLUSTER_CONFIG})
-      memory=$(yq e ".bootstrap.node-spec.memory" ${CLUSTER_CONFIG})
-      cpu=$(yq e ".bootstrap.node-spec.cpu" ${CLUSTER_CONFIG})
-      root_vol=$(yq e ".bootstrap.node-spec.root-vol" ${CLUSTER_CONFIG})
-      createOkdVmNode ${bs_ip_addr} ${host_name} ${kvm_host}.${BOOTSTRAP_KVM_DOMAIN} bootstrap ${memory} ${cpu} ${root_vol} 0 ".bootstrap.mac-addr"
-    fi
-    # Create the ignition and iPXE boot files
-    mac_addr=$(yq e ".bootstrap.mac-addr" ${CLUSTER_CONFIG})
-    configOkdNode ${bs_ip_addr} ${host_name}.${DOMAIN} ${mac_addr} bootstrap
-    createPxeFile ${mac_addr} ${platform} ${boot_dev}
-  fi
+  createInstallConfig
+  cp ${WORK_DIR}/install-config-upi.yaml ${WORK_DIR}/okd-install-dir/install-config.yaml
+  openshift-install --dir=${WORK_DIR}/okd-install-dir create ignition-configs
+  cp ${WORK_DIR}/okd-install-dir/*.ign ${WORK_DIR}/ipxe-work-dir/
+  createBootstrapNode
 
   #Create Control Plane Nodes:
   metal=$(yq e ".control-plane.metal" ${CLUSTER_CONFIG})
@@ -845,13 +805,13 @@ function deployCluster() {
     curl -o /usr/local/www/install/fcos/${OKD_RELEASE}/rootfs.img ${ROOTFS_URL} ; \
     fi"
 
-  cp ${WORK_DIR}/okd-install-dir/auth/kubeconfig ${OKD_LAB_PATH}/lab-config/${CLUSTER_NAME}-${SUB_DOMAIN}-${LAB_DOMAIN}/
-  chmod 400 ${OKD_LAB_PATH}/lab-config/${CLUSTER_NAME}-${SUB_DOMAIN}-${LAB_DOMAIN}/kubeconfig
+  cp ${WORK_DIR}/okd-install-dir/auth/kubeconfig ${OKD_LAB_PATH}/lab-config/${CLUSTER_NAME}.${DOMAIN}/
+  chmod 400 ${OKD_LAB_PATH}/lab-config/${CLUSTER_NAME}.${DOMAIN}/kubeconfig
   prepNodeFiles
 }
 
 function deployWorkers() {
-  WORK_DIR=${OKD_LAB_PATH}/${CLUSTER_NAME}-${SUB_DOMAIN}-${LAB_DOMAIN}
+  WORK_DIR=${OKD_LAB_PATH}/${CLUSTER_NAME}.${DOMAIN}
   rm -rf ${WORK_DIR}
   mkdir -p ${WORK_DIR}/ipxe-work-dir/ignition
   mkdir -p ${WORK_DIR}/dns-work-dir
@@ -960,7 +920,7 @@ function destroy() {
     esac
   done
 
-  WORK_DIR=${OKD_LAB_PATH}/${CLUSTER_NAME}-${SUB_DOMAIN}-${LAB_DOMAIN}
+  WORK_DIR=${OKD_LAB_PATH}/${CLUSTER_NAME}.${DOMAIN}
 
   if [[ ${DELETE_WORKER} == "true" ]]
   then
@@ -1111,15 +1071,15 @@ function monitor() {
         openshift-install --dir=${INSTALL_DIR} wait-for install-complete --log-level debug
       ;;
       -j)
-        ${SSH} core@${CLUSTER_NAME}-bootstrap.${SUB_DOMAIN}.${LAB_DOMAIN} "journalctl -b -f -u release-image.service -u bootkube.service"
+        ${SSH} core@${CLUSTER_NAME}-bootstrap.${DOMAIN} "journalctl -b -f -u release-image.service -u bootkube.service"
       ;;
       -m=*)
         CP_INDEX="${i#*=}"
-        ${SSH} core@${CLUSTER_NAME}-master-${CP_INDEX}.${SUB_DOMAIN}.${LAB_DOMAIN} "journalctl -b -f"
+        ${SSH} core@${CLUSTER_NAME}-master-${CP_INDEX}.${DOMAIN} "journalctl -b -f"
       ;;
       -w=*)
         W_INDEX="${i#*=}"
-        ${SSH} core@${CLUSTER_NAME}-worker-${W_INDEX}.${SUB_DOMAIN}.${LAB_DOMAIN} "journalctl -b -f"
+        ${SSH} core@${CLUSTER_NAME}-worker-${W_INDEX}.${DOMAIN} "journalctl -b -f"
       ;;
       *)
         # catch all
@@ -1227,7 +1187,7 @@ function regPvc() {
 }
 
 function initCephVars() {
-  export CEPH_WORK_DIR=${OKD_LAB_PATH}/${CLUSTER_NAME}-${SUB_DOMAIN}-${LAB_DOMAIN}/ceph-work-dir
+  export CEPH_WORK_DIR=${OKD_LAB_PATH}/${CLUSTER_NAME}.${DOMAIN}/ceph-work-dir
   rm -rf ${CEPH_WORK_DIR}
   git clone https://github.com/cgruver/lab-ceph.git ${CEPH_WORK_DIR}
 

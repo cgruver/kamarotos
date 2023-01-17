@@ -5,10 +5,10 @@ function trustCerts() {
     case ${i} in
       -c)
         CERT_URL=console-openshift-console.apps.${CLUSTER_NAME}.${DOMAIN}:443
-        CERT_NAME=okd-console.${SUB_DOMAIN}.${LAB_DOMAIN}.crt
+        CERT_NAME=okd-console.${DOMAIN}.crt
         trustCert ${CERT_URL} ${CERT_NAME} root ""
         CERT_URL=api.${CLUSTER_NAME}.${DOMAIN}:6443
-        CERT_NAME=okd-api.${SUB_DOMAIN}.${LAB_DOMAIN}.crt
+        CERT_NAME=okd-api.${DOMAIN}.crt
         trustCert ${CERT_URL} ${CERT_NAME} root "-servername api.${CLUSTER_NAME}.${DOMAIN}"
       ;;
       -n)
