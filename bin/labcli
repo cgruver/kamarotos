@@ -4,6 +4,8 @@
 . ${OKD_LAB_PATH}/bin/piUtils.sh
 . ${OKD_LAB_PATH}/bin/routerUtils.sh
 . ${OKD_LAB_PATH}/bin/clusterUtils.sh
+. ${OKD_LAB_PATH}/bin/clusterDeploy.sh
+. ${OKD_LAB_PATH}/bin/clusterDestroy.sh
 . ${OKD_LAB_PATH}/bin/hostUtils.sh
 . ${OKD_LAB_PATH}/bin/devTools.sh
 

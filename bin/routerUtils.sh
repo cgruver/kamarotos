@@ -470,6 +470,9 @@ set network.lan.hostname=router.${DOMAIN}
 delete network.guest
 delete network.wan6
 set system.@system[0].hostname=router.${DOMAIN}
+set dhcp.lan.leasetime="5m"
+set dhcp.lan.start="225"
+set dhcp.lan.limit="30"
 EOF
 
 unset zone

@@ -9,7 +9,8 @@ keycloak-version: none
 apicurio-version: none
 openwrt-version: none
 git-url: none
-sub-domain-configs: []
+sub-domain-configs:
+  - name: edge-cluster
 kvm-hosts:
   - host-name: kvm-host01
     mac-addr: "YOUR_HOST_MAC_HERE"

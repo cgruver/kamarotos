@@ -106,7 +106,12 @@ function labctx() {
     setEdgeEnv
     if [[ ${DOMAIN_INDEX} != "" ]]
     then
-      setDomainEnv
+      if [[ $(yq e ".sub-domain-configs.[${DOMAIN_INDEX}].name" ${LAB_CONFIG_FILE}) == "edge-cluster" ]]
+      then
+        setEdgeCluster
+      else
+        setDomainEnv
+      fi
     fi
   fi
 }
@@ -127,12 +132,27 @@ function setDomainEnv() {
   export DOMAIN_ROUTER_EDGE=$(yq e ".sub-domain-configs.[${DOMAIN_INDEX}].router-edge-ip" ${LAB_CONFIG_FILE})
   export DOMAIN_NETWORK=$(yq e ".sub-domain-configs.[${DOMAIN_INDEX}].network" ${LAB_CONFIG_FILE})
   export DOMAIN_NETMASK=$(yq e ".sub-domain-configs.[${DOMAIN_INDEX}].netmask" ${LAB_CONFIG_FILE})
+  export DOMAIN_CIDR=$(mask2cidr ${DOMAIN_NETMASK})
+  IFS="." read -r i1 i2 i3 i4 <<< "${DOMAIN_NETWORK}"
+  export DOMAIN_ARPA=${i3}.${i2}.${i1}
+  setClusterEnv
+}
+
+function setEdgeCluster() {
+  export DOMAIN=${LAB_DOMAIN}
+  export DOMAIN_ARPA=${EDGE_ARPA}
+  export CLUSTER_CONFIG=${LAB_CONFIG_FILE}
+  export DOMAIN_ROUTER=${EDGE_ROUTER}
+  setClusterEnv
+}
+
+function setClusterEnv() {
+
   export LOCAL_REGISTRY=$(yq e ".cluster.local-registry" ${CLUSTER_CONFIG})
   export PROXY_REGISTRY=$(yq e ".cluster.proxy-registry" ${CLUSTER_CONFIG})
   export CLUSTER_NAME=$(yq e ".cluster.name" ${CLUSTER_CONFIG})
   export KUBE_INIT_CONFIG=${OKD_LAB_PATH}/lab-config/${CLUSTER_NAME}.${DOMAIN}/kubeconfig
   export INSTALL_DIR=${OKD_LAB_PATH}/${CLUSTER_NAME}.${DOMAIN}/okd-install-dir
-  export DOMAIN_CIDR=$(mask2cidr ${DOMAIN_NETMASK})
   export CLUSTER_CIDR=$(yq e ".cluster.cluster-cidr" ${CLUSTER_CONFIG})
   export SERVICE_CIDR=$(yq e ".cluster.service-cidr" ${CLUSTER_CONFIG})
   export BUTANE_VERSION=$(yq e ".cluster.butane-version" ${CLUSTER_CONFIG})
@@ -140,8 +160,6 @@ function setDomainEnv() {
   export BUTANE_SPEC_VERSION=$(yq e ".cluster.butane-spec-version" ${CLUSTER_CONFIG})
   export OKD_REGISTRY=$(yq e ".cluster.remote-registry" ${CLUSTER_CONFIG})
   export PULL_SECRET=${OKD_LAB_PATH}/pull-secrets/${CLUSTER_NAME}-pull-secret.json
-  IFS="." read -r i1 i2 i3 i4 <<< "${DOMAIN_NETWORK}"
-  export DOMAIN_ARPA=${i3}.${i2}.${i1}
   release_set=$(yq ".cluster | has(\"release\")" ${CLUSTER_CONFIG})
   if [[ ${release_set} == "true" ]]
   then
