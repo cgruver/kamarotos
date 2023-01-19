@@ -233,9 +233,15 @@ function getOkdRelease() {
 }
 
 function ocLogin() {
+
+  USER=admin
+  
   for i in "$@"
   do
     case $i in
+      -u=*)
+        USER="${i#*=}"
+      ;;
       -a)
         LOGIN_ALL="true"
       ;;
@@ -248,11 +254,11 @@ function ocLogin() {
     while [[ ${DOMAIN_INDEX} -lt ${DOMAIN_COUNT} ]]
     do
       labctx $(yq e ".sub-domain-configs.[${DOMAIN_INDEX}].name" ${LAB_CONFIG_FILE})
-      oc login -u admin https://api.${CLUSTER_NAME}.${DOMAIN}:6443
+      oc login -u ${USER} https://api.${CLUSTER_NAME}.${DOMAIN}:6443
       DOMAIN_INDEX=$(( ${DOMAIN_INDEX} + 1 ))
     done
   else
-    oc login -u admin https://api.${CLUSTER_NAME}.${DOMAIN}:6443
+    oc login -u ${USER} https://api.${CLUSTER_NAME}.${DOMAIN}:6443
   fi
 }
 

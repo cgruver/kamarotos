@@ -3,6 +3,8 @@
 . ${OKD_LAB_PATH}/bin/labUtils.sh
 . ${OKD_LAB_PATH}/bin/piUtils.sh
 . ${OKD_LAB_PATH}/bin/routerUtils.sh
+. ${OKD_LAB_PATH}/bin/routerWireless.sh
+. ${OKD_LAB_PATH}/bin/routerConfig.sh
 . ${OKD_LAB_PATH}/bin/clusterUtils.sh
 . ${OKD_LAB_PATH}/bin/clusterDeploy.sh
 . ${OKD_LAB_PATH}/bin/clusterDestroy.sh

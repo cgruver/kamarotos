@@ -223,8 +223,7 @@ EOF
     for i in BaseOS AppStream ; \
     do mkdir -p /usr/local/www/install/repos/\${i}/x86_64/os/ ; \
     done ;\
-    dropbearkey -y -f /root/.ssh/id_dropbear | grep \"ssh-\" > /usr/local/www/install/postinstall/authorized_keys ;\
-    mkdir -p /root/bin"
+    dropbearkey -y -f /root/.ssh/id_dropbear | grep \"ssh-\" > /usr/local/www/install/postinstall/authorized_keys"
 
   echo "Installing Java 8 and 11"
   ${SSH} root@${BASTION_HOST} "mkdir /tmp/work-dir ; \

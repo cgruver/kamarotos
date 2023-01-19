@@ -2,12 +2,13 @@ function configRouter() {
   EDGE="false"
   WLAN="false"
   WWAN="false"
+  GL_MODEL=""
   INIT_IP=192.168.8.1
-  WIFI_CHANNEL=3
+  wifi_channel=3
   WORK_DIR=${OKD_LAB_PATH}/work-dir-router
   rm -rf ${WORK_DIR}
   mkdir -p ${WORK_DIR}/dns
-
+  
   for i in "$@"
   do
     case ${i} in
@@ -47,7 +48,19 @@ function configRouter() {
   fi
 }
 
+function checkRouterModel() {
+  local router_ip=${1}
+  GL_MODEL=$(${SSH} root@${router_ip} "uci get glconfig.general.model" )
+  echo "Detected Router Model: ${GL_MODEL}"
+  if [[ ${GL_MODEL} != "ar750s"  ]] && [[ ${GL_MODEL} != "mv1000"  ]]
+  then
+    echo "Unsupported Router Model Detected.  These scripts only support configuration of GL-iNet AR-750S or MV1000 routers."
+    exit 1
+  fi
+}
+
 function initRouter() {
+  checkRouterModel ${INIT_IP}
   if [[ ${EDGE} == "true" ]]
   then
     initEdge
@@ -68,13 +81,19 @@ function initRouter() {
 }
 
 function setupRouter() {
+  
   if [[ ${EDGE} == "true" ]]
   then
-    setupEdge
-    ${SSH} root@${EDGE_ROUTER} "opkg update && opkg install ip-full procps-ng-ps bind-server bind-tools sfdisk rsync resize2fs wget"
+    checkRouterModel ${EDGE_ROUTER}
+    createDhcpConfig ${LAB_DOMAIN}
+    createIpxeHostConfig ${EDGE_ROUTER}
+    createRouterDnsConfig  ${EDGE_ROUTER} ${LAB_DOMAIN} ${EDGE_ARPA} "edge"
     setupRouterCommon ${EDGE_ROUTER}
   else
-    setupDomain
+    checkRouterModel ${DOMAIN_ROUTER}
+    createDhcpConfig ${DOMAIN}
+    createIpxeHostConfig ${DOMAIN_ROUTER}
+    createRouterDnsConfig  ${DOMAIN_ROUTER} ${DOMAIN} ${DOMAIN_ARPA} "domain"
     ${SSH} root@${EDGE_ROUTER} "unset ROUTE ; \
       ROUTE=\$(uci add network route) ; \
       uci set network.\${ROUTE}.interface=lan ; \
@@ -85,27 +104,7 @@ function setupRouter() {
       /etc/init.d/network restart"
     pause 15 "Give the Router network time to restart"
     ${SSH} root@${EDGE_ROUTER} "/etc/init.d/named stop && /etc/init.d/named start"
-    ${SSH} root@${DOMAIN_ROUTER} "opkg update && opkg install ip-full procps-ng-ps bind-server bind-tools haproxy bash shadow uhttpd wget ; \
-      mv /etc/haproxy.cfg /etc/haproxy.cfg.orig ; \
-      /etc/init.d/lighttpd disable ; \
-      /etc/init.d/lighttpd stop ; \
-      groupadd haproxy ; \
-      useradd -d /data/haproxy -g haproxy haproxy ; \
-      mkdir -p /data/haproxy ; \
-      chown -R haproxy:haproxy /data/haproxy ; \
-      rm -f /etc/init.d/haproxy ; \
-      /etc/init.d/uhttpd enable ; \
-      mkdir -p /data/tftpboot/ipxe ; \
-      mkdir /data/tftpboot/networkboot"
     cat ${WORK_DIR}/edge-zone | ${SSH} root@${EDGE_ROUTER} "cat >> /etc/bind/named.conf"
-    if [[ ! -d ${OKD_LAB_PATH}/boot-files ]]
-    then
-      getBootFiles
-    fi
-    ${SCP} ${OKD_LAB_PATH}/boot-files/ipxe.efi root@${DOMAIN_ROUTER}:/data/tftpboot/ipxe.efi
-    ${SCP} ${OKD_LAB_PATH}/boot-files/vmlinuz root@${DOMAIN_ROUTER}:/data/tftpboot/networkboot/vmlinuz
-    ${SCP} ${OKD_LAB_PATH}/boot-files/initrd.img root@${DOMAIN_ROUTER}:/data/tftpboot/networkboot/initrd.img
-    ${SCP} ${WORK_DIR}/boot.ipxe root@${DOMAIN_ROUTER}:/data/tftpboot/boot.ipxe
     setupRouterCommon ${DOMAIN_ROUTER}
   fi
 }
@@ -114,6 +113,30 @@ function setupRouterCommon() {
 
   local router_ip=${1}
 
+  ${SSH} root@${router_ip} "opkg update && opkg install ip-full procps-ng-ps bind-server bind-tools haproxy bash shadow uhttpd sfdisk rsync resize2fs wget block-mount"
+  if [[ ${GL_MODEL} == "ar750s"  ]]
+  then
+    initMicroSD ${router_ip}
+  fi
+  ${SSH} root@${router_ip} "mv /etc/haproxy.cfg /etc/haproxy.cfg.orig ; \
+    /etc/init.d/lighttpd disable ; \
+    /etc/init.d/lighttpd stop ; \
+    groupadd haproxy ; \
+    useradd -d /data/haproxy -g haproxy haproxy ; \
+    mkdir -p /data/haproxy ; \
+    chown -R haproxy:haproxy /data/haproxy ; \
+    rm -f /etc/init.d/haproxy ; \
+    /etc/init.d/uhttpd enable ; \
+    mkdir -p /data/tftpboot/ipxe ; \
+    mkdir /data/tftpboot/networkboot"
+  if [[ ! -d ${OKD_LAB_PATH}/boot-files ]]
+  then
+    getBootFiles
+  fi
+  ${SCP} ${OKD_LAB_PATH}/boot-files/ipxe.efi root@${router_ip}:/data/tftpboot/ipxe.efi
+  ${SCP} ${OKD_LAB_PATH}/boot-files/vmlinuz root@${router_ip}:/data/tftpboot/networkboot/vmlinuz
+  ${SCP} ${OKD_LAB_PATH}/boot-files/initrd.img root@${router_ip}:/data/tftpboot/networkboot/initrd.img
+  ${SCP} ${WORK_DIR}/boot.ipxe root@${router_ip}:/data/tftpboot/boot.ipxe
   ${SCP} -r ${WORK_DIR}/dns/* root@${router_ip}:/etc/bind/
   ${SSH} root@${router_ip} "mkdir -p /data/var/named/dynamic ; \
     mkdir /data/var/named/data ; \
@@ -130,6 +153,7 @@ function setupRouterCommon() {
       uci set network.wwan.peerdns=0 ; \
     fi ; \
     uci commit"
+  echo "commit" >> ${WORK_DIR}/uci.batch
   ${SCP} ${WORK_DIR}/uci.batch root@${router_ip}:/tmp/uci.batch
   ${SSH} root@${router_ip} "cat /tmp/uci.batch | uci batch ; reboot"
 
@@ -139,134 +163,7 @@ function setupRouterCommon() {
   fi
 }
 
-function configWwanMV1000W() {
-
-local wifi_ssid=${1}
-local wifi_key=${2}
-local wwan_channel=${3}
-
-cat << EOF >> ${WORK_DIR}/uci.batch
-set wireless.radio2.disabled="0"
-set wireless.radio2.repeater="1"
-set wireless.radio2.legacy_rates="0"
-set wireless.radio2.htmode="HT20"
-set wireless.radio2.channel=${wwan_channel}
-set wireless.sta=wifi-iface
-set wireless.sta.device="radio2"
-set wireless.sta.ifname="wlan2"
-set wireless.sta.mode="sta"
-set wireless.sta.disabled="0"
-set wireless.sta.network="wwan"
-set wireless.sta.wds="0"
-set wireless.sta.ssid="${wifi_ssid}"  
-set wireless.sta.encryption="psk2"      
-set wireless.sta.key="${wifi_key}"
-set network.wwan=interface
-set network.wwan.proto="dhcp"
-set network.wwan.metric="20"
-EOF
-}
-
-function configWwanAR750S() {
-
-  local wifi_ssid=${1}
-  local wifi_key=${2}
-  local wwan_channel=${3}
-
-cat << EOF >> ${WORK_DIR}/uci.batch
-set wireless.radio0.repeater="1"
-set wireless.radio0.org_htmode='VHT80'
-set wireless.radio0.htmode='VHT80'
-set wireless.radio0.channel=${wwan_channel}
-set wireless.sta=wifi-iface
-set wireless.sta.device='radio0'
-set wireless.sta.network='wwan'
-set wireless.sta.mode='sta'
-set wireless.sta.ifname='wlan-sta'
-set wireless.sta.ssid="${wifi_ssid}"
-set wireless.sta.encryption='psk-mixed'
-set wireless.sta.key="${wifi_key}"
-set wireless.sta.disabled='0'
-set network.wwan=interface
-set network.wwan.proto='dhcp'
-set network.wwan.metric='20'
-EOF
-}
-
-function configWlanMV1000W() {
-
-local wifi_ssid=${1}
-local wifi_key=${2}
-local wlan_channel=${3}
-
-cat << EOF >> ${WORK_DIR}/uci.batch
-delete network.guest
-delete dhcp.guest
-delete wireless.guest2g
-delete wireless.sta2
-set wireless.default_radio0=wifi-iface
-set wireless.default_radio0.device="radio0"
-set wireless.default_radio0.ifname="wlan0"
-set wireless.default_radio0.network="lan"
-set wireless.default_radio0.mode="ap"
-set wireless.default_radio0.disabled="0"
-set wireless.default_radio0.ssid="${wifi_ssid}"
-set wireless.default_radio0.key="${wifi_key}"
-set wireless.default_radio0.encryption="psk2"
-set wireless.default_radio0.multi_ap="1"
-set wireless.radio0.legacy_rates="0"
-set wireless.radio0.htmode="HT20"
-set wireless.radio0.channel=${wlan_channel}
-EOF
-
-}
-
-function configWlanAR750S() {
-
-local wifi_ssid=${1}
-local wifi_key=${2}
-local wwan_channel=${3}
-local wlan_channel=${4}
-
-cat << EOF >> ${WORK_DIR}/uci.batch
-set wireless.default_radio0=wifi-iface
-set wireless.default_radio0.device='radio0'
-set wireless.default_radio0.network='lan'
-set wireless.default_radio0.mode='ap'
-set wireless.default_radio0.key="${wifi_key}"
-set wireless.default_radio0.disassoc_low_ack='0'
-set wireless.default_radio0.ifname='wlan0'
-set wireless.default_radio0.wds='1'
-set wireless.default_radio0.ssid="${wifi_ssid}-5G"
-set wireless.default_radio0.encryption='sae-mixed'
-set wireless.default_radio0.disabled='0'
-set wireless.default_radio0.channel=${wwan_channel}
-set wireless.default_radio1.key="${wifi_key}"
-set wireless.default_radio1.wds='1'
-set wireless.default_radio1.disassoc_low_ack='0'
-set wireless.default_radio1.ifname='wlan1'
-set wireless.default_radio1.ssid="${wifi_ssid}-2G"
-set wireless.default_radio1.encryption='sae-mixed'
-set wireless.default_radio1.device='radio1'
-set wireless.default_radio1.disabled='0'
-set wireless.radio1.channel=${wlan_channel}
-delete wireless.guest5g
-delete wireless.guest2g
-delete network.guest
-delete dhcp.guest
-EOF
-}
-
 function initEdge() {
-
-  WLAN_DEV=wlan0
-  GL_MODEL=$(${SSH} root@${INIT_IP} "uci get glconfig.general.model" )
-  echo "Detected Router Model: ${GL_MODEL}"
-  if [[ ${GL_MODEL} != "ar750s"  ]] && [[ ${GL_MODEL} != "mv1000"  ]]
-  then
-    echo "Unsupported Router Model Detected.  These scripts only support configuration of GL-iNet AR-750S or MV1000 routers."
-    exit 1
-  fi
 
 cat << EOF > ${WORK_DIR}/uci.batch
 set dropbear.@dropbear[0].PasswordAuth="off"
@@ -284,14 +181,14 @@ EOF
   if [[ ${WWAN} == "true" ]]
   then
     echo "Listing available Wireless Networks:"
-    ${SSH} root@${INIT_IP} "iwinfo ${WLAN_DEV} scan | grep -E 'ESSID|Mode'"
+    ${SSH} root@${INIT_IP} "iwinfo wlan0 scan | grep -E 'ESSID|Mode'"
     echo ""
     echo "Enter the ESSID of the Wireless Lan that you are connecting to:"
-    read WIFI_SSID
+    read wan_wifi_ssid
     echo "Enter the Channel of the Wireless Lan that you are connecting to:"
-    read WWAN_CHANNEL
+    read wwan_channel
     echo "Enter the passphrase of the wireless lan that you are connecting to:"
-    read WIFI_KEY
+    read wan_wifi_key
 
     unset zone
     let i=0
@@ -318,139 +215,27 @@ EOF
     fi
     if [[ ${GL_MODEL} == "ar750s"  ]]
     then
-      configWwanAR750S "${WIFI_SSID}" "${WIFI_KEY}" ${WWAN_CHANNEL}
+      configWwanAR750S "${wan_wifi_ssid}" "${wan_wifi_key}" ${wwan_channel}
     else
-      configWwanMV1000W "${WIFI_SSID}" "${WIFI_KEY}" ${WWAN_CHANNEL}
+      configWwanMV1000W "${wan_wifi_ssid}" "${wan_wifi_key}" ${wwan_channel}
     fi
   fi
 
   if [[ ${WLAN} == "true" ]]
   then
-    echo "Enter an SSID for you Lab Wireless LAN:"
-    read LAB_WIFI_SSID
+    echo "Enter an SSID for your Lab Wireless LAN:"
+    read lab_wifi_ssid
     echo "Enter a WPA/PSK 2 Passphrase for your Lab Wireless LAN:"
-    read LAB_WIFI_KEY
+    read lab_wifi_key
     if [[ ${GL_MODEL} == "ar750s"  ]]
     then
-      configWlanAR750S "${LAB_WIFI_SSID}" "${LAB_WIFI_KEY}" ${WWAN_CHANNEL} ${WIFI_CHANNEL}
+      configWlanAR750S "${lab_wifi_ssid}" "${lab_wifi_key}" ${wwan_channel} ${wifi_channel}
     else
-      configWlanMV1000W "${LAB_WIFI_SSID}" "${LAB_WIFI_KEY}" ${WWAN_CHANNEL}
+      configWlanMV1000W "${lab_wifi_ssid}" "${lab_wifi_key}" ${wwan_channel}
     fi
   fi
 
   echo "commit" >> ${WORK_DIR}/uci.batch
-}
-
-function setupEdge() {
-
-cat << EOF > ${WORK_DIR}/uci.batch
-set dhcp.@dnsmasq[0].domain=${LAB_DOMAIN}
-set dhcp.@dnsmasq[0].localuse=0
-set dhcp.@dnsmasq[0].cachelocal=0
-set dhcp.@dnsmasq[0].port=0
-commit
-EOF
-
-cat << EOF > ${WORK_DIR}/dns/named.conf
-acl "trusted" {
- ${EDGE_NETWORK}/${EDGE_CIDR};
- 127.0.0.1;
-};
-
-options {
-listen-on port 53 { 127.0.0.1; ${EDGE_ROUTER}; };
-   
-directory  "/data/var/named";
-dump-file  "/data/var/named/data/cache_dump.db";
-statistics-file "/data/var/named/data/named_stats.txt";
-memstatistics-file "/data/var/named/data/named_mem_stats.txt";
-allow-query     { trusted; };
-
-recursion yes;
-
-dnssec-validation yes;
-
-/* Path to ISC DLV key */
-bindkeys-file "/etc/bind/bind.keys";
-
-managed-keys-directory "/data/var/named/dynamic";
-
-pid-file "/var/run/named/named.pid";
-session-keyfile "/var/run/named/session.key";
-
-};
-
-logging {
-      channel default_debug {
-               file "data/named.run";
-               severity dynamic;
-      };
-};
-
-zone "${LAB_DOMAIN}" {
-   type master;
-   file "/etc/bind/db.${LAB_DOMAIN}"; # zone file path
-};
-
-zone "${EDGE_ARPA}.in-addr.arpa" {
-   type master;
-   file "/etc/bind/db.${EDGE_ARPA}";
-};
-
-zone "localhost" {
-   type master;
-   file "/etc/bind/db.local";
-};
-
-zone "127.in-addr.arpa" {
-   type master;
-   file "/etc/bind/db.127";
-};
-
-zone "0.in-addr.arpa" {
-   type master;
-   file "/etc/bind/db.0";
-};
-
-zone "255.in-addr.arpa" {
-   type master;
-   file "/etc/bind/db.255";
-};
-
-EOF
-
-cat << EOF > ${WORK_DIR}/dns/db.${LAB_DOMAIN}
-@       IN      SOA     router.${LAB_DOMAIN}. admin.${LAB_DOMAIN}. (
-            3          ; Serial
-            604800     ; Refresh
-            86400     ; Retry
-            2419200     ; Expire
-            604800 )   ; Negative Cache TTL
-;
-; name servers - NS records
-   IN      NS     router.${LAB_DOMAIN}.
-
-; name servers - A records
-router.${LAB_DOMAIN}.         IN      A      ${EDGE_ROUTER}
-
-; ${EDGE_NETWORK}/${EDGE_CIDR} - A records
-EOF
-
-cat << EOF > ${WORK_DIR}/dns/db.${EDGE_ARPA}
-@       IN      SOA     router.${LAB_DOMAIN}. admin.${LAB_DOMAIN}. (
-                              3         ; Serial
-                        604800         ; Refresh
-                        86400         ; Retry
-                        2419200         ; Expire
-                        604800 )       ; Negative Cache TTL
-
-; name servers - NS records
-      IN      NS      router.${LAB_DOMAIN}.
-
-; PTR Records
-1    IN      PTR     router.${LAB_DOMAIN}.
-EOF
-
 }
 
 function initDomain() {
@@ -470,9 +255,6 @@ set network.lan.hostname=router.${DOMAIN}
 delete network.guest
 delete network.wan6
 set system.@system[0].hostname=router.${DOMAIN}
-set dhcp.lan.leasetime="5m"
-set dhcp.lan.start="225"
-set dhcp.lan.limit="30"
 EOF
 
 unset zone
@@ -504,184 +286,6 @@ fi
 echo "commit" >> ${WORK_DIR}/uci.batch
 }
 
-function setupDomain() {
-
-cat << EOF > ${WORK_DIR}/boot.ipxe
-#!ipxe
-   
-echo ========================================================
-echo UUID: \${uuid}
-echo Manufacturer: \${manufacturer}
-echo Product name: \${product}
-echo Hostname: \${hostname}
-echo
-echo MAC address: \${net0/mac}
-echo IP address: \${net0/ip}
-echo IPv6 address: \${net0.ndp.0/ip6:ipv6}
-echo Netmask: \${net0/netmask}
-echo
-echo Gateway: \${gateway}
-echo DNS: \${dns}
-echo IPv6 DNS: \${dns6}
-echo Domain: \${domain}
-echo ========================================================
-   
-chain --replace --autofree ipxe/\${mac:hexhyp}.ipxe
-EOF
-
-cat << EOF > ${WORK_DIR}/uci.batch
-add_list dhcp.lan.dhcp_option="6,${DOMAIN_ROUTER}"
-set dhcp.lan.leasetime="5m"
-set dhcp.@dnsmasq[0].enable_tftp=1
-set dhcp.@dnsmasq[0].tftp_root=/data/tftpboot
-set dhcp.efi64_boot_1=match
-set dhcp.efi64_boot_1.networkid='set:efi64'
-set dhcp.efi64_boot_1.match='60,PXEClient:Arch:00007'
-set dhcp.efi64_boot_2=match
-set dhcp.efi64_boot_2.networkid='set:efi64'
-set dhcp.efi64_boot_2.match='60,PXEClient:Arch:00009'
-set dhcp.ipxe_boot=userclass
-set dhcp.ipxe_boot.networkid='set:ipxe'
-set dhcp.ipxe_boot.userclass='iPXE'
-set dhcp.uefi=boot
-set dhcp.uefi.filename='tag:efi64,tag:!ipxe,ipxe.efi'
-set dhcp.uefi.serveraddress="${DOMAIN_ROUTER}"
-set dhcp.uefi.servername='pxe'
-set dhcp.uefi.force='1'
-set dhcp.ipxe=boot
-set dhcp.ipxe.filename='tag:ipxe,boot.ipxe'
-set dhcp.ipxe.serveraddress="${DOMAIN_ROUTER}"
-set dhcp.ipxe.servername='pxe'
-set dhcp.ipxe.force='1'
-set dhcp.@dnsmasq[0].domain=${DOMAIN}
-set dhcp.@dnsmasq[0].localuse=0
-set dhcp.@dnsmasq[0].cachelocal=0
-set dhcp.@dnsmasq[0].port=0
-del_list uhttpd.main.listen_http="[::]:80"
-del_list uhttpd.main.listen_http="0.0.0.0:80"
-del_list uhttpd.main.listen_https="[::]:443"
-del_list uhttpd.main.listen_https="0.0.0.0:443"
-add_list uhttpd.main.listen_http="${DOMAIN_ROUTER}:80"
-add_list uhttpd.main.listen_https="${DOMAIN_ROUTER}:443"
-add_list uhttpd.main.listen_http="127.0.0.1:80"
-add_list uhttpd.main.listen_https="127.0.0.1:443"
-commit
-EOF
-
-cat << EOF > ${WORK_DIR}/edge-zone
-zone "${DOMAIN}" {
-    type stub;
-    masters { ${DOMAIN_ROUTER}; };
-    file "stub.${DOMAIN}";
-};
-
-EOF
-
-cat << EOF > ${WORK_DIR}/dns/named.conf
-acl "trusted" {
- ${DOMAIN_NETWORK}/${DOMAIN_CIDR};
- ${EDGE_NETWORK}/${EDGE_CIDR};
- 127.0.0.1;
-};
-
-options {
- listen-on port 53 { 127.0.0.1; ${DOMAIN_ROUTER}; };
- 
- directory  "/data/var/named";
- dump-file  "/data/var/named/data/cache_dump.db";
- statistics-file "/data/var/named/data/named_stats.txt";
- memstatistics-file "/data/var/named/data/named_mem_stats.txt";
- allow-query     { trusted; };
-
- recursion yes;
-
- forwarders { ${EDGE_ROUTER}; };
-
- dnssec-validation yes;
-
- /* Path to ISC DLV key */
- bindkeys-file "/etc/bind/bind.keys";
-
- managed-keys-directory "/data/var/named/dynamic";
-
- pid-file "/var/run/named/named.pid";
- session-keyfile "/var/run/named/session.key";
-
-};
-
-logging {
-        channel default_debug {
-                file "data/named.run";
-                severity dynamic;
-        };
-};
-
-zone "${DOMAIN}" {
-    type master;
-    file "/etc/bind/db.${DOMAIN}"; # zone file path
-};
-
-zone "${DOMAIN_ARPA}.in-addr.arpa" {
-    type master;
-    file "/etc/bind/db.${DOMAIN_ARPA}";
-};
-
-zone "localhost" {
-    type master;
-    file "/etc/bind/db.local";
-};
-
-zone "127.in-addr.arpa" {
-    type master;
-    file "/etc/bind/db.127";
-};
-
-zone "0.in-addr.arpa" {
-    type master;
-    file "/etc/bind/db.0";
-};
-
-zone "255.in-addr.arpa" {
-    type master;
-    file "/etc/bind/db.255";
-};
-
-EOF
-
-cat << EOF > ${WORK_DIR}/dns/db.${DOMAIN}
-@       IN      SOA     router.${DOMAIN}. admin.${DOMAIN}. (
-             3          ; Serial
-             604800     ; Refresh
-              86400     ; Retry
-            2419200     ; Expire
-             604800 )   ; Negative Cache TTL
-;
-; name servers - NS records
-    IN      NS     router.${DOMAIN}.
-
-; name servers - A records
-router.${DOMAIN}.         IN      A      ${DOMAIN_ROUTER}
-
-; ${DOMAIN_NETWORK}/${DOMAIN_CIDR} - A records
-EOF
-
-cat << EOF > ${WORK_DIR}/dns/db.${DOMAIN_ARPA}
-@       IN      SOA     router.${DOMAIN}. admin.${DOMAIN}. (
-                            3         ; Serial
-                        604800         ; Refresh
-                        86400         ; Retry
-                        2419200         ; Expire
-                        604800 )       ; Negative Cache TTL
-
-; name servers - NS records
-    IN      NS      router.${DOMAIN}.
-
-; PTR Records
-1    IN      PTR     router.${DOMAIN}.
-EOF
-
-}
-
 function getBootFiles() {
   mkdir -p ${OKD_LAB_PATH}/boot-files
   wget http://boot.ipxe.org/ipxe.efi -O ${OKD_LAB_PATH}/boot-files/ipxe.efi
@@ -689,25 +293,46 @@ function getBootFiles() {
   wget http://mirror.stream.centos.org/9-stream/BaseOS/x86_64/os/isolinux/initrd.img -O ${OKD_LAB_PATH}/boot-files/initrd.img
 }
 
-function addWireless() {
-  if [[ ${EDGE} == "true" ]]
-  then
-    ROUTER=${EDGE_ROUTER}
-  else
-    ROUTER=${DOMAIN_ROUTER}
-  fi
+function initMicroSD() {
 
-  echo "Enter an SSID for you Lab Wireless LAN:"
-  read LAB_WIFI_SSID
-  echo "Enter a WPA/PSK 2 Passphrase for your Lab Wireless LAN:"
-  read LAB_WIFI_KEY
+  local router_ip=${1}
 
-  ${SSH} root@${ROUTER} "uci set wireless.default_radio0.ssid=\"${LAB_WIFI_SSID}\" ; \
-    uci set wireless.default_radio0.key=\"${LAB_WIFI_KEY}\" ; \
-    uci set wireless.default_radio0.encryption=psk2 ; \
-    uci set wireless.radio0.band=2G_5G ; \
-    uci set wireless.radio0.channel=153 ; \
-    uci set wireless.radio0.htmode=VHT80 ; \
-    uci commit wireless ; \
-    /etc/init.d/network reload"
+  ${SSH} root@${router_ip} "mount | grep /dev/sda | while read line ; \
+    do echo \${line} | cut -d' ' -f1 ; \
+    done | while read fs ; \
+    do umount \${fs} ;  \
+    done ; \
+    dd if=/dev/zero of=/dev/sda bs=4096 count=1 ; \
+    echo \"/dev/sda1 : start=1, type=83\" > /tmp/part.info ; \
+    sfdisk --no-reread -f /dev/sda < /tmp/part.info ; \
+    rm /tmp/part.info ; \
+    umount /dev/sda1 ; \
+    mkfs.ext4 /dev/sda1 ; \
+    mkdir -p /usr/local ; \
+    umount /dev/sda1 ; \
+    echo \"mounting /usr/local filesystem\" ; \
+    let RC=0 ; \
+    while [[ \${RC} -eq 0 ]] ; \
+    do uci delete fstab.@mount[-1] ; \
+    let RC=\$? ; \
+    done; \
+    PART_UUID=\$(block info /dev/sda1 | cut -d\\\" -f2) ; \
+    MOUNT=\$(uci add fstab mount) ; \
+    uci set fstab.\${MOUNT}.target=/usr/local ; \
+    uci set fstab.\${MOUNT}.uuid=\${PART_UUID} ; \
+    uci set fstab.\${MOUNT}.enabled=1 ; \
+    uci commit fstab ; \
+    block mount ; \
+    mkdir -p /usr/local/www/install ; \
+    mkdir -p /usr/local/tftpboot/networkboot ; \
+    ln -s /usr/local /data ; \
+    ln -s /usr/local/www/install /www/install ; \
+    mkdir -p /usr/local/www/install/kickstart ; \
+    mkdir /usr/local/www/install/postinstall ; \
+    mkdir /usr/local/www/install/fcos ; \
+    mkdir -p /root/bin ; \
+    for i in BaseOS AppStream ; \
+    do mkdir -p /usr/local/www/install/repos/\${i}/x86_64/os/ ; \
+    done ;\
+    dropbearkey -y -f /root/.ssh/id_dropbear | grep \"ssh-\" > /usr/local/www/install/postinstall/authorized_keys"
 }
