@@ -156,6 +156,40 @@ function createIpxeHostConfig() {
 
 local router_ip=${1}
 
+CENTOS_MIRROR=$(yq e ".centos-mirror" ${LAB_CONFIG_FILE})
+
+cat << EOF > ${WORK_DIR}/MirrorSync.sh
+#!/bin/bash
+
+for i in BaseOS AppStream 
+do 
+  rsync  -avSHP --delete ${CENTOS_MIRROR}9-stream/\${i}/x86_64/os/ /usr/local/www/install/repos/\${i}/x86_64/os/ > /tmp/repo-mirror.\${i}.out 2>&1
+done
+EOF
+
+cat << EOF > ${WORK_DIR}/local-repos.repo
+[local-appstream]
+name=AppStream
+baseurl=http://${BASTION_HOST}/install/repos/AppStream/x86_64/os/
+gpgcheck=0
+enabled=1
+
+[local-baseos]
+name=BaseOS
+baseurl=http://${BASTION_HOST}/install/repos/BaseOS/x86_64/os/
+gpgcheck=0
+enabled=1
+
+EOF
+
+cat << EOF > ${WORK_DIR}/chrony.conf
+server ${BASTION_HOST} iburst
+driftfile /var/lib/chrony/drift
+makestep 1.0 3
+rtcsync
+logdir /var/log/chrony
+EOF
+
 cat << EOF > ${WORK_DIR}/boot.ipxe
 #!ipxe
    
@@ -211,5 +245,7 @@ add_list uhttpd.main.listen_http="${router_ip}:80"
 add_list uhttpd.main.listen_https="${router_ip}:443"
 add_list uhttpd.main.listen_http="127.0.0.1:80"
 add_list uhttpd.main.listen_https="127.0.0.1:443"
+set uhttpd.main.home='/www'
+set system.ntp.enable_server="1"
 EOF
 }
