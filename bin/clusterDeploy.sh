@@ -192,12 +192,12 @@ function createBootstrapNode() {
   fi
   # Create the ignition and iPXE boot files
   mac_addr=$(yq e ".bootstrap.mac-addr" ${CLUSTER_CONFIG})
-  configOkdNode ${bs_ip_addr} ${host_name}.${DOMAIN} ${mac_addr} bootstrap
+  createButaneConfig ${bs_ip_addr} ${host_name}.${DOMAIN} ${mac_addr} bootstrap ${platform} "false" ${boot_dev}
   createPxeFile ${mac_addr} ${platform} ${boot_dev}
 }
 
 function configSno() {
-  platform=qemu
+  BIP=false
   metal=$(yq e ".control-plane.metal" ${CLUSTER_CONFIG})
   ip_addr=$(yq e ".control-plane.okd-hosts.[0].ip-addr" ${CLUSTER_CONFIG})
   host_name=${CLUSTER_NAME}-node
@@ -212,24 +212,27 @@ function configSno() {
     createOkdVmNode ${ip_addr} ${host_name} ${kvm_host}.${DOMAIN} sno ${memory} ${cpu} ${root_vol} 0 ".control-plane.okd-hosts.[0].mac-addr"
   fi
   # Create the ignition and iPXE boot files
+  if [[ ${metal} == "true" ]]
+  then
+    platform=metal
+    boot_dev=$(yq e ".control-plane.okd-hosts.[0].boot-dev" ${CLUSTER_CONFIG})
+  else
+    platform=qemu
+    boot_dev=/dev/sda
+  fi
   mac_addr=$(yq e ".control-plane.okd-hosts.[0].mac-addr" ${CLUSTER_CONFIG})
-  install_dev=$(yq e ".control-plane.okd-hosts.[0].sno-install-dev" ${CLUSTER_CONFIG})
-  boot_dev=$(yq e ".control-plane.okd-hosts.[0].boot-dev" ${CLUSTER_CONFIG})
   if [[ ${BIP} == "true" ]]
   then
+    install_dev=$(yq e ".control-plane.okd-hosts.[0].sno-install-dev" ${CLUSTER_CONFIG})
     createInstallConfig ${install_dev}
     cp ${WORK_DIR}/install-config-upi.yaml ${WORK_DIR}/okd-install-dir/install-config.yaml
     openshift-install --dir=${WORK_DIR}/okd-install-dir create single-node-ignition-config
     cp ${WORK_DIR}/okd-install-dir/bootstrap-in-place-for-live-iso.ign ${WORK_DIR}/ipxe-work-dir/sno.ign
-    configOkdNode ${ip_addr} ${host_name}.${DOMAIN} ${mac_addr} sno
+    createButaneConfig ${ip_addr} ${host_name}.${DOMAIN} ${mac_addr} sno ${platform} "false" ${boot_dev}
     createSnoBipDNS ${host_name} ${ip_addr}
   else
-    configOkdNode ${ip_addr} ${host_name}.${DOMAIN} ${mac_addr} master
+    createButaneConfig ${ip_addr} ${host_name}.${DOMAIN} ${mac_addr} master ${platform} "false" ${boot_dev}
     createSnoDNS ${host_name} ${ip_addr} ${bs_ip_addr}
-  fi
-  if [[ ${metal} == "true" ]]
-  then
-    platform=metal
   fi
   createPxeFile ${mac_addr} ${platform} ${boot_dev}
 }
@@ -263,13 +266,13 @@ function configControlPlane() {
       createOkdVmNode ${ip_addr} ${host_name} ${kvm_host}.${DOMAIN} master ${memory} ${cpu} ${root_vol} 0 ".control-plane.okd-hosts.[${node_index}].mac-addr"
     fi
     # Create the ignition and iPXE boot files
-    mac_addr=$(yq e ".control-plane.okd-hosts.[${node_index}].mac-addr" ${CLUSTER_CONFIG})
-    configOkdNode ${ip_addr} ${host_name}.${DOMAIN} ${mac_addr} master
-    platform=qemu
+     platform=qemu
     if [[ ${metal} == "true" ]]
     then
       platform=metal
     fi
+    mac_addr=$(yq e ".control-plane.okd-hosts.[${node_index}].mac-addr" ${CLUSTER_CONFIG})
+    createButaneConfig ${ip_addr} ${host_name}.${DOMAIN} ${mac_addr} master ${platform} "false" ${boot_dev}
     createPxeFile ${mac_addr} ${platform} ${boot_dev}
     # Create control plane node DNS Records:
     echo "${host_name}.${DOMAIN}.   IN      A      ${ip_addr} ; ${CLUSTER_NAME}-${DOMAIN}-cp" >> ${WORK_DIR}/dns-work-dir/forward.zone
@@ -367,16 +370,17 @@ function deployWorkers() {
       createOkdVmNode ${ip_addr} ${host_name} ${kvm_host}.${DOMAIN} worker ${memory} ${cpu} ${root_vol} ${ceph_vol} ".compute-nodes.[${node_index}].mac-addr"
     fi
     # Create the ignition and iPXE boot files
-    mac_addr=$(yq e ".compute-nodes.[${node_index}].mac-addr" ${CLUSTER_CONFIG})
-    configOkdNode ${ip_addr} ${host_name}.${DOMAIN} ${mac_addr} worker
+    mac_addr=$(yq e ".compute-nodes.[${node_index}].mac-addr" ${CLUSTER_CONFIG}) 
+    config_ceph=false
     if [[ ${ceph_node} == "true" ]]
     then
       ceph_type=$(yq e ".compute-nodes.[${node_index}].ceph.type" ${CLUSTER_CONFIG})
       if [[ ${ceph_type} == "part" ]]
       then
-        configCephPart ${mac_addr} ${boot_dev}
+        config_ceph=true
       fi
     fi
+    createButaneConfig ${ip_addr} ${host_name}.${DOMAIN} ${mac_addr} worker ${platform} ${config_ceph} ${boot_dev}
     createPxeFile ${mac_addr} ${platform} ${boot_dev}
     # Create DNS entries
     echo "${host_name}.${DOMAIN}.   IN      A      ${ip_addr} ; ${host_name}-${DOMAIN}-wk" >> ${WORK_DIR}/dns-work-dir/forward.zone

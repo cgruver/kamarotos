@@ -246,6 +246,7 @@ add_list uhttpd.main.listen_https="${router_ip}:443"
 add_list uhttpd.main.listen_http="127.0.0.1:80"
 add_list uhttpd.main.listen_https="127.0.0.1:443"
 set uhttpd.main.home='/www'
+set uhttpd.main.redirect_https='0'
 set system.ntp.enable_server="1"
 EOF
 }

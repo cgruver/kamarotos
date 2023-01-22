@@ -140,9 +140,12 @@ function setDomainEnv() {
 
 function setEdgeCluster() {
   export DOMAIN=${LAB_DOMAIN}
+  export SUB_DOMAIN="edge-cluster"
   export DOMAIN_ARPA=${EDGE_ARPA}
   export CLUSTER_CONFIG=${LAB_CONFIG_FILE}
   export DOMAIN_ROUTER=${EDGE_ROUTER}
+  export DOMAIN_NETMASK=${EDGE_NETMASK}
+  export DOMAIN_NETWORK=${EDGE_NETWORK}
   setClusterEnv
 }
 

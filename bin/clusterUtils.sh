@@ -146,13 +146,22 @@ function approveCsr() {
 }
 
 function pullSecret() {
-  NEXUS_PWD="true"
-  NEXUS_PWD_CHK="false"
 
   if [[ ! -d ${OKD_LAB_PATH}/pull-secrets ]]
   then
     mkdir -p ${OKD_LAB_PATH}/pull-secrets
   fi
+  if [[ ${PROXY_REGISTRY} == "none" ]]
+  then
+    echo -n "{\"auths\": {\"fake\": {\"auth\": \"Zm9vOmJhcgo=\"}}}" > ${PULL_SECRET}
+  else
+    createPullSecret
+  fi
+}
+
+function createPullSecret() {
+  NEXUS_PWD="true"
+  NEXUS_PWD_CHK="false"
   echo "Enter the Nexus user for the pull secret:"
   read NEXUS_USER
   while [[ ${NEXUS_PWD} != ${NEXUS_PWD_CHK} ]]
@@ -434,6 +443,14 @@ function startControlPlane() {
   if [[ $(yq e ".control-plane.metal" ${CLUSTER_CONFIG}) == "true" ]]
   then
     echo "This script will not auto start bare-metal nodes.  Please power them on manually."
+    exit 0
+  fi
+
+  if [[ $(yq e ".control-plane.okd-hosts" ${CLUSTER_CONFIG} | yq e 'length' -) == "1" ]]
+  then
+    kvm_host=$(yq e ".control-plane.okd-hosts.[0].kvm-host" ${CLUSTER_CONFIG})
+    host_name=$(yq e ".control-plane.okd-hosts.[0].name" ${CLUSTER_CONFIG})
+    startNode ${kvm_host}.${DOMAIN} ${host_name}
   else
     for node_index in 0 1 2
     do
@@ -497,15 +514,17 @@ function monitor() {
         openshift-install --dir=${INSTALL_DIR} wait-for install-complete --log-level debug
       ;;
       -j)
-        ${SSH} core@${CLUSTER_NAME}-bootstrap.${DOMAIN} "journalctl -b -f -u release-image.service -u bootkube.service"
+        ${SSH} core@${CLUSTER_NAME}-bootstrap.${DOMAIN} "journalctl -b -f -u release-image.service -u bootkube.service -u release-image-pivot.service"
       ;;
       -m=*)
         CP_INDEX="${i#*=}"
-        ${SSH} core@${CLUSTER_NAME}-master-${CP_INDEX}.${DOMAIN} "journalctl -b -f"
+        host_name=$(yq e ".control-plane.okd-hosts.[${CP_INDEX}].name" ${CLUSTER_CONFIG})
+        ${SSH} core@${host_name}.${DOMAIN} "journalctl -b -f"
       ;;
       -w=*)
         W_INDEX="${i#*=}"
-        ${SSH} core@${CLUSTER_NAME}-worker-${W_INDEX}.${DOMAIN} "journalctl -b -f"
+        host_name=$(yq e ".compute-nodes.[${W_INDEX}].name" ${CLUSTER_CONFIG})
+        ${SSH} core@${host_name}.${DOMAIN} "journalctl -b -f"
       ;;
       *)
         # catch all
@@ -649,13 +668,14 @@ function initCephVars() {
 }
 
 function postInstall() {
-    for j in "$@"
+
+  for j in "$@"
   do
     case $j in
       -d)
         ${OC} patch ClusterVersion version --type merge -p '{"spec":{"channel":""}}'
         ${OC} patch configs.samples.operator.openshift.io cluster --type merge --patch '{"spec":{"managementState":"Removed"}}'
-        ${OC} patch OperatorHub cluster --type json -p '[{"op": "replace", "path": "/spec/sources", "value": []}]'
+        # ${OC} patch OperatorHub cluster --type json -p '[{"op": "replace", "path": "/spec/sources", "value": []}]'
         ${OC} patch OperatorHub cluster --type json -p '[{"op": "add", "path": "/spec/disableAllDefaultSources", "value": true}]'
       ;;
       *)
@@ -665,6 +685,7 @@ function postInstall() {
   done
   ${OC} patch imagepruners.imageregistry.operator.openshift.io/cluster --type merge -p '{"spec":{"schedule":"0 0 * * *","suspend":false,"keepTagRevisions":3,"keepYoungerThan":60,"resources":{},"affinity":{},"nodeSelector":{},"tolerations":[],"startingDeadlineSeconds":60,"successfulJobsHistoryLimit":3,"failedJobsHistoryLimit":3}}'
   ${OC} delete pod --field-selector=status.phase==Succeeded --all-namespaces
+  ${OC} delete pod --field-selector=status.phase==Failed --all-namespaces
   ${OC} patch OperatorHub cluster --type json -p '[{"op": "replace", "path": "/spec/sources", "value": [{"disabled":true,"name":"certified-operators"},{"disabled":true,"name":"redhat-marketplace"},{"disabled":true,"name":"redhat-operators"}]}]'
 }
 

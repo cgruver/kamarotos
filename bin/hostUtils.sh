@@ -23,11 +23,11 @@ function buildHostConfig() {
   install_url="http://${BASTION_HOST}/install"
   local index=${1}
 
-  hostname=$(yq e ".kvm-hosts.[${index}].host-name" ${CONFIG_FILE})
-  mac_addr=$(yq e ".kvm-hosts.[${index}].mac-addr" ${CONFIG_FILE})
-  ip_addr=$(yq e ".kvm-hosts.[${index}].ip-addr" ${CONFIG_FILE})
-  disk1=$(yq e ".kvm-hosts.[${index}].disks.disk1" ${CONFIG_FILE})
-  disk2=$(yq e ".kvm-hosts.[${index}].disks.disk2" ${CONFIG_FILE})
+  hostname=$(yq e ".kvm-hosts.[${index}].host-name" ${CLUSTER_CONFIG})
+  mac_addr=$(yq e ".kvm-hosts.[${index}].mac-addr" ${CLUSTER_CONFIG})
+  ip_addr=$(yq e ".kvm-hosts.[${index}].ip-addr" ${CLUSTER_CONFIG})
+  disk1=$(yq e ".kvm-hosts.[${index}].disks.disk1" ${CLUSTER_CONFIG})
+  disk2=$(yq e ".kvm-hosts.[${index}].disks.disk2" ${CLUSTER_CONFIG})
 
   IFS="." read -r i1 i2 i3 i4 <<< "${ip_addr}"
   echo "${hostname}.${DOMAIN}.   IN      A      ${ip_addr} ; ${hostname}-${DOMAIN}-kvm" >> ${WORK_DIR}/forward.zone
@@ -36,7 +36,7 @@ function buildHostConfig() {
 cat << EOF > ${WORK_DIR}/${mac_addr//:/-}.ipxe
 #!ipxe
 
-kernel ${install_url}/repos/BaseOS/x86_64/os/isolinux/vmlinuz net.ifnames=1 ifname=nic0:${mac_addr} ip=${ip_addr}::${ROUTER}:${NETMASK}:${hostname}.${DOMAIN}:nic0:none nameserver=${ROUTER} inst.ks=${install_url}/kickstart/${mac_addr//:/-}.ks inst.repo=${install_url}/repos/BaseOS/x86_64/os initrd=initrd.img
+kernel ${install_url}/repos/BaseOS/x86_64/os/isolinux/vmlinuz net.ifnames=1 ifname=nic0:${mac_addr} ip=${ip_addr}::${DOMAIN_ROUTER}:${DOMAIN_NETMASK}:${hostname}.${DOMAIN}:nic0:none nameserver=${DOMAIN_ROUTER} inst.ks=${install_url}/kickstart/${mac_addr//:/-}.ks inst.repo=${install_url}/repos/BaseOS/x86_64/os initrd=initrd.img
 initrd ${install_url}/repos/BaseOS/x86_64/os/isolinux/initrd.img
 
 boot
@@ -50,7 +50,7 @@ then
 fi
 
 cat << EOF > ${WORK_DIR}/${mac_addr//:/-}.ks
-#version=RHEL8
+#version=RHEL9
 cmdline
 keyboard --vckeymap=us --xlayouts='us'
 lang en_US.UTF-8
@@ -60,7 +60,7 @@ rootpw --iscrypted ${LAB_PWD}
 firstboot --disable
 skipx
 services --enabled="chronyd"
-timezone America/New_York --isUtc
+timezone America/New_York --utc
 
 # Disk partitioning information
 ignoredisk --only-use=${DISK_LIST}
@@ -76,7 +76,7 @@ logvol /  --fstype="xfs" --grow --maxsize=2000000 --size=1024 --name=root --vgna
 # Network Config
 network  --hostname=${hostname}
 network  --device=nic0 --noipv4 --noipv6 --no-activate --onboot=no
-network  --bootproto=static --device=br0 --bridgeslaves=nic0 --gateway=${ROUTER} --ip=${ip_addr} --nameserver=${ROUTER} --netmask=${NETMASK} --noipv6 --activate --bridgeopts="stp=false" --onboot=yes
+network  --bootproto=static --device=br0 --bridgeslaves=nic0 --gateway=${DOMAIN_ROUTER} --ip=${ip_addr} --nameserver=${DOMAIN_ROUTER} --netmask=${DOMAIN_NETMASK} --noipv6 --activate --bridgeopts="stp=false" --onboot=yes
 
 eula --agreed
 
@@ -87,12 +87,6 @@ kexec-tools
 
 %addon com_redhat_kdump --enable --reserve-mb='auto'
 
-%end
-
-%anaconda
-pwpolicy root --minlen=6 --minquality=1 --notstrict --nochanges --notempty
-pwpolicy user --minlen=6 --minquality=1 --notstrict --nochanges --emptyok
-pwpolicy luks --minlen=6 --minquality=1 --notstrict --nochanges --notempty
 %end
 
 %post
@@ -232,118 +226,6 @@ EOF
 
 }
 
-function configOkdNode() {
-    
-  local ip_addr=${1}
-  local host_name=${2}
-  local mac=${3}
-  local role=${4}
-
-  if [[ ${role} == "bootstrap" ]]
-  then
-    sed -i 's|Pivot bootstrap to the OpenShift Release Image\\nWants=release-image.service\\nAfter=release-image.service\\n\\n|Pivot bootstrap to the OpenShift Release Image\\nWants=release-image.service\\nAfter=release-image.service\\nBefore=bootkube.service\\n\\n|g' ${WORK_DIR}/ipxe-work-dir/bootstrap.ign
-  fi
-
-cat << EOF > ${WORK_DIR}/ipxe-work-dir/${mac//:/-}-config.yml
-variant: ${BUTANE_VARIANT}
-version: ${BUTANE_SPEC_VERSION}
-ignition:
-  config:
-    merge:
-      - local: ${role}.ign
-kernel_arguments:
-  should_exist:
-    - mitigations=auto
-  should_not_exist:
-    - mitigations=auto,nosmt
-    - mitigations=off
-storage:
-  files:
-    - path: /etc/zincati/config.d/90-disable-feature.toml
-      mode: 0644
-      contents:
-        inline: |
-          [updates]
-          enabled = false
-    - path: /etc/systemd/network/25-nic0.link
-      mode: 0644
-      contents:
-        inline: |
-          [Match]
-          MACAddress=${mac}
-          [Link]
-          Name=nic0
-    - path: /etc/NetworkManager/system-connections/nic0.nmconnection
-      mode: 0600
-      overwrite: true
-      contents:
-        inline: |
-          [connection]
-          type=ethernet
-          interface-name=nic0
-
-          [ethernet]
-          mac-address=${mac}
-
-          [ipv4]
-          method=manual
-          addresses=${ip_addr}/${DOMAIN_NETMASK}
-          gateway=${DOMAIN_ROUTER}
-          dns=${DOMAIN_ROUTER}
-          dns-search=${DOMAIN}
-    - path: /etc/hostname
-      mode: 0420
-      overwrite: true
-      contents:
-        inline: |
-          ${host_name}
-    - path: /etc/chrony.conf
-      mode: 0644
-      overwrite: true
-      contents:
-        inline: |
-          pool ${BASTION_HOST} iburst 
-          driftfile /var/lib/chrony/drift
-          makestep 1.0 3
-          rtcsync
-          logdir /var/log/chrony
-EOF
-
-cat ${WORK_DIR}/ipxe-work-dir/${mac//:/-}-config.yml | butane -d ${WORK_DIR}/ipxe-work-dir/ -o ${WORK_DIR}/ipxe-work-dir/ignition/${mac//:/-}.ign
-
-}
-
-function configCephPart() {
-
-local mac=${1}
-local boot_dev=${2}
-
-mv ${WORK_DIR}/ipxe-work-dir/ignition/${mac//:/-}.ign ${WORK_DIR}/ipxe-work-dir/${mac//:/-}.ign
-
-cat << EOF > ${WORK_DIR}/ipxe-work-dir/${mac//:/-}-ceph.yml
-variant: ${BUTANE_VARIANT}
-version: ${BUTANE_SPEC_VERSION}
-ignition:
-  config:
-    merge:
-      - local: ${mac//:/-}.ign
-storage:
-  disks:
-    - device: ${boot_dev}
-      wipe_table: false
-      partitions:
-        - label: root
-          number: 4
-          size_mib: 102400
-          resize: true
-        - number: 5
-          size_mib: 0
-EOF
-
-cat ${WORK_DIR}/ipxe-work-dir/${mac//:/-}-ceph.yml | butane -d ${WORK_DIR}/ipxe-work-dir/ -o ${WORK_DIR}/ipxe-work-dir/ignition/${mac//:/-}.ign
-
-}
-
 function createPxeFile() {
   local mac=${1}
   local platform=${2}
@@ -441,27 +323,12 @@ function deployKvmHosts() {
     esac
   done
 
-  if [[ ${KVM_EDGE} == "true" ]]
-  then
-    DOMAIN=${LAB_DOMAIN}
-    ROUTER=${EDGE_ROUTER}
-    NETWORK=${EDGE_NETWORK}
-    NETMASK=${EDGE_NETMASK}
-    CONFIG_FILE=${LAB_CONFIG_FILE}
-    ARPA=${EDGE_ARPA}
-  else
-    ROUTER=${DOMAIN_ROUTER}
-    NETWORK=${DOMAIN_NETWORK}
-    NETMASK=${DOMAIN_NETMASK}
-    CONFIG_FILE=${CLUSTER_CONFIG}
-    ARPA=${DOMAIN_ARPA}
-  fi
   LAB_PWD=$(cat ${OKD_LAB_PATH}/lab_host_pw)
   WORK_DIR=${OKD_LAB_PATH}/boot-work-dir
   rm -rf ${WORK_DIR}
   mkdir -p ${WORK_DIR}
 
-  HOST_COUNT=$(yq e ".kvm-hosts" ${CONFIG_FILE} | yq e 'length' -)
+  HOST_COUNT=$(yq e ".kvm-hosts" ${CLUSTER_CONFIG} | yq e 'length' -)
 
   if [[ ${HOST_NAME} == "" ]]
   then
@@ -476,7 +343,7 @@ function deployKvmHosts() {
     let node_index=0
     while [[ node_index -lt ${HOST_COUNT} ]]
     do
-      host_name=$(yq e ".kvm-hosts.[${node_index}].host-name" ${CONFIG_FILE})
+      host_name=$(yq e ".kvm-hosts.[${node_index}].host-name" ${CLUSTER_CONFIG})
       if [[ ${host_name} == ${HOST_NAME} ]]
       then
         buildHostConfig ${node_index}
@@ -493,11 +360,11 @@ function deployKvmHosts() {
   fi
 
   ${SCP} -r ${WORK_DIR}/*.ks root@${BASTION_HOST}:/usr/local/www/install/kickstart
-  ${SCP} -r ${WORK_DIR}/*.ipxe root@${ROUTER}:/data/tftpboot/ipxe
+  ${SCP} -r ${WORK_DIR}/*.ipxe root@${DOMAIN_ROUTER}:/data/tftpboot/ipxe
 
-  cat ${WORK_DIR}/forward.zone | ${SSH} root@${ROUTER} "cat >> /etc/bind/db.${DOMAIN}"
-  cat ${WORK_DIR}/reverse.zone | ${SSH} root@${ROUTER} "cat >> /etc/bind/db.${ARPA}"
-  ${SSH} root@${ROUTER} "/etc/init.d/named stop && /etc/init.d/named start"
+  cat ${WORK_DIR}/forward.zone | ${SSH} root@${DOMAIN_ROUTER} "cat >> /etc/bind/db.${DOMAIN}"
+  cat ${WORK_DIR}/reverse.zone | ${SSH} root@${DOMAIN_ROUTER} "cat >> /etc/bind/db.${DOMAIN_ARPA}"
+  ${SSH} root@${DOMAIN_ROUTER} "/etc/init.d/named stop && /etc/init.d/named start"
 }
 
 function updateCentos() {
