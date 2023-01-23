@@ -114,10 +114,10 @@ function setupRouterCommon() {
   local router_ip=${1}
 
   ${SSH} root@${router_ip} "opkg update && opkg install ip-full procps-ng-ps bind-server bind-tools haproxy bash shadow uhttpd sfdisk rsync resize2fs wget block-mount"
-  if [[ ${GL_MODEL} == "ar750s"  ]]
-  then
-    initMicroSD ${router_ip}
-  fi
+  # if [[ ${GL_MODEL} == "ar750s"  ]]
+  # then
+  #   initMicroSD ${router_ip}
+  # fi
   ${SSH} root@${router_ip} "mv /etc/haproxy.cfg /etc/haproxy.cfg.orig ; \
     /etc/init.d/lighttpd disable ; \
     /etc/init.d/lighttpd stop ; \
@@ -131,16 +131,14 @@ function setupRouterCommon() {
     mkdir /data/tftpboot/networkboot"
   if [[ ! -d ${OKD_LAB_PATH}/boot-files ]]
   then
-    getBootFiles
+    getBootFile
   fi
   ${SCP} ${OKD_LAB_PATH}/boot-files/ipxe.efi root@${router_ip}:/data/tftpboot/ipxe.efi
-  ${SCP} ${OKD_LAB_PATH}/boot-files/vmlinuz root@${router_ip}:/data/tftpboot/networkboot/vmlinuz
-  ${SCP} ${OKD_LAB_PATH}/boot-files/initrd.img root@${router_ip}:/data/tftpboot/networkboot/initrd.img
   ${SCP} ${WORK_DIR}/boot.ipxe root@${router_ip}:/data/tftpboot/boot.ipxe
-  ${SCP} ${WORK_DIR}/local-repos.repo root@${BASTION_HOST}:/usr/local/www/install/postinstall/local-repos.repo
-  ${SCP} ${WORK_DIR}/chrony.conf root@${BASTION_HOST}:/usr/local/www/install/postinstall/chrony.conf
-  ${SCP} ${WORK_DIR}/MirrorSync.sh root@${BASTION_HOST}:/root/bin/MirrorSync.sh
-  ${SSH} root@${BASTION_HOST} "chmod 750 /root/bin/MirrorSync.sh"
+  # ${SCP} ${WORK_DIR}/local-repos.repo root@${BASTION_HOST}:/usr/local/www/install/postinstall/local-repos.repo
+  # ${SCP} ${WORK_DIR}/chrony.conf root@${BASTION_HOST}:/usr/local/www/install/postinstall/chrony.conf
+  # ${SCP} ${WORK_DIR}/MirrorSync.sh root@${BASTION_HOST}:/root/bin/MirrorSync.sh
+  # ${SSH} root@${BASTION_HOST} "chmod 750 /root/bin/MirrorSync.sh"
   ${SCP} -r ${WORK_DIR}/dns/* root@${router_ip}:/etc/bind/
   ${SSH} root@${router_ip} "mkdir -p /data/var/named/dynamic ; \
     mkdir /data/var/named/data ; \
@@ -290,11 +288,9 @@ fi
 echo "commit" >> ${WORK_DIR}/uci.batch
 }
 
-function getBootFiles() {
+function getBootFile() {
   mkdir -p ${OKD_LAB_PATH}/boot-files
   wget http://boot.ipxe.org/ipxe.efi -O ${OKD_LAB_PATH}/boot-files/ipxe.efi
-  wget http://mirror.stream.centos.org/9-stream/BaseOS/x86_64/os/isolinux/vmlinuz -O ${OKD_LAB_PATH}/boot-files/vmlinuz
-  wget http://mirror.stream.centos.org/9-stream/BaseOS/x86_64/os/isolinux/initrd.img -O ${OKD_LAB_PATH}/boot-files/initrd.img
 }
 
 function initMicroSD() {

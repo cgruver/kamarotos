@@ -139,10 +139,10 @@ function setDomainEnv() {
 }
 
 function setEdgeCluster() {
+  export CLUSTER_CONFIG=${OKD_LAB_PATH}/lab-config/domain-configs/$(yq e ".sub-domain-configs.[${DOMAIN_INDEX}].cluster-config-file" ${LAB_CONFIG_FILE})
   export DOMAIN=${LAB_DOMAIN}
   export SUB_DOMAIN="edge-cluster"
   export DOMAIN_ARPA=${EDGE_ARPA}
-  export CLUSTER_CONFIG=${LAB_CONFIG_FILE}
   export DOMAIN_ROUTER=${EDGE_ROUTER}
   export DOMAIN_NETMASK=${EDGE_NETMASK}
   export DOMAIN_NETWORK=${EDGE_NETWORK}

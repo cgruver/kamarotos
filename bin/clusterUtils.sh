@@ -603,6 +603,29 @@ function installCeph() {
 
 function createCephCluster() {
 
+  if [[ $(yq ". | has(\"compute-nodes\")" ${CLUSTER_CONFIG}) == "true" ]]
+  then
+    createWorkerCephCluster
+  else
+    createControlPlaneCephCluster
+  fi
+  envsubst < ${CEPH_WORK_DIR}/install/cluster.yaml | ${OC} apply -f -
+}
+
+function createControlPlaneCephCluster() {
+  for node_index in 0 1 2
+  do
+    node_name=$(yq e ".control-plane.okd-hosts.[${node_index}].name" ${CLUSTER_CONFIG}).${DOMAIN}
+    ceph_dev=$(yq e ".control-plane.ceph.ceph-dev" ${CLUSTER_CONFIG})
+    yq e ".spec.storage.nodes.[${node_index}].name = \"${node_name}\"" -i ${CEPH_WORK_DIR}/install/cluster.yaml
+    yq e ".spec.storage.nodes.[${node_index}].devices.[0].name = \"${ceph_dev}\"" -i ${CEPH_WORK_DIR}/install/cluster.yaml
+    yq e ".spec.storage.nodes.[${node_index}].devices.[0].config.osdsPerDevice = \"1\"" -i ${CEPH_WORK_DIR}/install/cluster.yaml
+    ${SSH} -o ConnectTimeout=5 core@${node_name} "sudo wipefs -a -f /dev/${ceph_dev} && sudo dd if=/dev/zero of=/dev/${ceph_dev} bs=4096 count=1"
+    ${OC} label nodes ${node_name} role=storage-node
+  done
+}
+
+function createWorkerCephCluster() {
   let NODE_COUNT=$(yq e ".compute-nodes" ${CLUSTER_CONFIG} | yq e 'length' -)
   let node_index=0
   while [[ node_index -lt ${NODE_COUNT} ]]
@@ -620,7 +643,6 @@ function createCephCluster() {
     node_index=$(( ${node_index} + 1 ))
     ${OC} label nodes ${node_name} role=storage-node
   done
-  envsubst < ${CEPH_WORK_DIR}/install/cluster.yaml | ${OC} apply -f -
 }
 
 function regPvc() {

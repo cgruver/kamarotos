@@ -18,16 +18,6 @@ kvm-hosts:
     disks:
       disk1: nvme0n1
       disk2: NA
-cluster:
-  name: okd4-sno
-  cluster-cidr: 10.88.0.0/14
-  service-cidr: 172.20.0.0/16
-  local-registry: none
-  proxy-registry: none
-  remote-registry: quay.io/openshift/okd
-  butane-version: v0.16.0
-  butane-spec-version: 1.4.0
-  ingress-ip-addr: 10.11.12.2
 bootstrap:
   metal: false
   node-spec:
@@ -39,9 +29,17 @@ bootstrap:
 control-plane:
   metal: false
   node-spec:
-    memory: 61440
-    cpu: 12
-    root-vol: 800
+    memory: 20480
+    cpu: 6
+    root-vol: 100
+  ceph:
+    ceph-dev: /dev/sdb
+    ceph-vol: 200
+    type: disk
   okd-hosts:
     - kvm-host: kvm-host01
-      ip-addr: 10.11.12.60
+      ip-addr: 10.14.14.60
+    - kvm-host: kvm-host01
+      ip-addr: 10.14.14.61
+    - kvm-host: kvm-host01
+      ip-addr: 10.14.14.62
