@@ -169,7 +169,7 @@ ${SSH} root@${DOMAIN_ROUTER} "uci set network.${INTERFACE}_lb=interface ; \
   uci set network.${INTERFACE}_lb.ipaddr=${haproxy_ip}/${DOMAIN_NETMASK} ; \
   uci commit ; \
   /etc/init.d/network reload ; \
-  sleep 2 ; \
+  sleep 10 ; \
   chmod 644 /etc/haproxy-${CLUSTER_NAME}.cfg ; \
   chmod 750 /etc/init.d/haproxy-${CLUSTER_NAME} ; \
   /etc/init.d/haproxy-${CLUSTER_NAME} enable ; \
