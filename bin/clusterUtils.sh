@@ -514,7 +514,8 @@ function monitor() {
         openshift-install --dir=${INSTALL_DIR} wait-for install-complete --log-level debug
       ;;
       -j)
-        ${SSH} core@${CLUSTER_NAME}-bootstrap.${DOMAIN} "journalctl -b -f -u release-image.service -u bootkube.service -u release-image-pivot.service"
+        host_name=$(yq e ".bootstrap.name" ${CLUSTER_CONFIG})
+        ${SSH} core@${host_name}.${DOMAIN} "journalctl -b -f -u release-image.service -u bootkube.service -u release-image-pivot.service"
       ;;
       -m=*)
         CP_INDEX="${i#*=}"
