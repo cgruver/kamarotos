@@ -42,6 +42,7 @@ function writeButaneFiles() {
   local host_name=${2}
   local mac=${3}
   local role=${4}
+  local cidr=$(mask2cidr ${DOMAIN_NETMASK})
 
 cat << EOF >> ${WORK_DIR}/ipxe-work-dir/${mac//:/-}-config.yml
 storage:
@@ -74,7 +75,7 @@ storage:
 
           [ipv4]
           method=manual
-          addresses=${ip_addr}/${DOMAIN_NETMASK}
+          addresses=${ip_addr}/${cidr}
           gateway=${DOMAIN_ROUTER}
           dns=${DOMAIN_ROUTER}
           dns-search=${DOMAIN}

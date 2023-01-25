@@ -193,7 +193,7 @@ function createBootstrapNode() {
   # Create the ignition and iPXE boot files
   mac_addr=$(yq e ".bootstrap.mac-addr" ${CLUSTER_CONFIG})
   createButaneConfig ${bs_ip_addr} ${host_name}.${DOMAIN} ${mac_addr} bootstrap ${platform} "false" ${boot_dev}
-  createPxeFile ${mac_addr} ${platform} ${boot_dev}
+  createPxeFile ${mac_addr} ${platform} ${boot_dev} ${host_name} ${bs_ip_addr}
 }
 
 function configSno() {
@@ -234,7 +234,7 @@ function configSno() {
     createButaneConfig ${ip_addr} ${host_name}.${DOMAIN} ${mac_addr} master ${platform} "false" ${boot_dev}
     createSnoDNS ${host_name} ${ip_addr} ${bs_ip_addr}
   fi
-  createPxeFile ${mac_addr} ${platform} ${boot_dev}
+  createPxeFile ${mac_addr} ${platform} ${boot_dev} ${host_name} ${ip_addr}
 }
 
 function configControlPlane() {
@@ -290,7 +290,7 @@ function configControlPlane() {
     fi
     mac_addr=$(yq e ".control-plane.okd-hosts.[${node_index}].mac-addr" ${CLUSTER_CONFIG})
     createButaneConfig ${ip_addr} ${host_name}.${DOMAIN} ${mac_addr} master ${platform} ${config_ceph} ${boot_dev}
-    createPxeFile ${mac_addr} ${platform} ${boot_dev}
+    createPxeFile ${mac_addr} ${platform} ${boot_dev} ${host_name} ${ip_addr}
     # Create control plane node DNS Records:
     echo "${host_name}.${DOMAIN}.   IN      A      ${ip_addr} ; ${CLUSTER_NAME}-${DOMAIN}-cp" >> ${WORK_DIR}/dns-work-dir/forward.zone
     echo "etcd-${node_index}.${DOMAIN}.          IN      A      ${ip_addr} ; ${CLUSTER_NAME}-${DOMAIN}-cp" >> ${WORK_DIR}/dns-work-dir/forward.zone
@@ -398,7 +398,7 @@ function deployWorkers() {
       fi
     fi
     createButaneConfig ${ip_addr} ${host_name}.${DOMAIN} ${mac_addr} worker ${platform} ${config_ceph} ${boot_dev}
-    createPxeFile ${mac_addr} ${platform} ${boot_dev}
+    createPxeFile ${mac_addr} ${platform} ${boot_dev} ${host_name} ${ip_addr}
     # Create DNS entries
     echo "${host_name}.${DOMAIN}.   IN      A      ${ip_addr} ; ${host_name}-${DOMAIN}-wk" >> ${WORK_DIR}/dns-work-dir/forward.zone
     o4=$(echo ${ip_addr} | cut -d"." -f4)
