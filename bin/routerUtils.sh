@@ -71,6 +71,7 @@ function initRouter() {
       uci set firewall.\${FW}.dest=lan ; \
       uci commit firewall"
   fi
+  ${SSH} root@${INIT_IP} "rm /etc/hotplug.d/block/11-mount"
   echo "Generating SSH keys"
   ${SSH} root@${INIT_IP} "rm -rf /root/.ssh ; rm -rf /data/* ; mkdir -p /root/.ssh ; dropbearkey -t rsa -s 4096 -f /root/.ssh/id_dropbear"
   echo "Copying workstation SSH key to router"
@@ -81,7 +82,11 @@ function initRouter() {
 }
 
 function setupRouter() {
-  
+
+  if [[ ! -d ${OKD_LAB_PATH}/boot-files ]]
+  then
+    getBootFile
+  fi
   if [[ ${EDGE} == "true" ]]
   then
     checkRouterModel ${EDGE_ROUTER}
@@ -114,10 +119,15 @@ function setupRouterCommon() {
   local router_ip=${1}
 
   ${SSH} root@${router_ip} "opkg update && opkg install ip-full procps-ng-ps bind-server bind-tools haproxy bash shadow uhttpd sfdisk rsync resize2fs wget block-mount"
-  # if [[ ${GL_MODEL} == "ar750s"  ]]
-  # then
-  #   initMicroSD ${router_ip}
-  # fi
+  if [[ ${GL_MODEL} == "ar750s" ]] && [[ ${NO_LAB_PI} == "true" ]]
+  then
+    initMicroSD ${router_ip}
+    ${SCP} ${WORK_DIR}/local-repos.repo root@${router_ip}:/usr/local/www/install/postinstall/local-repos.repo
+    ${SCP} ${WORK_DIR}/chrony.conf root@${router_ip}:/usr/local/www/install/postinstall/chrony.conf
+    ${SCP} ${WORK_DIR}/MirrorSync.sh root@${router_ip}:/root/bin/MirrorSync.sh
+    ${SSH} root@${router_ip} "chmod 750 /root/bin/MirrorSync.sh"
+    cat ~/.ssh/id_rsa.pub | ${SSH} root@${router_ip} "cat >> /usr/local/www/install/postinstall/authorized_keys"
+  fi
   ${SSH} root@${router_ip} "mv /etc/haproxy.cfg /etc/haproxy.cfg.orig ; \
     /etc/init.d/lighttpd disable ; \
     /etc/init.d/lighttpd stop ; \
@@ -129,16 +139,8 @@ function setupRouterCommon() {
     /etc/init.d/uhttpd enable ; \
     mkdir -p /data/tftpboot/ipxe ; \
     mkdir /data/tftpboot/networkboot"
-  if [[ ! -d ${OKD_LAB_PATH}/boot-files ]]
-  then
-    getBootFile
-  fi
   ${SCP} ${OKD_LAB_PATH}/boot-files/ipxe.efi root@${router_ip}:/data/tftpboot/ipxe.efi
   ${SCP} ${WORK_DIR}/boot.ipxe root@${router_ip}:/data/tftpboot/boot.ipxe
-  # ${SCP} ${WORK_DIR}/local-repos.repo root@${BASTION_HOST}:/usr/local/www/install/postinstall/local-repos.repo
-  # ${SCP} ${WORK_DIR}/chrony.conf root@${BASTION_HOST}:/usr/local/www/install/postinstall/chrony.conf
-  # ${SCP} ${WORK_DIR}/MirrorSync.sh root@${BASTION_HOST}:/root/bin/MirrorSync.sh
-  # ${SSH} root@${BASTION_HOST} "chmod 750 /root/bin/MirrorSync.sh"
   ${SCP} -r ${WORK_DIR}/dns/* root@${router_ip}:/etc/bind/
   ${SSH} root@${router_ip} "mkdir -p /data/var/named/dynamic ; \
     mkdir /data/var/named/data ; \
@@ -306,10 +308,8 @@ function initMicroSD() {
     echo \"/dev/sda1 : start=1, type=83\" > /tmp/part.info ; \
     sfdisk --no-reread -f /dev/sda < /tmp/part.info ; \
     rm /tmp/part.info ; \
-    umount /dev/sda1 ; \
     mkfs.ext4 /dev/sda1 ; \
     mkdir -p /usr/local ; \
-    umount /dev/sda1 ; \
     echo \"mounting /usr/local filesystem\" ; \
     let RC=0 ; \
     while [[ \${RC} -eq 0 ]] ; \

@@ -209,6 +209,13 @@ function setEdgeEnv() {
     export GIT_SERVER=$(yq e ".git-url" ${LAB_CONFIG_FILE})
     IFS="." read -r i1 i2 i3 i4 <<< "${EDGE_NETWORK}"
     export EDGE_ARPA=${i3}.${i2}.${i1}
+    if [[ $(yq ". | has(\"bastion-ip\")" ${LAB_CONFIG_FILE}) == "true" ]]
+    then
+      export BASTION_HOST=$(yq e ".bastion-ip" ${LAB_CONFIG_FILE})
+    else
+      export BASTION_HOST=${EDGE_ROUTER}
+      export NO_LAB_PI="true"
+    fi
   fi
 }
 
