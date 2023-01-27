@@ -598,8 +598,7 @@ function installCeph() {
   ${OC} apply -f ${CEPH_WORK_DIR}/install/crds.yaml
   ${OC} apply -f ${CEPH_WORK_DIR}/install/common.yaml
   ${OC} apply -f ${CEPH_WORK_DIR}/install/rbac.yaml
-
-  envsubst < ${CEPH_WORK_DIR}/install/operator-openshift.yaml | ${OC} apply -f -
+  envsubst < ${CEPH_OPERATOR_FILE} | ${OC} apply -f -
 }
 
 function createCephCluster() {
@@ -610,7 +609,7 @@ function createCephCluster() {
   else
     createControlPlaneCephCluster
   fi
-  envsubst < ${CEPH_WORK_DIR}/install/cluster.yaml | ${OC} apply -f -
+  envsubst < ${CEPH_CLUSTER_FILE} | ${OC} apply -f -
 }
 
 function createControlPlaneCephCluster() {
@@ -618,9 +617,9 @@ function createControlPlaneCephCluster() {
   do
     node_name=$(yq e ".control-plane.okd-hosts.[${node_index}].name" ${CLUSTER_CONFIG}).${DOMAIN}
     ceph_dev=$(yq e ".control-plane.ceph.ceph-dev" ${CLUSTER_CONFIG})
-    yq e ".spec.storage.nodes.[${node_index}].name = \"${node_name}\"" -i ${CEPH_WORK_DIR}/install/cluster.yaml
-    yq e ".spec.storage.nodes.[${node_index}].devices.[0].name = \"${ceph_dev}\"" -i ${CEPH_WORK_DIR}/install/cluster.yaml
-    yq e ".spec.storage.nodes.[${node_index}].devices.[0].config.osdsPerDevice = \"1\"" -i ${CEPH_WORK_DIR}/install/cluster.yaml
+    yq e ".spec.storage.nodes.[${node_index}].name = \"${node_name}\"" -i ${CEPH_CLUSTER_FILE}
+    yq e ".spec.storage.nodes.[${node_index}].devices.[0].name = \"${ceph_dev}\"" -i ${CEPH_CLUSTER_FILE}
+    yq e ".spec.storage.nodes.[${node_index}].devices.[0].config.osdsPerDevice = \"1\"" -i ${CEPH_CLUSTER_FILE}
     ${SSH} -o ConnectTimeout=5 core@${node_name} "sudo wipefs -a -f /dev/${ceph_dev} && sudo dd if=/dev/zero of=/dev/${ceph_dev} bs=4096 count=1"
     ${OC} label nodes ${node_name} role=storage-node
   done
@@ -636,9 +635,9 @@ function createWorkerCephCluster() {
     if [[ ${ceph_node} == "true" ]]
     then
       ceph_dev=$(yq e ".compute-nodes.[${node_index}].ceph.ceph-dev" ${CLUSTER_CONFIG})
-      yq e ".spec.storage.nodes.[${node_index}].name = \"${node_name}\"" -i ${CEPH_WORK_DIR}/install/cluster.yaml
-      yq e ".spec.storage.nodes.[${node_index}].devices.[0].name = \"${ceph_dev}\"" -i ${CEPH_WORK_DIR}/install/cluster.yaml
-      yq e ".spec.storage.nodes.[${node_index}].devices.[0].config.osdsPerDevice = \"1\"" -i ${CEPH_WORK_DIR}/install/cluster.yaml
+      yq e ".spec.storage.nodes.[${node_index}].name = \"${node_name}\"" -i ${CEPH_CLUSTER_FILE}
+      yq e ".spec.storage.nodes.[${node_index}].devices.[0].name = \"${ceph_dev}\"" -i ${CEPH_CLUSTER_FILE}
+      yq e ".spec.storage.nodes.[${node_index}].devices.[0].config.osdsPerDevice = \"1\"" -i ${CEPH_CLUSTER_FILE}
       ${SSH} -o ConnectTimeout=5 core@${node_name} "sudo wipefs -a -f /dev/${ceph_dev} && sudo dd if=/dev/zero of=/dev/${ceph_dev} bs=4096 count=1"
     fi
     node_index=$(( ${node_index} + 1 ))
@@ -667,6 +666,15 @@ function initCephVars() {
   export CSI_ATTACHER_VER=$(yq e ".csi-attacher" ${CEPH_WORK_DIR}/install/versions.yaml)
   export ROOK_CEPH_VER=$(yq e ".rook-ceph" ${CEPH_WORK_DIR}/install/versions.yaml)
   export CEPH_VER=$(yq e ".ceph" ${CEPH_WORK_DIR}/install/versions.yaml)
+
+  if [[ ${NO_LAB_PI} == "true" ]]
+  then
+    CEPH_OPERATOR_FILE=${CEPH_WORK_DIR}/install/operator-openshift-no-pi.yaml
+    CEPH_CLUSTER_FILE=${CEPH_WORK_DIR}/install/cluster-no-pi.yaml
+  else
+    CEPH_OPERATOR_FILE=${CEPH_WORK_DIR}/install/operator-openshift.yaml
+    CEPH_CLUSTER_FILE=${CEPH_WORK_DIR}/install/cluster.yaml
+  fi
 
   for j in "$@"
   do
