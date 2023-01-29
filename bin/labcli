@@ -109,9 +109,6 @@ do
       setKubeConfig
       echo ${KUBECONFIG}
     ;;
-    --update)
-      updateCentos
-    ;;
     --ceph)
       initCephVars "$@"
     ;;

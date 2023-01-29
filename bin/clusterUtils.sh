@@ -10,7 +10,7 @@ function startWorker() {
     else
       if [[ ${node_index} -gt 0 ]]
       then
-        pause 15 "Pause to stagger node start up"
+        pause 30 "Pause to stagger node start up"
       fi
       kvm_host=$(yq e ".compute-nodes.[${node_index}].kvm-host" ${CLUSTER_CONFIG})  
       startNode ${kvm_host}.${DOMAIN} ${host_name}
@@ -456,7 +456,7 @@ function startControlPlane() {
     do
       if [[ ${node_index} -gt 0 ]]
       then
-        pause 15 "Pause to stagger node start up"
+        pause 30 "Pause to stagger node start up"
       fi
       kvm_host=$(yq e ".control-plane.okd-hosts.[${node_index}].kvm-host" ${CLUSTER_CONFIG})
       host_name=$(yq e ".control-plane.okd-hosts.[${node_index}].name" ${CLUSTER_CONFIG})
