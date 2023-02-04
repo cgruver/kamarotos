@@ -75,9 +75,9 @@ EOF
   SD_DEV=mmcblk1
   SD_PART=mmcblk1p
 
-  GL_MODEL=$(${SSH} root@${EDGE_ROUTER} "uci get glconfig.general.model" )
+  checkRouterModel ${EDGE_ROUTER}
   echo "Detected Router Model: ${GL_MODEL}"
-  if [[ ${GL_MODEL} == "ar750s"  ]]
+  if [[ ${GL_MODEL} == "GL-AR750S"  ]]
   then
     SD_DEV=sda
     SD_PART=sda

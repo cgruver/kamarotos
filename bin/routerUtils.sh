@@ -50,9 +50,9 @@ function configRouter() {
 
 function checkRouterModel() {
   local router_ip=${1}
-  GL_MODEL=$(${SSH} root@${router_ip} "uci get glconfig.general.model" )
+  GL_MODEL=$(${SSH} root@${router_ip} "uci get system.@system[0].hostname" )
   echo "Detected Router Model: ${GL_MODEL}"
-  if [[ ${GL_MODEL} != "ar750s"  ]] && [[ ${GL_MODEL} != "mv1000"  ]]
+  if [[ ${GL_MODEL} != "GL-AR750S"  ]] && [[ ${GL_MODEL} != "GL-MV1000"  ]] && [[ ${GL_MODEL} != "GL-AXT1800"  ]]
   then
     echo "Unsupported Router Model Detected.  These scripts only support configuration of GL-iNet AR-750S or MV1000 routers."
     exit 1
@@ -119,7 +119,7 @@ function setupRouterCommon() {
   local router_ip=${1}
 
   ${SSH} root@${router_ip} "opkg update && opkg install ip-full procps-ng-ps bind-server bind-tools haproxy bash shadow uhttpd sfdisk rsync resize2fs wget block-mount"
-  if [[ ${GL_MODEL} == "ar750s" ]] && [[ ${NO_LAB_PI} == "true" ]]
+  if [[ ${GL_MODEL} == "GL-AR750S" ]] && [[ ${NO_LAB_PI} == "true" ]]
   then
     initMicroSD ${router_ip}
     ${SCP} ${WORK_DIR}/local-repos.repo root@${router_ip}:/usr/local/www/install/postinstall/local-repos.repo
@@ -217,7 +217,7 @@ EOF
     else
       echo "FIREWALL ZONE NOT FOUND, CCONFIGURE MANUALLY WITH LUCI"
     fi
-    if [[ ${GL_MODEL} == "ar750s"  ]]
+    if [[ ${GL_MODEL} == "GL-AR750S" ]] || [[ ${GL_MODEL} == "GL-AXT1800" ]]
     then
       configWwanAR750S "${wan_wifi_ssid}" "${wan_wifi_key}" ${wwan_channel}
     else
@@ -231,7 +231,7 @@ EOF
     read lab_wifi_ssid
     echo "Enter a WPA/PSK 2 Passphrase for your Lab Wireless LAN:"
     read lab_wifi_key
-    if [[ ${GL_MODEL} == "ar750s"  ]]
+    if [[ ${GL_MODEL} == "GL-AR750S"  ]] || [[ ${GL_MODEL} == "GL-AXT1800" ]]
     then
       configWlanAR750S "${lab_wifi_ssid}" "${lab_wifi_key}" ${wwan_channel} ${wifi_channel}
     else
