@@ -52,6 +52,26 @@ set network.wwan.metric='20'
 EOF
 }
 
+function configWwanAXT1800() {
+
+  local wifi_ssid=${1}
+  local wifi_key=${2}
+  local wwan_channel=${3}
+
+cat << EOF >> ${WORK_DIR}/uci.batch
+set wireless.radio0.channel=${wwan_channel}
+set wireless.sta=wifi-iface
+set wireless.sta.device='radio0'
+set wireless.sta.network='wwan'
+set wireless.sta.mode='sta'
+set wireless.sta.ifname='wlan-sta0'
+set wireless.sta.ssid="${wifi_ssid}"
+set wireless.sta.encryption='psk-mixed'
+set wireless.sta.key="${wifi_key}"
+set wireless.sta.disabled='0'
+EOF
+}
+
 function configWlanMV1000W() {
 
 local wifi_ssid=${1}

@@ -36,9 +36,19 @@ function configRouter() {
     esac
   done
 
+  if [[ ! -d ${OKD_LAB_PATH}/boot-files ]]
+  then
+    getBootFile
+  fi
   if [[ ${INIT} == "true" ]]
   then
-    initRouter
+    checkRouterModel ${INIT_IP}
+    if [[ ${GL_MODEL} == "GL-AXT1800" ]]
+    then
+      initAxtRouter
+    else
+      initRouter
+    fi
   elif [[ ${SETUP} == "true" ]]
   then
     setupRouter
@@ -60,7 +70,6 @@ function checkRouterModel() {
 }
 
 function initRouter() {
-  checkRouterModel ${INIT_IP}
   if [[ ${EDGE} == "true" ]]
   then
     initEdge
@@ -78,25 +87,57 @@ function initRouter() {
   cat ${OKD_LAB_PATH}/ssh_key.pub | ${SSH} root@${INIT_IP} "cat >> /etc/dropbear/authorized_keys"
   echo "Applying UCI config"
   ${SCP} ${WORK_DIR}/uci.batch root@${INIT_IP}:/tmp/uci.batch
-  ${SSH} root@${INIT_IP} "cat /tmp/uci.batch | uci batch ; passwd -l root ; poweroff"
+  ${SSH} root@${INIT_IP} "cat /tmp/uci.batch | uci batch ; \
+    /etc/init.d/lighttpd disable ; \
+    /etc/init.d/lighttpd stop ; \
+    passwd -l root ; \
+    poweroff"
+}
+
+function initAxtRouter() {
+
+cat << EOF > ${WORK_DIR}/uci.batch
+set dropbear.@dropbear[0].PasswordAuth="off"
+set dropbear.@dropbear[0].RootPasswordAuth="off"
+set network.lan.ipaddr="${EDGE_ROUTER}"
+set network.lan.netmask=${EDGE_NETMASK}
+set network.lan.hostname=router.${LAB_DOMAIN}
+commit
+EOF
+
+  ${SCP} ${WORK_DIR}/uci.batch root@${INIT_IP}:/tmp/uci.batch
+  ${SSH} root@${INIT_IP} "cat /tmp/uci.batch | uci batch ; \
+    rm -rf /root/.ssh ; \
+    mkdir -p /root/.ssh ; \
+    dropbearkey -t ed25519 -f /root/.ssh/id_dropbear ; \
+    /etc/init.d/gl_nas_diskmanager disable ; \
+    /etc/init.d/gl_nas_diskmanager stop ; \
+    /etc/init.d/gl_nas_sys disable ; \
+    /etc/init.d/gl_nas_sys stop ; \
+    /etc/init.d/gl_nas_sys_dl disable ; \
+    /etc/init.d/gl_nas_sys_dl stop ; \
+    /etc/init.d/gl_nas_sys_up disable ; \
+    /etc/init.d/gl_nas_sys_up stop ; \
+    rm -rf /etc/hotplug.d/block ; \
+    sed -i \"s|listen 80|listen 10.11.12.1:80|g\" /etc/nginx/conf.d/gl.conf ; \
+    sed -i \"s|listen 443|listen 10.11.12.1:443|g\" /etc/nginx/conf.d/gl.conf ; \
+    sed -i \"/listen \[::\]:80/d\" /etc/nginx/conf.d/gl.conf ; \
+    sed -i \"/listen \[::\]:443/d\" /etc/nginx/conf.d/gl.conf ; \
+    reboot"
 }
 
 function setupRouter() {
 
-  if [[ ! -d ${OKD_LAB_PATH}/boot-files ]]
-  then
-    getBootFile
-  fi
   if [[ ${EDGE} == "true" ]]
   then
     checkRouterModel ${EDGE_ROUTER}
-    createDhcpConfig ${LAB_DOMAIN}
+    createDhcpConfig ${EDGE_ROUTER} ${LAB_DOMAIN}
     createIpxeHostConfig ${EDGE_ROUTER}
     createRouterDnsConfig  ${EDGE_ROUTER} ${LAB_DOMAIN} ${EDGE_ARPA} "edge"
     setupRouterCommon ${EDGE_ROUTER}
   else
     checkRouterModel ${DOMAIN_ROUTER}
-    createDhcpConfig ${DOMAIN}
+    createDhcpConfig ${DOMAIN_ROUTER} ${DOMAIN}
     createIpxeHostConfig ${DOMAIN_ROUTER}
     createRouterDnsConfig  ${DOMAIN_ROUTER} ${DOMAIN} ${DOMAIN_ARPA} "domain"
     ${SSH} root@${EDGE_ROUTER} "unset ROUTE ; \
@@ -114,12 +155,34 @@ function setupRouter() {
   fi
 }
 
+function setupHaProxy() {
+
+  local router_ip=${1}
+
+  if [[ ${GL_MODEL} == "GL-AXT1800" ]]
+  then
+    ${SSH} root@${router_ip} "echo 'src/gz OpenWrt https://downloads.openwrt.org/snapshots/packages/arm_cortex-a7/packages' >> /etc/opkg/customfeeds.conf ; \
+    opkg update ; \
+    opkg install haproxy"
+  else
+    ${SSH} root@${router_ip} "opkg update ; \
+    opkg install haproxy"
+  fi
+  ${SSH} root@${router_ip} "mv /etc/haproxy.cfg /etc/haproxy.cfg.orig ; \
+    addgroup haproxy ; \
+    adduser -g haproxy -h /data/haproxy -G haproxy haproxy -D -H -s /bin/false ; \
+    mkdir -p /data/haproxy ; \
+    chown -R haproxy:haproxy /data/haproxy ; \
+    rm -f /etc/init.d/haproxy"
+}
+
 function setupRouterCommon() {
 
   local router_ip=${1}
 
-  ${SSH} root@${router_ip} "opkg update && opkg install ip-full procps-ng-ps bind-server bind-tools haproxy bash shadow uhttpd sfdisk rsync resize2fs wget block-mount"
-  if [[ ${GL_MODEL} == "GL-AR750S" ]] && [[ ${NO_LAB_PI} == "true" ]]
+  ${SSH} root@${router_ip} "opkg update && opkg install ip-full procps-ng-ps bind-server bind-tools bash uhttpd sfdisk rsync resize2fs wget block-mount wipefs"
+  
+  if [[ ${NO_LAB_PI} == "true" ]]
   then
     initMicroSD ${router_ip}
     ${SCP} ${WORK_DIR}/local-repos.repo root@${router_ip}:/usr/local/www/install/postinstall/local-repos.repo
@@ -128,15 +191,8 @@ function setupRouterCommon() {
     ${SSH} root@${router_ip} "chmod 750 /root/bin/MirrorSync.sh"
     cat ~/.ssh/id_rsa.pub | ${SSH} root@${router_ip} "cat >> /usr/local/www/install/postinstall/authorized_keys"
   fi
-  ${SSH} root@${router_ip} "mv /etc/haproxy.cfg /etc/haproxy.cfg.orig ; \
-    /etc/init.d/lighttpd disable ; \
-    /etc/init.d/lighttpd stop ; \
-    groupadd haproxy ; \
-    useradd -d /data/haproxy -g haproxy haproxy ; \
-    mkdir -p /data/haproxy ; \
-    chown -R haproxy:haproxy /data/haproxy ; \
-    rm -f /etc/init.d/haproxy ; \
-    /etc/init.d/uhttpd enable ; \
+  setupHaProxy ${router_ip}
+  ${SSH} root@${router_ip} "/etc/init.d/uhttpd enable ; \
     mkdir -p /data/tftpboot/ipxe ; \
     mkdir /data/tftpboot/networkboot"
   ${SCP} ${OKD_LAB_PATH}/boot-files/ipxe.efi root@${router_ip}:/data/tftpboot/ipxe.efi
@@ -160,7 +216,6 @@ function setupRouterCommon() {
   echo "commit" >> ${WORK_DIR}/uci.batch
   ${SCP} ${WORK_DIR}/uci.batch root@${router_ip}:/tmp/uci.batch
   ${SSH} root@${router_ip} "cat /tmp/uci.batch | uci batch ; reboot"
-
   if [[ ${EDGE} == "false" ]]
   then
     ${SSH} root@${EDGE_ROUTER} "/etc/init.d/named stop && /etc/init.d/named start"
@@ -176,10 +231,7 @@ set network.lan.ipaddr="${EDGE_ROUTER}"
 set network.lan.netmask=${EDGE_NETMASK}
 set network.lan.hostname=router.${LAB_DOMAIN}
 delete network.wan6
-set dhcp.lan.leasetime="5m"
-set dhcp.lan.start="225"
-set dhcp.lan.limit="30"
-add_list dhcp.lan.dhcp_option="6,${EDGE_ROUTER}"
+
 EOF
 
   if [[ ${WWAN} == "true" ]]
@@ -299,16 +351,24 @@ function initMicroSD() {
 
   local router_ip=${1}
 
-  ${SSH} root@${router_ip} "mount | grep /dev/sda | while read line ; \
+  if [[ ${GL_MODEL} == "GL-AR750S" ]]
+  then
+    SD_DEV=sda
+    SD_PART=sda1
+  else
+    SD_DEV=mmcblk0
+    SD_PART=mmcblk0p1
+  fi
+  ${SSH} root@${router_ip} "mount | grep /dev/${SD_DEV} | while read line ; \
     do echo \${line} | cut -d' ' -f1 ; \
     done | while read fs ; \
     do umount \${fs} ;  \
     done ; \
-    dd if=/dev/zero of=/dev/sda bs=4096 count=1 ; \
-    echo \"/dev/sda1 : start=1, type=83\" > /tmp/part.info ; \
-    sfdisk --no-reread -f /dev/sda < /tmp/part.info ; \
+    wipefs -af /dev/${SD_DEV} ; \
+    echo \"/dev/${SD_PART} : start=1, type=83\" > /tmp/part.info ; \
+    sfdisk --no-reread -f /dev/${SD_DEV} < /tmp/part.info ; \
     rm /tmp/part.info ; \
-    mkfs.ext4 /dev/sda1 ; \
+    mkfs.ext4 /dev/${SD_PART} ; \
     mkdir -p /usr/local ; \
     echo \"mounting /usr/local filesystem\" ; \
     let RC=0 ; \
@@ -316,7 +376,7 @@ function initMicroSD() {
     do uci delete fstab.@mount[-1] ; \
     let RC=\$? ; \
     done; \
-    PART_UUID=\$(block info /dev/sda1 | cut -d\\\" -f2) ; \
+    PART_UUID=\$(block info /dev/${SD_PART} | cut -d\\\" -f2) ; \
     MOUNT=\$(uci add fstab mount) ; \
     uci set fstab.\${MOUNT}.target=/usr/local ; \
     uci set fstab.\${MOUNT}.uuid=\${PART_UUID} ; \
