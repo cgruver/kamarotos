@@ -154,28 +154,25 @@ add_list dhcp.lan.dhcp_option="6,${EDGE_ROUTER}"
 EOF
 }
 
-function createHttpdIp() {
-
-  local router_ip=${1}
-  local httpd_ip=${2}
-
-  ${SSH} root@${router_ip} "uci set network.httpd_ip=interface ; \
-    uci set network.httpd_ip.ifname=\"@lan\" ; \
-    uci set network.httpd_ip.proto=static ; \
-    uci set network.httpd_ip.hostname=httpd.${DOMAIN} ; \
-    uci set network.httpd_ip.ipaddr=${haproxy_ip}/${EDGE_NETMASK} ; \
-    uci commit"
-}
-
 function createIpxeHostConfig() {
 
 local router_ip=${1}
-if [[ ${GL_MODEL} == "GL-AXT1800" ]]
+if [[ ${GL_MODEL} != "GL-AXT1800" ]]
 then
-  httpd_ip=$(yq e ".httpd-ip" ${LAB_CONFIG_FILE})
-  createHttpdIp ${router_ip} ${httpd_ip}
-else
-  httpd_ip=${router_ip}
+${SSH} root@${router_ip} "opkg update ; \
+  opkg install uhttpd ; \
+  /etc/init.d/uhttpd enable"
+
+cat << EOF >> ${WORK_DIR}/uci.batch
+del_list uhttpd.main.listen_http="[::]:80"
+del_list uhttpd.main.listen_http="0.0.0.0:80"
+del_list uhttpd.main.listen_https="[::]:443"
+del_list uhttpd.main.listen_https="0.0.0.0:443"
+add_list uhttpd.main.listen_http="${router_ip}:80"
+add_list uhttpd.main.listen_https="${router_ip}:443"
+set uhttpd.main.home='/www'
+set uhttpd.main.redirect_https='0'
+EOF
 fi
 
 CENTOS_MIRROR=$(yq e ".centos-mirror" ${LAB_CONFIG_FILE})
@@ -259,14 +256,6 @@ set dhcp.ipxe.filename='tag:ipxe,boot.ipxe'
 set dhcp.ipxe.serveraddress="${router_ip}"
 set dhcp.ipxe.servername='pxe'
 set dhcp.ipxe.force='1'
-del_list uhttpd.main.listen_http="[::]:80"
-del_list uhttpd.main.listen_http="0.0.0.0:80"
-del_list uhttpd.main.listen_https="[::]:443"
-del_list uhttpd.main.listen_https="0.0.0.0:443"
-add_list uhttpd.main.listen_http="${httpd_ip}:80"
-add_list uhttpd.main.listen_https="${httpd_ip}:443"
-set uhttpd.main.home='/www'
-set uhttpd.main.redirect_https='0'
 set system.ntp.enable_server="1"
 EOF
 }

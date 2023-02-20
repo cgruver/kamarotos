@@ -192,8 +192,7 @@ function setupRouterCommon() {
     cat ~/.ssh/id_rsa.pub | ${SSH} root@${router_ip} "cat >> /usr/local/www/install/postinstall/authorized_keys"
   fi
   setupHaProxy ${router_ip}
-  ${SSH} root@${router_ip} "/etc/init.d/uhttpd enable ; \
-    mkdir -p /data/tftpboot/ipxe ; \
+  ${SSH} root@${router_ip} "mkdir -p /data/tftpboot/ipxe ; \
     mkdir /data/tftpboot/networkboot"
   ${SCP} ${OKD_LAB_PATH}/boot-files/ipxe.efi root@${router_ip}:/data/tftpboot/ipxe.efi
   ${SCP} ${WORK_DIR}/boot.ipxe root@${router_ip}:/data/tftpboot/boot.ipxe
@@ -384,7 +383,6 @@ function initMicroSD() {
     uci commit fstab ; \
     block mount ; \
     mkdir -p /usr/local/www/install ; \
-    mkdir -p /usr/local/tftpboot/networkboot ; \
     ln -s /usr/local /data ; \
     ln -s /usr/local/www/install /www/install ; \
     mkdir -p /usr/local/www/install/kickstart ; \
