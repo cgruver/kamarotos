@@ -58,7 +58,7 @@ options {
  dnssec-validation yes;
 
  /* Path to ISC DLV key */
- bindkeys-file "/etc/bind/bind.keys";
+ bindkeys-file "/data/bind/bind.keys";
 
  managed-keys-directory "/data/var/named/dynamic";
 
@@ -76,32 +76,32 @@ logging {
 
 zone "${net_domain}" {
     type master;
-    file "/etc/bind/db.${net_domain}"; # zone file path
+    file "/data/bind/db.${net_domain}"; # zone file path
 };
 
 zone "${arpa}.in-addr.arpa" {
     type master;
-    file "/etc/bind/db.${arpa}";
+    file "/data/bind/db.${arpa}";
 };
 
 zone "localhost" {
     type master;
-    file "/etc/bind/db.local";
+    file "/data/bind/db.local";
 };
 
 zone "127.in-addr.arpa" {
     type master;
-    file "/etc/bind/db.127";
+    file "/data/bind/db.127";
 };
 
 zone "0.in-addr.arpa" {
     type master;
-    file "/etc/bind/db.0";
+    file "/data/bind/db.0";
 };
 
 zone "255.in-addr.arpa" {
     type master;
-    file "/etc/bind/db.255";
+    file "/data/bind/db.255";
 };
 
 EOF

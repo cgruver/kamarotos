@@ -88,7 +88,7 @@ EOF
     mkdir -p /usr/local/nexus/sonatype-work/nexus3/etc"
   cat ${PI_WORK_DIR}/nexus.properties | ${SSH} root@${BASTION_HOST} "cat >> /usr/local/nexus/sonatype-work/nexus3/etc/nexus.properties"
   ${SSH} root@${BASTION_HOST} "chown -R nexus:nexus /usr/local/nexus/sonatype-work/nexus3/etc ; /etc/init.d/nexus enable"
-  echo "nexus.${LAB_DOMAIN}.           IN      A      ${BASTION_HOST}" | ${SSH} root@${EDGE_ROUTER} "cat >> /etc/bind/db.${LAB_DOMAIN}"
+  echo "nexus.${LAB_DOMAIN}.           IN      A      ${BASTION_HOST}" | ${SSH} root@${EDGE_ROUTER} "cat >> /data/bind/db.${LAB_DOMAIN}"
   ${SSH} root@${EDGE_ROUTER} "/etc/init.d/named stop && /etc/init.d/named start"
 }
 
@@ -196,7 +196,7 @@ EOF
   ${SCP} ${PI_WORK_DIR}/gitea root@${BASTION_HOST}:/etc/init.d/gitea
   ${SCP} ${PI_WORK_DIR}/giteaInit.sh root@${BASTION_HOST}:/tmp/giteaInit.sh
   ${SSH} root@${BASTION_HOST} "chown -R gitea:gitea /usr/local/gitea ; chmod 755 /etc/init.d/gitea ; chmod 755 /tmp/giteaInit.sh ; /tmp/giteaInit.sh ; /etc/init.d/gitea enable"
-  echo "gitea.${LAB_DOMAIN}.           IN      A      ${BASTION_HOST}" | ${SSH} root@${EDGE_ROUTER} "cat >> /etc/bind/db.${LAB_DOMAIN}"
+  echo "gitea.${LAB_DOMAIN}.           IN      A      ${BASTION_HOST}" | ${SSH} root@${EDGE_ROUTER} "cat >> /data/bind/db.${LAB_DOMAIN}"
   ${SSH} root@${EDGE_ROUTER} "/etc/init.d/named stop && /etc/init.d/named start"
 }
 
@@ -247,7 +247,7 @@ EOF
     mkdir -p /usr/local/keycloak/home ; \
     groupadd keycloak ; \
     useradd -g keycloak -d /usr/local/keycloak/home keycloak"
-  echo "keycloak.${LAB_DOMAIN}.           IN      A      ${BASTION_HOST}" | ${SSH} root@${EDGE_ROUTER} "cat >> /etc/bind/db.${LAB_DOMAIN}"
+  echo "keycloak.${LAB_DOMAIN}.           IN      A      ${BASTION_HOST}" | ${SSH} root@${EDGE_ROUTER} "cat >> /data/bind/db.${LAB_DOMAIN}"
   ${SSH} root@${EDGE_ROUTER} "/etc/init.d/named stop && /etc/init.d/named start"
   ${SCP} ${PI_WORK_DIR}/keycloak.conf root@${BASTION_HOST}:/usr/local/keycloak/keycloak-server/conf/keycloak.conf
   ${SCP} ${PI_WORK_DIR}/keycloak root@${BASTION_HOST}:/etc/init.d/keycloak
@@ -300,6 +300,6 @@ EOF
     chown -R apicurio:apicurio /usr/local/apicurio ; \
     chmod 750 /etc/init.d/apicurio ; \
     /etc/init.d/apicurio enable"
-  echo "apicurio.${LAB_DOMAIN}.           IN      A      ${BASTION_HOST}" | ${SSH} root@${EDGE_ROUTER} "cat >> /etc/bind/db.${LAB_DOMAIN}"
+  echo "apicurio.${LAB_DOMAIN}.           IN      A      ${BASTION_HOST}" | ${SSH} root@${EDGE_ROUTER} "cat >> /data/bind/db.${LAB_DOMAIN}"
   ${SSH} root@${EDGE_ROUTER} "/etc/init.d/named stop && /etc/init.d/named start"
 }

@@ -125,7 +125,7 @@ function mask2cidr() {
 
 function setDomainEnv() {
 
-  export CLUSTER_CONFIG=${OKD_LAB_PATH}/lab-config/domain-configs/$(yq e ".sub-domain-configs.[${DOMAIN_INDEX}].cluster-config-file" ${LAB_CONFIG_FILE})
+  export CLUSTER_CONFIG=${OKD_LAB_PATH}/lab-config/cluster-configs/$(yq e ".sub-domain-configs.[${DOMAIN_INDEX}].cluster-config-file" ${LAB_CONFIG_FILE})
   export SUB_DOMAIN=$(yq e ".sub-domain-configs.[${DOMAIN_INDEX}].name" ${LAB_CONFIG_FILE})
   export DOMAIN="${SUB_DOMAIN}.${LAB_DOMAIN}"
   export DOMAIN_ROUTER=$(yq e ".sub-domain-configs.[${DOMAIN_INDEX}].router-ip" ${LAB_CONFIG_FILE})
@@ -139,7 +139,7 @@ function setDomainEnv() {
 }
 
 function setEdgeCluster() {
-  export CLUSTER_CONFIG=${OKD_LAB_PATH}/lab-config/domain-configs/$(yq e ".sub-domain-configs.[${DOMAIN_INDEX}].cluster-config-file" ${LAB_CONFIG_FILE})
+  export CLUSTER_CONFIG=${OKD_LAB_PATH}/lab-config/cluster-configs/$(yq e ".sub-domain-configs.[${DOMAIN_INDEX}].cluster-config-file" ${LAB_CONFIG_FILE})
   export DOMAIN=${LAB_DOMAIN}
   export SUB_DOMAIN="edge-cluster"
   export DOMAIN_ARPA=${EDGE_ARPA}

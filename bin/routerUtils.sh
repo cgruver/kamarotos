@@ -150,7 +150,7 @@ function setupRouter() {
       /etc/init.d/network restart"
     pause 15 "Give the Router network time to restart"
     ${SSH} root@${EDGE_ROUTER} "/etc/init.d/named stop && /etc/init.d/named start"
-    cat ${WORK_DIR}/edge-zone | ${SSH} root@${EDGE_ROUTER} "cat >> /etc/bind/named.conf"
+    cat ${WORK_DIR}/edge-zone | ${SSH} root@${EDGE_ROUTER} "cat >> /data/bind/named.conf"
     setupRouterCommon ${DOMAIN_ROUTER}
   fi
 }
@@ -213,17 +213,19 @@ function setupRouterCommon() {
   else
     setupHaProxy ${router_ip}
   fi
-  ${SSH} root@${router_ip} "mkdir -p /data/tftpboot/ipxe ; \
+  ${SSH} root@${router_ip} "mkdir /data/var/named/data ; \
+    cp -r /etc/bind /data/bind ; \
+    mkdir -p /data/tftpboot/ipxe ; \
     mkdir /data/tftpboot/networkboot"
   ${SCP} ${OKD_LAB_PATH}/boot-files/ipxe.efi root@${router_ip}:/data/tftpboot/ipxe.efi
   ${SCP} ${WORK_DIR}/boot.ipxe root@${router_ip}:/data/tftpboot/boot.ipxe
-  ${SCP} -r ${WORK_DIR}/dns/* root@${router_ip}:/etc/bind/
+  ${SCP} -r ${WORK_DIR}/dns/* root@${router_ip}:/data/bind/
   ${SSH} root@${router_ip} "mkdir -p /data/var/named/dynamic ; \
-    mkdir /data/var/named/data ; \
     chown -R bind:bind /data/var/named ; \
-    chown -R bind:bind /etc/bind ; \
+    chown -R bind:bind /data/bind ; \
     /etc/init.d/named disable ; \
     sed -i \"s|START=50|START=99|g\" /etc/init.d/named ; \
+    sed -i \"s|config_file=/etc/bind/named.conf|config_file=/data/bind/named.conf|g\" /etc/init.d/named ; \
     /etc/init.d/named enable ; \
     uci set network.wan.dns=${router_ip} ; \
     uci set network.wan.peerdns=0 ; \

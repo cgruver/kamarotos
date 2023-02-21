@@ -175,8 +175,8 @@ function deletePxeConfig() {
 
 function deleteDns() {
   local key=${1}
-  ${SSH} root@${DOMAIN_ROUTER} "cat /etc/bind/db.${DOMAIN} | grep -v ${key} > /tmp/db.${DOMAIN} && cp /tmp/db.${DOMAIN} /etc/bind/db.${DOMAIN}"
-  ${SSH} root@${DOMAIN_ROUTER} "cat /etc/bind/db.${DOMAIN_ARPA} | grep -v ${key} > /tmp/db.${DOMAIN_ARPA} && cp /tmp/db.${DOMAIN_ARPA} /etc/bind/db.${DOMAIN_ARPA}"
+  ${SSH} root@${DOMAIN_ROUTER} "cat /data/bind/db.${DOMAIN} | grep -v ${key} > /data/bind/db.${DOMAIN}.tmp && mv /data/bind/db.${DOMAIN}.tmp /data/bind/db.${DOMAIN}"
+  ${SSH} root@${DOMAIN_ROUTER} "cat /data/bind/db.${DOMAIN_ARPA} | grep -v ${key} > /data/bind/db.${DOMAIN_ARPA}.tmp &&  mv /data/bind/db.${DOMAIN_ARPA}.tmp /data/bind/db.${DOMAIN_ARPA}"
 }
 
 function createSnoBipDNS() {
@@ -299,8 +299,8 @@ function prepNodeFiles() {
     curl -o /usr/local/www/install/fcos/${OKD_RELEASE}/rootfs.img ${ROOTFS_URL} ; \
     fi"
   
-  cat ${WORK_DIR}/dns-work-dir/forward.zone | ${SSH} root@${DOMAIN_ROUTER} "cat >> /etc/bind/db.${DOMAIN}"
-  cat ${WORK_DIR}/dns-work-dir/reverse.zone | ${SSH} root@${DOMAIN_ROUTER} "cat >> /etc/bind/db.${DOMAIN_ARPA}"
+  cat ${WORK_DIR}/dns-work-dir/forward.zone | ${SSH} root@${DOMAIN_ROUTER} "cat >> /data/bind/db.${DOMAIN}"
+  cat ${WORK_DIR}/dns-work-dir/reverse.zone | ${SSH} root@${DOMAIN_ROUTER} "cat >> /data/bind/db.${DOMAIN_ARPA}"
   ${SSH} root@${DOMAIN_ROUTER} "/etc/init.d/named stop && sleep 2 && /etc/init.d/named start && sleep 2"
   ${SSH} root@${EDGE_ROUTER} "/etc/init.d/named stop && sleep 2 && /etc/init.d/named start && sleep 2"
   ${SSH} root@${BASTION_HOST} "mkdir -p /usr/local/www/install/fcos/ignition/${CLUSTER_NAME}.${DOMAIN}"
@@ -364,8 +364,8 @@ function deployKvmHosts() {
   ${SCP} -r ${WORK_DIR}/*.ks root@${BASTION_HOST}:/usr/local/www/install/kickstart
   ${SCP} -r ${WORK_DIR}/*.ipxe root@${DOMAIN_ROUTER}:/data/tftpboot/ipxe
 
-  cat ${WORK_DIR}/forward.zone | ${SSH} root@${DOMAIN_ROUTER} "cat >> /etc/bind/db.${DOMAIN}"
-  cat ${WORK_DIR}/reverse.zone | ${SSH} root@${DOMAIN_ROUTER} "cat >> /etc/bind/db.${DOMAIN_ARPA}"
+  cat ${WORK_DIR}/forward.zone | ${SSH} root@${DOMAIN_ROUTER} "cat >> /data/bind/db.${DOMAIN}"
+  cat ${WORK_DIR}/reverse.zone | ${SSH} root@${DOMAIN_ROUTER} "cat >> /data/bind/db.${DOMAIN_ARPA}"
   ${SSH} root@${DOMAIN_ROUTER} "/etc/init.d/named stop && /etc/init.d/named start && sleep 2"
 }
 
