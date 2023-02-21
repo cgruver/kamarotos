@@ -2,6 +2,7 @@ function configRouter() {
   EDGE="false"
   WLAN="false"
   WWAN="false"
+  FORMAT_SD="false"
   GL_MODEL=""
   INIT_IP=192.168.8.1
   wifi_channel=3
@@ -26,6 +27,9 @@ function configRouter() {
       ;;
       -s|--setup)
         SETUP="true"
+      ;;
+      -f|--format)
+        FORMAT_SD="true"
       ;;
       -aw|--add-wireless)
         ADD_WIRELESS="true"
@@ -119,10 +123,6 @@ EOF
     /etc/init.d/gl_nas_sys_up disable ; \
     /etc/init.d/gl_nas_sys_up stop ; \
     rm -rf /etc/hotplug.d/block ; \
-    sed -i \"s|listen 80|listen 10.11.12.1:80|g\" /etc/nginx/conf.d/gl.conf ; \
-    sed -i \"s|listen 443|listen 10.11.12.1:443|g\" /etc/nginx/conf.d/gl.conf ; \
-    sed -i \"/listen \[::\]:80/d\" /etc/nginx/conf.d/gl.conf ; \
-    sed -i \"/listen \[::\]:443/d\" /etc/nginx/conf.d/gl.conf ; \
     reboot"
 }
 
@@ -176,22 +176,43 @@ function setupHaProxy() {
     rm -f /etc/init.d/haproxy"
 }
 
+function setupNginx() {
+
+  local router_ip=${1}
+
+  ${SSH} root@${router_ip} "/etc/init.d/nginx stop ; \
+    opkg update ; \
+    opkg install nginx-all-module --force-overwrite; \
+    sed -i \"s|listen 80|listen ${router_ip}:80|g\" /etc/nginx/conf.d/gl.conf ; \
+    sed -i \"s|listen 443|listen ${router_ip}:443|g\" /etc/nginx/conf.d/gl.conf ; \
+    sed -i \"/listen \[::\]:80/d\" /etc/nginx/conf.d/gl.conf ; \
+    sed -i \"/listen \[::\]:443/d\" /etc/nginx/conf.d/gl.conf ; \
+    echo \"include /usr/local/nginx/*.conf;\" >> /etc/nginx/nginx.conf ; \
+    mkdir -p /usr/local/nginx ; \
+    /etc/init.d/nginx start"
+}
+
 function setupRouterCommon() {
 
   local router_ip=${1}
 
-  ${SSH} root@${router_ip} "opkg update && opkg install ip-full procps-ng-ps bind-server bind-tools bash uhttpd sfdisk rsync resize2fs wget block-mount wipefs"
+  ${SSH} root@${router_ip} "opkg update && opkg install ip-full procps-ng-ps bind-server bind-tools bash sfdisk rsync resize2fs wget block-mount wipefs"
   
   if [[ ${NO_LAB_PI} == "true" ]]
   then
-    initMicroSD ${router_ip}
+    initMicroSD ${router_ip} ${FORMAT_SD}
     ${SCP} ${WORK_DIR}/local-repos.repo root@${router_ip}:/usr/local/www/install/postinstall/local-repos.repo
     ${SCP} ${WORK_DIR}/chrony.conf root@${router_ip}:/usr/local/www/install/postinstall/chrony.conf
     ${SCP} ${WORK_DIR}/MirrorSync.sh root@${router_ip}:/root/bin/MirrorSync.sh
     ${SSH} root@${router_ip} "chmod 750 /root/bin/MirrorSync.sh"
     cat ~/.ssh/id_rsa.pub | ${SSH} root@${router_ip} "cat >> /usr/local/www/install/postinstall/authorized_keys"
   fi
-  setupHaProxy ${router_ip}
+  if [[ ${GL_MODEL} == "GL-AXT1800" ]]
+  then
+    setupNginx ${router_ip}
+  else
+    setupHaProxy ${router_ip}
+  fi
   ${SSH} root@${router_ip} "mkdir -p /data/tftpboot/ipxe ; \
     mkdir /data/tftpboot/networkboot"
   ${SCP} ${OKD_LAB_PATH}/boot-files/ipxe.efi root@${router_ip}:/data/tftpboot/ipxe.efi
@@ -349,7 +370,9 @@ function getBootFile() {
 function initMicroSD() {
 
   local router_ip=${1}
+  local format=${2}
 
+  ${SSH} root@${router_ip} "mkdir -p /usr/local"
   if [[ ${GL_MODEL} == "GL-AR750S" ]]
   then
     SD_DEV=sda
@@ -358,18 +381,31 @@ function initMicroSD() {
     SD_DEV=mmcblk0
     SD_PART=mmcblk0p1
   fi
-  ${SSH} root@${router_ip} "mount | grep /dev/${SD_DEV} | while read line ; \
-    do echo \${line} | cut -d' ' -f1 ; \
-    done | while read fs ; \
-    do umount \${fs} ;  \
-    done ; \
-    wipefs -af /dev/${SD_DEV} ; \
-    echo \"/dev/${SD_PART} : start=1, type=83\" > /tmp/part.info ; \
-    sfdisk --no-reread -f /dev/${SD_DEV} < /tmp/part.info ; \
-    rm /tmp/part.info ; \
-    mkfs.ext4 /dev/${SD_PART} ; \
-    mkdir -p /usr/local ; \
-    echo \"mounting /usr/local filesystem\" ; \
+  if [[ ${format} == "true" ]]
+  then
+    ${SSH} root@${router_ip} "mount | grep /dev/${SD_DEV} | while read line ; \
+      do echo \${line} | cut -d' ' -f1 ; \
+      done | while read fs ; \
+      do umount \${fs} ;  \
+      done ; \
+      wipefs -af /dev/${SD_DEV} ; \
+      echo \"/dev/${SD_PART} : start=1, type=83\" > /tmp/part.info ; \
+      sfdisk --no-reread -f /dev/${SD_DEV} < /tmp/part.info ; \
+      rm /tmp/part.info ; \
+      mkfs.ext4 /dev/${SD_PART} ; \
+      mount /dev/${SD_PART} /usr/local ; \
+      mkdir -p /usr/local/www/install ; \
+      mkdir -p /usr/local/www/install/kickstart ; \
+      mkdir /usr/local/www/install/postinstall ; \
+      mkdir /usr/local/www/install/fcos ; \
+      for i in BaseOS AppStream ; \
+        do mkdir -p /usr/local/www/install/repos/\${i}/x86_64/os/ ; \
+      done ;\
+      dropbearkey -y -f /root/.ssh/id_dropbear | grep \"ssh-\" > /usr/local/www/install/postinstall/authorized_keys ; \
+      umount /dev/${SD_PART}"
+  fi
+
+  ${SSH} root@${router_ip} "echo \"mounting /usr/local filesystem\" ; \
     let RC=0 ; \
     while [[ \${RC} -eq 0 ]] ; \
     do uci delete fstab.@mount[-1] ; \
@@ -382,15 +418,7 @@ function initMicroSD() {
     uci set fstab.\${MOUNT}.enabled=1 ; \
     uci commit fstab ; \
     block mount ; \
-    mkdir -p /usr/local/www/install ; \
     ln -s /usr/local /data ; \
     ln -s /usr/local/www/install /www/install ; \
-    mkdir -p /usr/local/www/install/kickstart ; \
-    mkdir /usr/local/www/install/postinstall ; \
-    mkdir /usr/local/www/install/fcos ; \
-    mkdir -p /root/bin ; \
-    for i in BaseOS AppStream ; \
-    do mkdir -p /usr/local/www/install/repos/\${i}/x86_64/os/ ; \
-    done ;\
-    dropbearkey -y -f /root/.ssh/id_dropbear | grep \"ssh-\" > /usr/local/www/install/postinstall/authorized_keys"
+    mkdir -p /root/bin"
 }

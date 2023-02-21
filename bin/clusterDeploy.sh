@@ -46,134 +46,33 @@ EOF
 
 function createLbConfig() {
 
-local cp_0=$(yq e ".control-plane.okd-hosts.[0].ip-addr" ${CLUSTER_CONFIG})
-local cp_1=$(yq e ".control-plane.okd-hosts.[1].ip-addr" ${CLUSTER_CONFIG})
-local cp_2=$(yq e ".control-plane.okd-hosts.[2].ip-addr" ${CLUSTER_CONFIG})
-local bs=$(yq e ".bootstrap.ip-addr" ${CLUSTER_CONFIG})
-local haproxy_ip=$(yq e ".cluster.ingress-ip-addr" ${CLUSTER_CONFIG})
+  local lb_ip=$(yq e ".cluster.ingress-ip-addr" ${CLUSTER_CONFIG})
 
-cat << EOF > ${WORK_DIR}/haproxy-${CLUSTER_NAME}.init
-#!/bin/sh /etc/rc.common
-# Copyright (C) 2009-2010 OpenWrt.org
+  INTERFACE=$(echo "${CLUSTER_NAME//-/_}" | tr "[:upper:]" "[:lower:]")
+  ${SSH} root@${DOMAIN_ROUTER} "uci set network.${INTERFACE}_lb=interface ; \
+    uci set network.${INTERFACE}_lb.ifname=\"@lan\" ; \
+    uci set network.${INTERFACE}_lb.proto=static ; \
+    uci set network.${INTERFACE}_lb.hostname=${CLUSTER_NAME}-lb.${DOMAIN} ; \
+    uci set network.${INTERFACE}_lb.ipaddr=${lb_ip}/${DOMAIN_NETMASK} ; \
+    uci commit ; \
+    /etc/init.d/network reload ; \
+    sleep 10"
 
-START=99
-STOP=80
-
-SERVICE_USE_PID=1
-EXTRA_COMMANDS="check"
-
-HAPROXY_BIN="/usr/sbin/haproxy"
-HAPROXY_CONFIG="/etc/haproxy-${CLUSTER_NAME}.cfg"
-HAPROXY_PID="/var/run/haproxy-${CLUSTER_NAME}.pid"
-
-start() {
-	service_start \$HAPROXY_BIN -q -D -f "\$HAPROXY_CONFIG" -p "\$HAPROXY_PID"
-}
-
-stop() {
-	kill -9 \$(cat \$HAPROXY_PID)
-	service_stop \$HAPROXY_BIN
-}
-
-reload() {
-	\$HAPROXY_BIN -D -q -f \$HAPROXY_CONFIG -p \$HAPROXY_PID -sf \$(cat \$HAPROXY_PID)
-}
-
-check() {
-        \$HAPROXY_BIN -c -q -V -f \$HAPROXY_CONFIG
-}
-EOF
-
-cat << EOF > ${WORK_DIR}/haproxy-${CLUSTER_NAME}.cfg
-global
-
-    log         127.0.0.1 local2
-
-    chroot      /data/haproxy
-    pidfile     /var/run/haproxy.pid
-    maxconn     50000
-    user        haproxy
-    group       haproxy
-    daemon
-
-    stats socket /data/haproxy/stats
-
-defaults
-    mode                    http
-    log                     global
-    option                  dontlognull
-    option                  redispatch
-    retries                 3
-    timeout http-request    10s
-    timeout queue           1m
-    timeout connect         10s
-    timeout client          10m
-    timeout server          10m
-    timeout http-keep-alive 10s
-    timeout check           10s
-    maxconn                 50000
-
-listen okd4-api 
-    bind ${haproxy_ip}:6443
-    balance roundrobin
-    option                  tcplog
-    mode tcp
-    option tcpka
-    option tcp-check
-    server okd4-bootstrap ${bs}:6443 check weight 1
-    server okd4-master-0 ${cp_0}:6443 check weight 1
-    server okd4-master-1 ${cp_1}:6443 check weight 1
-    server okd4-master-2 ${cp_2}:6443 check weight 1
-
-listen okd4-mc 
-    bind ${haproxy_ip}:22623
-    balance roundrobin
-    option                  tcplog
-    mode tcp
-    option tcpka
-    server okd4-bootstrap ${bs}:22623 check weight 1
-    server okd4-master-0 ${cp_0}:22623 check weight 1
-    server okd4-master-1 ${cp_1}:22623 check weight 1
-    server okd4-master-2 ${cp_2}:22623 check weight 1
-
-listen okd4-apps 
-    bind ${haproxy_ip}:80
-    balance source
-    option                  tcplog
-    mode tcp
-    option tcpka
-    server okd4-master-0 ${cp_0}:80 check weight 1
-    server okd4-master-1 ${cp_1}:80 check weight 1
-    server okd4-master-2 ${cp_2}:80 check weight 1
-
-listen okd4-apps-ssl 
-    bind ${haproxy_ip}:443
-    balance source
-    option                  tcplog
-    mode tcp
-    option tcpka
-    option tcp-check
-    server okd4-master-0 ${cp_0}:443 check weight 1
-    server okd4-master-1 ${cp_1}:443 check weight 1
-    server okd4-master-2 ${cp_2}:443 check weight 1
-EOF
-
-${SCP} ${WORK_DIR}/haproxy-${CLUSTER_NAME}.cfg root@${DOMAIN_ROUTER}:/etc/haproxy-${CLUSTER_NAME}.cfg
-${SCP} ${WORK_DIR}/haproxy-${CLUSTER_NAME}.init root@${DOMAIN_ROUTER}:/etc/init.d/haproxy-${CLUSTER_NAME}
-
-INTERFACE=$(echo "${CLUSTER_NAME//-/_}" | tr "[:upper:]" "[:lower:]")
-${SSH} root@${DOMAIN_ROUTER} "uci set network.${INTERFACE}_lb=interface ; \
-  uci set network.${INTERFACE}_lb.ifname=\"@lan\" ; \
-  uci set network.${INTERFACE}_lb.proto=static ; \
-  uci set network.${INTERFACE}_lb.hostname=${CLUSTER_NAME}-lb.${DOMAIN} ; \
-  uci set network.${INTERFACE}_lb.ipaddr=${haproxy_ip}/${DOMAIN_NETMASK} ; \
-  uci commit ; \
-  /etc/init.d/network reload ; \
-  sleep 10 ; \
-  chmod 644 /etc/haproxy-${CLUSTER_NAME}.cfg ; \
-  chmod 750 /etc/init.d/haproxy-${CLUSTER_NAME} ; \
-  /etc/init.d/haproxy-${CLUSTER_NAME} enable ; \
-  /etc/init.d/haproxy-${CLUSTER_NAME} start"
+  checkRouterModel ${lb_ip}
+  if [[ ${GL_MODEL} == "GL-AXT1800" ]]
+  then
+    configNginx ${lb_ip}
+    ${SCP} ${WORK_DIR}/nginx-${CLUSTER_NAME}.conf root@${DOMAIN_ROUTER}:/usr/local/nginx/nginx-${CLUSTER_NAME}.conf
+    ${SSH} root@${DOMAIN_ROUTER} "/etc/init.d/nginx restart"
+  else
+    configHaProxy ${lb_ip}
+    ${SCP} ${WORK_DIR}/haproxy-${CLUSTER_NAME}.cfg root@${DOMAIN_ROUTER}:/etc/haproxy-${CLUSTER_NAME}.cfg
+    ${SCP} ${WORK_DIR}/haproxy-${CLUSTER_NAME}.init root@${DOMAIN_ROUTER}:/etc/init.d/haproxy-${CLUSTER_NAME}
+    ${SSH} root@${DOMAIN_ROUTER} "chmod 644 /etc/haproxy-${CLUSTER_NAME}.cfg ; \
+      chmod 750 /etc/init.d/haproxy-${CLUSTER_NAME} ; \
+      /etc/init.d/haproxy-${CLUSTER_NAME} enable ; \
+      /etc/init.d/haproxy-${CLUSTER_NAME} start"
+  fi
 }
 
 function createBootstrapNode() {

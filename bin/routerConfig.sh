@@ -156,12 +156,13 @@ EOF
 
 function createIpxeHostConfig() {
 
-local router_ip=${1}
-if [[ ${GL_MODEL} != "GL-AXT1800" ]]
-then
-${SSH} root@${router_ip} "opkg update ; \
-  opkg install uhttpd ; \
-  /etc/init.d/uhttpd enable"
+  local router_ip=${1}
+  
+  if [[ ${GL_MODEL} != "GL-AXT1800" ]]
+  then
+  ${SSH} root@${router_ip} "opkg update ; \
+    opkg install uhttpd ; \
+    /etc/init.d/uhttpd enable"
 
 cat << EOF >> ${WORK_DIR}/uci.batch
 del_list uhttpd.main.listen_http="[::]:80"
@@ -257,5 +258,173 @@ set dhcp.ipxe.serveraddress="${router_ip}"
 set dhcp.ipxe.servername='pxe'
 set dhcp.ipxe.force='1'
 set system.ntp.enable_server="1"
+EOF
+}
+
+function configHaProxy() {
+
+  local lb_ip=${1}
+  local cp_0=$(yq e ".control-plane.okd-hosts.[0].ip-addr" ${CLUSTER_CONFIG})
+  local cp_1=$(yq e ".control-plane.okd-hosts.[1].ip-addr" ${CLUSTER_CONFIG})
+  local cp_2=$(yq e ".control-plane.okd-hosts.[2].ip-addr" ${CLUSTER_CONFIG})
+  local bs=$(yq e ".bootstrap.ip-addr" ${CLUSTER_CONFIG})
+
+cat << EOF > ${WORK_DIR}/haproxy-${CLUSTER_NAME}.init
+#!/bin/sh /etc/rc.common
+# Copyright (C) 2009-2010 OpenWrt.org
+
+START=99
+STOP=80
+
+SERVICE_USE_PID=1
+EXTRA_COMMANDS="check"
+
+HAPROXY_BIN="/usr/sbin/haproxy"
+HAPROXY_CONFIG="/etc/haproxy-${CLUSTER_NAME}.cfg"
+HAPROXY_PID="/var/run/haproxy-${CLUSTER_NAME}.pid"
+
+start() {
+	service_start \$HAPROXY_BIN -q -D -f "\$HAPROXY_CONFIG" -p "\$HAPROXY_PID"
+}
+
+stop() {
+	kill -9 \$(cat \$HAPROXY_PID)
+	service_stop \$HAPROXY_BIN
+}
+
+reload() {
+	\$HAPROXY_BIN -D -q -f \$HAPROXY_CONFIG -p \$HAPROXY_PID -sf \$(cat \$HAPROXY_PID)
+}
+
+check() {
+        \$HAPROXY_BIN -c -q -V -f \$HAPROXY_CONFIG
+}
+EOF
+
+cat << EOF > ${WORK_DIR}/haproxy-${CLUSTER_NAME}.cfg
+global
+
+    log         127.0.0.1 local2
+
+    chroot      /data/haproxy
+    pidfile     /var/run/haproxy.pid
+    maxconn     50000
+    user        haproxy
+    group       haproxy
+    daemon
+
+    stats socket /data/haproxy/stats
+
+defaults
+    mode                    http
+    log                     global
+    option                  dontlognull
+    option                  redispatch
+    retries                 3
+    timeout http-request    10s
+    timeout queue           1m
+    timeout connect         10s
+    timeout client          10m
+    timeout server          10m
+    timeout http-keep-alive 10s
+    timeout check           10s
+    maxconn                 50000
+
+listen okd4-api 
+    bind ${lb_ip}:6443
+    balance roundrobin
+    option                  tcplog
+    mode tcp
+    option tcpka
+    option tcp-check
+    server okd4-bootstrap ${bs}:6443 check weight 1
+    server okd4-master-0 ${cp_0}:6443 check weight 1
+    server okd4-master-1 ${cp_1}:6443 check weight 1
+    server okd4-master-2 ${cp_2}:6443 check weight 1
+
+listen okd4-mc 
+    bind ${lb_ip}:22623
+    balance roundrobin
+    option                  tcplog
+    mode tcp
+    option tcpka
+    server okd4-bootstrap ${bs}:22623 check weight 1
+    server okd4-master-0 ${cp_0}:22623 check weight 1
+    server okd4-master-1 ${cp_1}:22623 check weight 1
+    server okd4-master-2 ${cp_2}:22623 check weight 1
+
+listen okd4-apps 
+    bind ${lb_ip}:80
+    balance source
+    option                  tcplog
+    mode tcp
+    option tcpka
+    server okd4-master-0 ${cp_0}:80 check weight 1
+    server okd4-master-1 ${cp_1}:80 check weight 1
+    server okd4-master-2 ${cp_2}:80 check weight 1
+
+listen okd4-apps-ssl 
+    bind ${lb_ip}:443
+    balance source
+    option                  tcplog
+    mode tcp
+    option tcpka
+    option tcp-check
+    server okd4-master-0 ${cp_0}:443 check weight 1
+    server okd4-master-1 ${cp_1}:443 check weight 1
+    server okd4-master-2 ${cp_2}:443 check weight 1
+EOF
+
+}
+
+function configNginx() {
+
+  local lb_ip=${1}
+  local cp_0=$(yq e ".control-plane.okd-hosts.[0].ip-addr" ${CLUSTER_CONFIG})
+  local cp_1=$(yq e ".control-plane.okd-hosts.[1].ip-addr" ${CLUSTER_CONFIG})
+  local cp_2=$(yq e ".control-plane.okd-hosts.[2].ip-addr" ${CLUSTER_CONFIG})
+  local bs=$(yq e ".bootstrap.ip-addr" ${CLUSTER_CONFIG})
+
+cat << EOF > ${WORK_DIR}/nginx-${CLUSTER_NAME}.conf
+stream {
+    upstream okd4-api {
+        server ${bs}:6443 max_fails=3 fail_timeout=1s;  # bootstrap
+        server ${cp_0}:6443 max_fails=3 fail_timeout=1s;
+        server ${cp_1}:6443 max_fails=3 fail_timeout=1s;
+        server ${cp_2}:6443 max_fails=3 fail_timeout=1s;
+    }
+    upstream okd4-mc {
+        server ${bs}:22623 max_fails=3 fail_timeout=1s; # bootstrap
+        server ${cp_0}:22623 max_fails=3 fail_timeout=1s;
+        server ${cp_1}:22623 max_fails=3 fail_timeout=1s;
+        server ${cp_2}:22623 max_fails=3 fail_timeout=1s;
+    }
+    upstream okd4-https {
+        server ${cp_0}:443 max_fails=3 fail_timeout=1s;
+        server ${cp_1}:443 max_fails=3 fail_timeout=1s;
+        server ${cp_2}:443 max_fails=3 fail_timeout=1s;
+    }
+    upstream okd4-http {
+        server ${cp_0}:80 max_fails=3 fail_timeout=1s;
+        server ${cp_1}:80 max_fails=3 fail_timeout=1s;
+        server ${cp_2}:80 max_fails=3 fail_timeout=1s;
+    }
+    server {
+        listen ${lb_ip}:6443;
+        proxy_pass okd4-api;
+    }
+    server {
+        listen ${lb_ip}:22623;
+        proxy_pass okd4-mc;
+    }
+    server {
+        listen ${lb_ip}:443;
+        proxy_pass okd4-https;
+    }
+    server {
+        listen ${lb_ip}:80;
+        proxy_pass okd4-http;
+    }
+}
 EOF
 }
