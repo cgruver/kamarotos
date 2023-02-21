@@ -18,8 +18,8 @@ SCP="scp -O -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -oHostKe
 for i in "$@"
 do
   case $i in
-    -d=*|--domain=*)
-      SUB_DOMAIN="${i#*=}"
+    -c=*|--cluster=*)
+      CLUSTER="${i#*=}"
     ;;
     *)
        # catch all
@@ -27,16 +27,16 @@ do
   esac
 done
 
-if [[ -z ${SUB_DOMAIN} ]]
+if [[ -z ${CLUSTER} ]]
 then
   labctx
 else
-  labctx ${SUB_DOMAIN}
+  labctx ${CLUSTER}
 fi
 
 if [[ ${LAB_CTX_ERROR} == "true" ]]
 then
-  echo "Error processing lab config for domain: ${SUB_DOMAIN}"
+  echo "Error processing lab config for cluster: ${CLUSTER}"
   exit 1
 fi
 

@@ -10,9 +10,9 @@ function labenv() {
   for i in "$@"
   do
     case $i in
-      -d=*|--domain=*)
-        sub_domain="${i#*=}"
-        labctx ${sub_domain}
+      -c=*|--cluster=*)
+        cluster="${i#*=}"
+        labctx ${cluster}
       ;;
     esac
   done
@@ -24,7 +24,7 @@ function labenv() {
         setEdgeEnv
       ;;
       -k)
-        if [[ -z ${SUB_DOMAIN} ]]
+        if [[ -z ${CLUSTER} ]]
         then
           labctx
         fi
@@ -38,43 +38,39 @@ function labenv() {
   i=""
 }
 
-function setDomainIndex() {
+function setClusterIndex() {
 
-  local sub_domain=${1}
-  SUB_DOMAIN=""
-  INDEX=""
-  export LAB_CTX_ERROR="true"
-
+  local cluster=${1}
   if [[ -z ${LAB_CONFIG_FILE} ]]
   then
     echo "ENV VAR LAB_CONFIG_FILE must be set to the path to a lab config yaml."
   else
     DONE=false
-    DOMAIN_COUNT=$(yq e ".sub-domain-configs" ${LAB_CONFIG_FILE} | yq e 'length' -)
-    if [[ ${DOMAIN_COUNT} -eq 0 ]]
+    CLUSTER_COUNT=$(yq e ".cluster-configs" ${LAB_CONFIG_FILE} | yq e 'length' -)
+    if [[ ${CLUSTER_COUNT} -eq 0 ]]
     then
       INDEX=""
       DONE="true"
-    elif [[ -z ${sub_domain} ]]
+    elif [[ -z ${cluster} ]]
     then
       let array_index=0
-      while [[ array_index -lt ${DOMAIN_COUNT} ]]
+      while [[ array_index -lt ${CLUSTER_COUNT} ]]
       do
-        domain_name=$(yq e ".sub-domain-configs.[${array_index}].name" ${LAB_CONFIG_FILE})
-        echo "$(( ${array_index} + 1 )) - ${domain_name}"
+        cluster_name=$(yq e ".cluster-configs.[${array_index}].name" ${LAB_CONFIG_FILE})
+        echo "$(( ${array_index} + 1 )) - ${cluster_name}"
         array_index=$(( ${array_index} + 1 ))
       done
       unset array_index
-      echo "Enter the index of the domain that you want to work with:"
+      echo "Enter the index of the cluster that you want to work with:"
       read ENTRY
       INDEX=$(( ${ENTRY} - 1 ))
       DONE="true"
     else
       let array_index=0
-      while [[ array_index -lt ${DOMAIN_COUNT} ]]
+      while [[ array_index -lt ${CLUSTER_COUNT} ]]
       do
-        domain_name=$(yq e ".sub-domain-configs.[${array_index}].name" ${LAB_CONFIG_FILE})
-        if [[ ${domain_name} == ${sub_domain} ]]
+        cluster_name=$(yq e ".cluster-configs.[${array_index}].name" ${LAB_CONFIG_FILE})
+        if [[ ${cluster_name} == ${cluster} ]]
         then
           INDEX=${array_index}
           DONE=true
@@ -87,29 +83,63 @@ function setDomainIndex() {
     if [[ ${DONE} == "true" ]]
     then
       export LAB_CTX_ERROR="false"
-      DOMAIN_INDEX=${INDEX}
+      CLUSTER_INDEX=${INDEX}
     else
-      echo "Domain Entry Not Found In Config File."
-      DOMAIN_INDEX=""
+      echo "Cluster Entry Not Found In Config File."
+      CLUSTER_INDEX=""
     fi
+  fi
+}
+
+function setDomainIndex() {
+
+  local sub_domain=${1}
+  SUB_DOMAIN=""
+  INDEX=""
+  export LAB_CTX_ERROR="true"
+
+  DONE=false
+  DOMAIN_COUNT=$(yq e ".sub-domain-configs" ${LAB_CONFIG_FILE} | yq e 'length' -)
+  let array_index=0
+  while [[ array_index -lt ${DOMAIN_COUNT} ]]
+  do
+    domain_name=$(yq e ".sub-domain-configs.[${array_index}].name" ${LAB_CONFIG_FILE})
+    if [[ ${domain_name} == ${sub_domain} ]]
+    then
+      INDEX=${array_index}
+      DONE=true
+      break
+    fi
+    array_index=$(( ${array_index} + 1 ))
+  done
+  unset array_index
+  if [[ ${DONE} == "true" ]]
+  then
+    export LAB_CTX_ERROR="false"
+    DOMAIN_INDEX=${INDEX}
+  else
+    echo "Domain Entry Not Found In Config File."
+    DOMAIN_INDEX=""
   fi
 }
 
 function labctx() {
 
-  local sub_domain=${1}
+  local cluster=${1}
   SUB_DOMAIN=""
-  setDomainIndex ${sub_domain}
+  setClusterIndex ${cluster}
 
   if [[ ${LAB_CTX_ERROR} == "false" ]]
   then
     setEdgeEnv
-    if [[ ${DOMAIN_INDEX} != "" ]]
+    if [[ ${CLUSTER_INDEX} != "" ]]
     then
-      if [[ $(yq e ".sub-domain-configs.[${DOMAIN_INDEX}].name" ${LAB_CONFIG_FILE}) == "edge-cluster" ]]
+      setClusterEnv
+      if [[ $(yq e ".cluster-configs.[${CLUSTER_INDEX}].domain" ${LAB_CONFIG_FILE}) == "edge" ]]
       then
         setEdgeCluster
       else
+        setDomainIndex $(yq e ".cluster-configs.[${CLUSTER_INDEX}].domain" ${LAB_CONFIG_FILE})
         setDomainEnv
       fi
     fi
@@ -125,7 +155,6 @@ function mask2cidr() {
 
 function setDomainEnv() {
 
-  export CLUSTER_CONFIG=${OKD_LAB_PATH}/lab-config/cluster-configs/$(yq e ".sub-domain-configs.[${DOMAIN_INDEX}].cluster-config-file" ${LAB_CONFIG_FILE})
   export SUB_DOMAIN=$(yq e ".sub-domain-configs.[${DOMAIN_INDEX}].name" ${LAB_CONFIG_FILE})
   export DOMAIN="${SUB_DOMAIN}.${LAB_DOMAIN}"
   export DOMAIN_ROUTER=$(yq e ".sub-domain-configs.[${DOMAIN_INDEX}].router-ip" ${LAB_CONFIG_FILE})
@@ -135,22 +164,20 @@ function setDomainEnv() {
   export DOMAIN_CIDR=$(mask2cidr ${DOMAIN_NETMASK})
   IFS="." read -r i1 i2 i3 i4 <<< "${DOMAIN_NETWORK}"
   export DOMAIN_ARPA=${i3}.${i2}.${i1}
-  setClusterEnv
 }
 
 function setEdgeCluster() {
-  export CLUSTER_CONFIG=${OKD_LAB_PATH}/lab-config/cluster-configs/$(yq e ".sub-domain-configs.[${DOMAIN_INDEX}].cluster-config-file" ${LAB_CONFIG_FILE})
   export DOMAIN=${LAB_DOMAIN}
   export SUB_DOMAIN="edge-cluster"
   export DOMAIN_ARPA=${EDGE_ARPA}
   export DOMAIN_ROUTER=${EDGE_ROUTER}
   export DOMAIN_NETMASK=${EDGE_NETMASK}
   export DOMAIN_NETWORK=${EDGE_NETWORK}
-  setClusterEnv
 }
 
 function setClusterEnv() {
 
+  export CLUSTER_CONFIG=${OKD_LAB_PATH}/lab-config/cluster-configs/$(yq e ".cluster-configs.[${CLUSTER_INDEX}].cluster-config-file" ${LAB_CONFIG_FILE})
   export LOCAL_REGISTRY=$(yq e ".cluster.local-registry" ${CLUSTER_CONFIG})
   export PROXY_REGISTRY=$(yq e ".cluster.proxy-registry" ${CLUSTER_CONFIG})
   export CLUSTER_NAME=$(yq e ".cluster.name" ${CLUSTER_CONFIG})
