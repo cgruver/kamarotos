@@ -508,10 +508,10 @@ function monitor() {
   do
     case $i in
       -b)
-        openshift-install --dir=${INSTALL_DIR} wait-for bootstrap-complete --log-level debug
+        openshift-install --dir=${OKD_LAB_PATH}/${CLUSTER_NAME}.${DOMAIN}/okd-install-dir wait-for bootstrap-complete --log-level debug
       ;;
       -i)
-        openshift-install --dir=${INSTALL_DIR} wait-for install-complete --log-level debug
+        openshift-install --dir=${OKD_LAB_PATH}/${CLUSTER_NAME}.${DOMAIN}/okd-install-dir wait-for install-complete --log-level debug
       ;;
       -j)
         host_name=$(yq e ".bootstrap.name" ${CLUSTER_CONFIG})
@@ -610,6 +610,8 @@ function createCephCluster() {
     createControlPlaneCephCluster
   fi
   envsubst < ${CEPH_CLUSTER_FILE} | ${OC} apply -f -
+  ${OC} patch configmap rook-ceph-operator-config -n rook-ceph --type merge --patch '"data": {"CSI_PLUGIN_TOLERATIONS": "- key: \"node-role.kubernetes.io/master\"\n  operator: \"Exists\"\n  effect: \"NoSchedule\"\n"}'
+  ${OC} apply -f ${CEPH_WORK_DIR}/configure/ceph-storage-class.yaml
 }
 
 function createControlPlaneCephCluster() {
@@ -620,7 +622,7 @@ function createControlPlaneCephCluster() {
     yq e ".spec.storage.nodes.[${node_index}].name = \"${node_name}\"" -i ${CEPH_CLUSTER_FILE}
     yq e ".spec.storage.nodes.[${node_index}].devices.[0].name = \"${ceph_dev}\"" -i ${CEPH_CLUSTER_FILE}
     yq e ".spec.storage.nodes.[${node_index}].devices.[0].config.osdsPerDevice = \"1\"" -i ${CEPH_CLUSTER_FILE}
-    ${SSH} -o ConnectTimeout=5 core@${node_name} "sudo wipefs -a -f /dev/${ceph_dev} && sudo dd if=/dev/zero of=/dev/${ceph_dev} bs=4096 count=1"
+    ${SSH} -o ConnectTimeout=5 core@${node_name} "sudo wipefs -a -f /dev/${ceph_dev} && sudo dd if=/dev/zero of=/dev/${ceph_dev} bs=4096 count=100"
     ${OC} label nodes ${node_name} role=storage-node
   done
 }
@@ -638,7 +640,7 @@ function createWorkerCephCluster() {
       yq e ".spec.storage.nodes.[${node_index}].name = \"${node_name}\"" -i ${CEPH_CLUSTER_FILE}
       yq e ".spec.storage.nodes.[${node_index}].devices.[0].name = \"${ceph_dev}\"" -i ${CEPH_CLUSTER_FILE}
       yq e ".spec.storage.nodes.[${node_index}].devices.[0].config.osdsPerDevice = \"1\"" -i ${CEPH_CLUSTER_FILE}
-      ${SSH} -o ConnectTimeout=5 core@${node_name} "sudo wipefs -a -f /dev/${ceph_dev} && sudo dd if=/dev/zero of=/dev/${ceph_dev} bs=4096 count=1"
+      ${SSH} -o ConnectTimeout=5 core@${node_name} "sudo wipefs -a -f /dev/${ceph_dev} && sudo dd if=/dev/zero of=/dev/${ceph_dev} bs=4096 count=100"
     fi
     node_index=$(( ${node_index} + 1 ))
     ${OC} label nodes ${node_name} role=storage-node
@@ -646,10 +648,7 @@ function createWorkerCephCluster() {
 }
 
 function regPvc() {
-  ${OC} apply -f ${CEPH_WORK_DIR}/configure/ceph-storage-class.yaml
-  ${OC} patch configmap rook-ceph-operator-config -n rook-ceph --type merge --patch '"data": {"CSI_PLUGIN_TOLERATIONS": "- key: \"node-role.kubernetes.io/master\"\n  operator: \"Exists\"\n  effect: \"NoSchedule\"\n"}'
   ${OC} apply -f ${CEPH_WORK_DIR}/configure/registry-pvc.yaml
-  ${OC} patch configs.imageregistry.operator.openshift.io cluster --type json -p '[{ "op": "remove", "path": "/spec/storage/emptyDir" }]'
   ${OC} patch configs.imageregistry.operator.openshift.io cluster --type merge --patch '{"spec":{"rolloutStrategy":"Recreate","managementState":"Managed","storage":{"pvc":{"claim":"registry-pvc"}}}}'
 }
 
@@ -700,6 +699,11 @@ function initCephVars() {
 
 function postInstall() {
 
+  ${OC} patch imagepruners.imageregistry.operator.openshift.io/cluster --type merge -p '{"spec":{"schedule":"0 0 * * *","suspend":false,"keepTagRevisions":3,"keepYoungerThan":60,"resources":{},"affinity":{},"nodeSelector":{},"tolerations":[],"startingDeadlineSeconds":60,"successfulJobsHistoryLimit":3,"failedJobsHistoryLimit":3}}'
+  ${OC} delete pod --field-selector=status.phase==Succeeded --all-namespaces
+  ${OC} delete pod --field-selector=status.phase==Failed --all-namespaces
+  ${OC} patch OperatorHub cluster --type json -p '[{"op": "replace", "path": "/spec/sources", "value": [{"disabled":true,"name":"certified-operators"},{"disabled":true,"name":"redhat-marketplace"},{"disabled":true,"name":"redhat-operators"}]}]'
+  ${OC} patch OperatorHub cluster --type json -p '[{"op": "add", "path": "/spec/disableAllDefaultSources", "value": false}]'
   for j in "$@"
   do
     case $j in
@@ -714,10 +718,6 @@ function postInstall() {
       ;;
     esac
   done
-  ${OC} patch imagepruners.imageregistry.operator.openshift.io/cluster --type merge -p '{"spec":{"schedule":"0 0 * * *","suspend":false,"keepTagRevisions":3,"keepYoungerThan":60,"resources":{},"affinity":{},"nodeSelector":{},"tolerations":[],"startingDeadlineSeconds":60,"successfulJobsHistoryLimit":3,"failedJobsHistoryLimit":3}}'
-  ${OC} delete pod --field-selector=status.phase==Succeeded --all-namespaces
-  ${OC} delete pod --field-selector=status.phase==Failed --all-namespaces
-  ${OC} patch OperatorHub cluster --type json -p '[{"op": "replace", "path": "/spec/sources", "value": [{"disabled":true,"name":"certified-operators"},{"disabled":true,"name":"redhat-marketplace"},{"disabled":true,"name":"redhat-operators"}]}]'
 }
 
 function getNodes() {

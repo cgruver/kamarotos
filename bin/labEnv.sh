@@ -127,6 +127,7 @@ function labctx() {
 
   local cluster=${1}
   SUB_DOMAIN=""
+  CLUSTER=""
   setClusterIndex ${cluster}
 
   if [[ ${LAB_CTX_ERROR} == "false" ]]
@@ -135,13 +136,6 @@ function labctx() {
     if [[ ${CLUSTER_INDEX} != "" ]]
     then
       setClusterEnv
-      if [[ $(yq e ".cluster-configs.[${CLUSTER_INDEX}].domain" ${LAB_CONFIG_FILE}) == "edge" ]]
-      then
-        setEdgeCluster
-      else
-        setDomainIndex $(yq e ".cluster-configs.[${CLUSTER_INDEX}].domain" ${LAB_CONFIG_FILE})
-        setDomainEnv
-      fi
     fi
   fi
 }
@@ -177,12 +171,19 @@ function setEdgeCluster() {
 
 function setClusterEnv() {
 
+  if [[ $(yq e ".cluster-configs.[${CLUSTER_INDEX}].domain" ${LAB_CONFIG_FILE}) == "edge" ]]
+  then
+    setEdgeCluster
+  else
+    setDomainIndex $(yq e ".cluster-configs.[${CLUSTER_INDEX}].domain" ${LAB_CONFIG_FILE})
+    setDomainEnv
+  fi
   export CLUSTER_CONFIG=${OKD_LAB_PATH}/lab-config/cluster-configs/$(yq e ".cluster-configs.[${CLUSTER_INDEX}].cluster-config-file" ${LAB_CONFIG_FILE})
+  export CLUSTER=$(yq e ".cluster-configs.[${CLUSTER_INDEX}].name" ${LAB_CONFIG_FILE})
   export LOCAL_REGISTRY=$(yq e ".cluster.local-registry" ${CLUSTER_CONFIG})
   export PROXY_REGISTRY=$(yq e ".cluster.proxy-registry" ${CLUSTER_CONFIG})
   export CLUSTER_NAME=$(yq e ".cluster.name" ${CLUSTER_CONFIG})
   export KUBE_INIT_CONFIG=${OKD_LAB_PATH}/lab-config/${CLUSTER_NAME}.${DOMAIN}/kubeconfig
-  export INSTALL_DIR=${OKD_LAB_PATH}/${CLUSTER_NAME}.${DOMAIN}/okd-install-dir
   export CLUSTER_CIDR=$(yq e ".cluster.cluster-cidr" ${CLUSTER_CONFIG})
   export SERVICE_CIDR=$(yq e ".cluster.service-cidr" ${CLUSTER_CONFIG})
   export BUTANE_VERSION=$(yq e ".cluster.butane-version" ${CLUSTER_CONFIG})
@@ -318,7 +319,6 @@ function clearLabEnv() {
   unset PROXY_REGISTRY
   unset CLUSTER_NAME
   unset KUBE_INIT_CONFIG
-  unset INSTALL_DIR
   unset OKD_RELEASE
   unset DOMAIN_CIDR
   unset CLUSTER_CIDR
