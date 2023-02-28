@@ -2,8 +2,6 @@ cluster:
   name: okd4-sno
   cluster-cidr: 10.88.0.0/14
   service-cidr: 172.20.0.0/16
-  local-registry: none
-  proxy-registry: none
   remote-registry: quay.io/openshift/okd
   butane-version: v0.16.0
   butane-spec-version: 1.4.0

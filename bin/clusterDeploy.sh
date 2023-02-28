@@ -229,7 +229,7 @@ function deployCluster() {
     exit 1
   fi
   createInstallConfig
-  if [[ ${PROXY_REGISTRY} != "none" ]]
+  if [[ ${NO_LAB_PI} == "false" ]]
   then
     appendDisconnectedInstallConfig
   fi

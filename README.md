@@ -30,7 +30,7 @@ __Note:__ These utilities are very opinionated toward the equipment that I run i
    brew install yq
    ```
 
-1. Clone the utiliy code repo:
+1. Clone the utility code repo:
 
    ```bash
    git clone https://github.com/cgruver/kamarotos.git ${HOME}/okd-lab/kamarotos
@@ -46,7 +46,6 @@ __Note:__ These utilities are very opinionated toward the equipment that I run i
 1. Edit your shell `rc` (`.bashrc` or `.zshrc`) file to enable the utilities in the path, and load that lab functions into the shell:
 
    ```bash
-   export LAB_CONFIG_FILE=${HOME}/okd-lab/lab-config/lab.yaml
    . ${HOME}/okd-lab/bin/labEnv.sh
    ```
 
@@ -56,7 +55,7 @@ __Note:__ These utilities are very opinionated toward the equipment that I run i
 
 The `examples` directory in this project contains a sample `lab.yaml` file.  This file is the main configuration file for your lab.  It contains references to "sub domains" that contain the configuration for a specific OpenShift cluster.
 
-The OpenShift cluster configuration files are in `examples/domain-configs`
+The OpenShift cluster configuration files are in `examples/cluster-configs`
 
 These files correspond to the following cluster configurations:
 
@@ -80,16 +79,27 @@ The first configuration file defines the networks for your lab, as well as any K
 domain: my.awesome.lab
 network: 10.11.12.0
 router-ip: 10.11.12.1
-bastion-ip: 10.11.12.10
+bastion-ip: 10.11.12.10 # Omit if no Raspberry Pi
 netmask: 255.255.255.0
 # CentOS Stream Mirror to pull from
 centos-mirror: rsync://mirror.cogentco.com/CentOS/
 # Gitea release to install on Bastion Host
-gitea-version: 1.15.9
+gitea-version: 1.15.9 # Omit if no Raspberry Pi
 # URL of your git server
-git-url: https://gitea.my.awesome.lab:3000
-# OpenWRT version to install on the Bastion Host
-openwrt-version: 21.02.1
+git-url: https://gitea.my.awesome.lab:3000 # Omit if no Raspberry Pi
+# OpenWRT version to install on the Raspberry Pi Bastion Host
+openwrt-version: 21.02.1 # Omit if no Raspberry Pi
+# Cluster Configurations
+cluster-configs:
+- name: okd-dev
+  cluster-config-file: dev-cluster.yaml
+  domain: dev
+- name: okd-qa
+  cluster-config-file: qa-cluster.yaml
+  domain: qa
+- name: okd-prod
+  cluster-config-file: prod-cluster.yaml
+  domain: prod
 # Region Network Configurations
 sub-domain-configs:
   # Domain Name, this is prepended to the lab domain. i.e. dev.my.awesome.lab
@@ -103,13 +113,11 @@ sub-domain-configs:
   # domain netmask
   netmask: 255.255.255.0
   # Name of the OpenShift cluster config file.  These files are in ${OKD_LAB_PATH}/lab-config/domain-configs
-  cluster-config-file: dev-cluster.yaml
 - name: qa
   router-edge-ip: 10.11.12.3
   router-ip: 10.11.14.1
   network: 10.11.14.0
   netmask: 255.255.255.0
-  cluster-config-file: qa-cluster.yaml
 - name: prod
   router-edge-ip: 10.11.12.4
   router-ip: 10.11.15.1
@@ -147,16 +155,16 @@ cluster:
   cluster-cidr: 10.100.0.0/14
   service-cidr: 172.30.0.0/16
   # URL to the registry used to mirror the OpenShift install images
-  local-registry: nexus.my.awesome.lab:5001
+  local-registry: nexus.my.awesome.lab:5001 # Omit if no Raspberry Pi
   # URL to the Nexus group used to proxy remote registries
-  proxy-registry: nexus.my.awesome.lab:5000
+  proxy-registry: nexus.my.awesome.lab:5000 # Omit if no Raspberry Pi
   # The URL to the registry hosting the OpenShift install images
   remote-registry: quay.io/openshift/okd
   # The version of butane used to configure ignition files for the FCOS nodes
   butane-version: v0.14.0
   # The version of the Butane specification to use for the ignition files
   butane-spec-version: 1.4.0
-  # The OpenShift release to install - This entry is created by running: labcli --latest
+  # The OpenShift release to install - This entry is created by running: labcli --latest or labcli --latest --scos 
   release: 4.10.0-0.okd-2022-03-07-131213
   # The HA Proxy IP address to assign on the router
   ingress-ip-addr: 10.11.12.2

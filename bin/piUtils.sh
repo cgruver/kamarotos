@@ -18,6 +18,43 @@ function configPi() {
   done
 }
 
+function initPiNetwork() {
+
+  cat ${OKD_LAB_PATH}/ssh_key.pub | ssh root@192.168.1.1 "cat >> /etc/dropbear/authorized_keys"
+  ssh root@192.168.1.1 "uci set dropbear.@dropbear[0].PasswordAuth=off ; \
+    uci set dropbear.@dropbear[0].RootPasswordAuth=off ; \
+    uci set network.lan.ipaddr=${BASTION_HOST} ; \
+    uci set network.lan.netmask=${EDGE_NETMASK} ; \
+    uci set network.lan.hostname=bastion.${LAB_DOMAIN} ; \
+    uci set network.lan.gateway=${EDGE_ROUTER} ; \
+    uci set network.lan.dns=${EDGE_ROUTER} ; \
+    uci commit ; \
+    rm -rf /etc/rc.d/*dnsmasq* ; \
+    poweroff"
+}
+
+function initPiDisk() {
+  ${SSH} root@${BASTION_HOST} "opkg update ; \
+    opkg install lsblk sfdisk losetup resize2fs ; \
+    PART_INFO=\$(sfdisk -l /dev/mmcblk0 | grep mmcblk0p2) ; \
+    let ROOT_SIZE=20971520 ; \
+    let P2_START=\$(echo \${PART_INFO} | cut -d" " -f2) ; \
+    let P3_START=\$(( \${P2_START}+\${ROOT_SIZE}+8192 )) ; \
+    sfdisk --no-reread -f --delete /dev/mmcblk0 2 ; \
+    sfdisk --no-reread -f -d /dev/mmcblk0 > /tmp/part.info ; \
+    echo \"/dev/mmcblk0p2 : start= \${P2_START}, size= \${ROOT_SIZE}, type=83\" >> /tmp/part.info ; \
+    echo \"/dev/mmcblk0p3 : start= \${P3_START}, type=83\" >> /tmp/part.info ; \
+    sfdisk --no-reread -f /dev/mmcblk0 < /tmp/part.info ; \
+    rm /tmp/part.info ; \
+    reboot"
+  pause 15 "Wait for reboot"
+  ${SSH} root@${BASTION_HOST} "LOOP=\"\$(losetup -f)\" ; \
+    losetup \${LOOP} /dev/mmcblk0p2 ; \
+    e2fsck -y -f \${LOOP} ; \
+    resize2fs \${LOOP} ; \
+    reboot"
+}
+
 function initPi() {
 
   OPENWRT_VER=$(yq e ".openwrt-version" ${LAB_CONFIG_FILE})

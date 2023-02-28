@@ -178,10 +178,13 @@ function setClusterEnv() {
     setDomainIndex $(yq e ".cluster-configs.[${CLUSTER_INDEX}].domain" ${LAB_CONFIG_FILE})
     setDomainEnv
   fi
+  if [[ ${NO_LAB_PI} == "false" ]]
+  then
+    export LOCAL_REGISTRY=$(yq e ".cluster.local-registry" ${CLUSTER_CONFIG})
+    export PROXY_REGISTRY=$(yq e ".cluster.proxy-registry" ${CLUSTER_CONFIG})
+  fi
   export CLUSTER_CONFIG=${OKD_LAB_PATH}/lab-config/cluster-configs/$(yq e ".cluster-configs.[${CLUSTER_INDEX}].cluster-config-file" ${LAB_CONFIG_FILE})
   export CLUSTER=$(yq e ".cluster-configs.[${CLUSTER_INDEX}].name" ${LAB_CONFIG_FILE})
-  export LOCAL_REGISTRY=$(yq e ".cluster.local-registry" ${CLUSTER_CONFIG})
-  export PROXY_REGISTRY=$(yq e ".cluster.proxy-registry" ${CLUSTER_CONFIG})
   export CLUSTER_NAME=$(yq e ".cluster.name" ${CLUSTER_CONFIG})
   export KUBE_INIT_CONFIG=${OKD_LAB_PATH}/lab-config/${CLUSTER_NAME}.${DOMAIN}/kubeconfig
   export CLUSTER_CIDR=$(yq e ".cluster.cluster-cidr" ${CLUSTER_CONFIG})
@@ -228,6 +231,7 @@ function setEdgeEnv() {
     echo "ENV VAR LAB_CONFIG_FILE must be set to the path to a lab config yaml."
     export LAB_CTX_ERROR="true"
   else
+    export NO_LAB_PI="false"
     export LAB_DOMAIN=$(yq e ".domain" ${LAB_CONFIG_FILE})
     export EDGE_ROUTER=$(yq e ".router-ip" ${LAB_CONFIG_FILE})
     export EDGE_NETMASK=$(yq e ".netmask" ${LAB_CONFIG_FILE})

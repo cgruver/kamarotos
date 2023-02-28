@@ -9,4 +9,5 @@ keycloak-version: 18.0.1
 apicurio-version: 0.2.54.Final
 openwrt-version: 22.03.2
 git-url: https://gitea.my.awesome.lab:3000
-sub-domain-configs:
+sub-domain-configs: []
+cluster-configs: []

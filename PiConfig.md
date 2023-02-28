@@ -1,17 +1,48 @@
-# NanoPi 
+# NanoPi & Raspberry Pi config
+
+## Init OS
+
+```bash
+OPENWRT_VER=$(yq e ".openwrt-version" ${LAB_CONFIG_FILE})
+# NanoPi
+OPENWRT_PATH=$(echo "${OPENWRT_VER}/targets/rockchip/armv8/openwrt-${OPENWRT_VER}-rockchip-armv8-friendlyarm_nanopi-r4s-ext4-sysupgrade.img.gz")
+# Raspberry Pi
+OPENWRT_PATH=$(echo "${OPENWRT_VER}/targets/bcm27xx/bcm2711/openwrt-${OPENWRT_VER}-bcm27xx-bcm2711-rpi-4-ext4-factory.img.gz")
+```
 
 ```bash
 diskutil list
+export SD_DEV=/dev/disk4
+```
 
+```bash
 sudo bash
 TEMP_DIR=$(mktemp -d)
-wget https://downloads.openwrt.org/releases/22.03.3/targets/rockchip/armv8/openwrt-22.03.3-rockchip-armv8-friendlyarm_nanopi-r4s-ext4-sysupgrade.img.gz -O ${TEMP_DIR}/openwrt.img.gz
+wget https://downloads.openwrt.org/releases/${OPENWRT_PATH} -O ${TEMP_DIR}/openwrt.img.gz
 gunzip ${TEMP_DIR}/openwrt.img.gz
 dd if=${TEMP_DIR}/openwrt.img of=/dev/disk4 bs=4M conv=fsync
 diskutil eject /dev/disk4
 rm -rf ${TEMP_DIR}
 exit
 ```
+
+## Set Up Network
+
+```bash
+cat ${OKD_LAB_PATH}/ssh_key.pub | ssh root@192.168.1.1 "cat >> /etc/dropbear/authorized_keys"
+ssh root@192.168.1.1 "uci set dropbear.@dropbear[0].PasswordAuth=off ; \
+  uci set dropbear.@dropbear[0].RootPasswordAuth=off ; \
+  uci set network.lan.ipaddr="${BASTION_HOST}" ; \
+  uci set network.lan.netmask=${EDGE_NETMASK} ; \
+  uci set network.lan.hostname=bastion.${LAB_DOMAIN} ; \
+  uci set network.lan.gateway=${EDGE_ROUTER} ; \
+  uci set network.lan.dns=${EDGE_ROUTER} ; \
+  uci commit ; \
+  rm -rf /etc/rc.d/*dnsmasq* ; \
+  poweroff"
+```
+
+## Format Disk
 
 ```bash
 ssh root@192.168.1.1

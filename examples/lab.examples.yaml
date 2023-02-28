@@ -7,40 +7,59 @@ centos-mirror: rsync://mirror.facebook.net/centos-stream/
 gitea-version: 1.17.3
 openwrt-version: 22.03.2
 git-url: https://gitea.my.awesome.lab:3000
+cluster-configs:
+- name: kvm-cluster-basic
+  cluster-config-file: kvm-cluster-basic.yaml
+  domain: kvm-basic
+- name: kvm-cluster-3-worker
+  cluster-config-file: kvm-cluster-3-worker.yaml
+  domain: kvm-worker
+- name: sno-kvm
+  cluster-config-file: sno-kvm.yaml
+  domain: sno-kvm
+- name: sno-bare-metal
+  cluster-config-file: sno-bm.yaml
+  domain: sno-bm
+- name: bare-metal-3-node
+  cluster-config-file: bare-metal-basic.yaml
+  domain: bm-basic
+- name: bare-metal-3-worker
+  cluster-config-file: bare-metal-3-worker.yaml
+  domain: bm-worker
+- name: edge-sno
+  cluster-config-file: sno.yaml
+  domain: edge
+- name: edge-sno
+  cluster-config-file: 3-node-no-pi.yaml
+  domain: edge
 sub-domain-configs:
 - name: kvm-basic
   router-edge-ip: 10.11.12.15
   router-ip: 10.11.13.1
   network: 10.11.13.0
   netmask: 255.255.255.0
-  cluster-config-file: kvm-cluster-basic.yaml
 - name: kvm-worker
   router-edge-ip: 10.11.12.16
   router-ip: 10.11.14.1
   network: 10.11.14.0
   netmask: 255.255.255.0
-  cluster-config-file: kvm-cluster-3-worker.yaml
 - name: sno-kvm
   router-edge-ip: 10.11.12.17
   router-ip: 10.11.15.1
   network: 10.11.15.0
   netmask: 255.255.255.0
-  cluster-config-file: sno-kvm.yaml
 - name: sno-bm
   router-edge-ip: 10.11.12.18
   router-ip: 10.11.16.1
   network: 10.11.16.0
   netmask: 255.255.255.0
-  cluster-config-file: sno-bm.yaml
 - name: bm-basic
   router-edge-ip: 10.11.12.19
   router-ip: 10.11.17.1
   network: 10.11.17.0
   netmask: 255.255.255.0
-  cluster-config-file: bare-metal-basic.yaml
 - name: bm-worker
   router-edge-ip: 10.11.12.20
   router-ip: 10.11.18.1
   network: 10.11.18.0
   netmask: 255.255.255.0
-  cluster-config-file: bare-metal-3-worker.yaml
