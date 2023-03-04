@@ -1,4 +1,5 @@
-#!/bin/bash
+#!/usr/bin/env bash
+
 . ${OKD_LAB_PATH}/bin/labEnv.sh
 . ${OKD_LAB_PATH}/bin/labUtils.sh
 . ${OKD_LAB_PATH}/bin/piUtils.sh
