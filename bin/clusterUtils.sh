@@ -160,8 +160,8 @@ function pullSecret() {
 }
 
 function createPullSecret() {
-  NEXUS_PWD="true"
-  NEXUS_PWD_CHK="false"
+  NEXUS_PWD="hello"
+  NEXUS_PWD_CHK="goodbye"
   echo "Enter the Nexus user for the pull secret:"
   read NEXUS_USER
   while [[ ${NEXUS_PWD} != ${NEXUS_PWD_CHK} ]]
@@ -170,6 +170,10 @@ function createPullSecret() {
     read -s NEXUS_PWD
     echo "Re-Enter the password for the pull secret:"
     read -s NEXUS_PWD_CHK
+    if [[ ${NEXUS_PWD} != ${NEXUS_PWD_CHK} ]]
+    then
+      echo "Passwords do not match. Try Again."
+    fi
   done
   NEXUS_SECRET=$(echo -n "${NEXUS_USER}:${NEXUS_PWD}" | base64) 
   echo -n "{\"auths\": {\"fake\": {\"auth\": \"Zm9vOmJhcgo=\"},\"nexus.${LAB_DOMAIN}:5001\": {\"auth\": \"${NEXUS_SECRET}\"}}}" > ${PULL_SECRET}
@@ -239,6 +243,7 @@ function getOkdRelease() {
   OKD_RELEASE=$(basename $(curl -Ls -o /dev/null -w %{url_effective} https://github.com/okd-project/${OKD_BASE}/releases/latest))
   echo ${OKD_RELEASE}
   yq e ".cluster.release = \"${OKD_RELEASE}\"" -i ${CLUSTER_CONFIG}
+  setRelease
 }
 
 function ocLogin() {

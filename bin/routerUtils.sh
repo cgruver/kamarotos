@@ -196,7 +196,7 @@ function setupRouterCommon() {
 
   local router_ip=${1}
 
-  ${SSH} root@${router_ip} "opkg update && opkg install ip-full procps-ng-ps bind-server bind-tools bash sfdisk rsync resize2fs wget block-mount wipefs"
+  ${SSH} root@${router_ip} "opkg update && opkg install ip-full procps-ng-ps bind-server bind-tools bash sfdisk rsync resize2fs wget block-mount wipefs coreutils-nohup"
   
   if [[ ${NO_LAB_PI} == "true" ]]
   then
@@ -213,7 +213,7 @@ function setupRouterCommon() {
   else
     setupHaProxy ${router_ip}
   fi
-  ${SSH} root@${router_ip} "mkdir /data/var/named/data ; \
+  ${SSH} root@${router_ip} "mkdir -p /data/var/named/data ; \
     cp -r /etc/bind /data/bind ; \
     mkdir -p /data/tftpboot/ipxe ; \
     mkdir /data/tftpboot/networkboot"

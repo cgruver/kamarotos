@@ -1,21 +1,22 @@
 function createPartInfo() {
 
-local disk1=${1}
-local disk2=${2}
-
-if [[ ${disk2} == "NA" ]]
-then
-cat <<EOF
-part pv.1 --fstype="lvmpv" --ondisk=${disk1} --size=1024 --grow --maxsize=2000000
-volgroup centos --pesize=4096 pv.1
-EOF
-else
-cat <<EOF
-part pv.1 --fstype="lvmpv" --ondisk=${disk1} --size=1024 --grow --maxsize=2000000
-part pv.2 --fstype="lvmpv" --ondisk=${disk2} --size=1024 --grow --maxsize=2000000
-volgroup centos --pesize=4096 pv.1 pv.2
-EOF
-fi
+  local index=${1}
+  local disk_index=0
+  local disk_list=""
+  disk_dev=$(yq e ".kvm-hosts.[${index}].disks.[${disk_index}]" ${CLUSTER_CONFIG})
+  echo "part pv.${disk_index} --fstype=\"lvmpv\" --ondisk=${disk_dev} --size=1024 --grow --maxsize=2000000" > ${WORK_DIR}/part.info
+  disk_list="pv.${disk_index}"
+  numDisks=$(yq e ".kvm-hosts.[${index}].disks" ${CLUSTER_CONFIG} | yq e 'length' -)
+  let disk_index=1
+  while [[ ${disk_index} -lt ${numDisks} ]]
+  do
+    disk_dev=$(yq e ".kvm-hosts.[${index}].disks.[${disk_index}]" ${CLUSTER_CONFIG})
+    echo "part pv.${disk_index} --fstype=\"lvmpv\" --ondisk=${disk_dev} --size=1024 --grow --maxsize=2000000" >> ${WORK_DIR}/part.info
+    disk_list="${disk_list} pv.${disk_index}"
+    disk_index=$(( ${disk_index} + 1 ))
+  done
+  echo "volgroup centos --pesize=4096 ${disk_list}" >> ${WORK_DIR}/part.info
+  cat ${WORK_DIR}/part.info
 }
 
 function buildHostConfig() {
@@ -26,8 +27,16 @@ function buildHostConfig() {
   hostname=$(yq e ".kvm-hosts.[${index}].host-name" ${CLUSTER_CONFIG})
   mac_addr=$(yq e ".kvm-hosts.[${index}].mac-addr" ${CLUSTER_CONFIG})
   ip_addr=$(yq e ".kvm-hosts.[${index}].ip-addr" ${CLUSTER_CONFIG})
-  disk1=$(yq e ".kvm-hosts.[${index}].disks.disk1" ${CLUSTER_CONFIG})
-  disk2=$(yq e ".kvm-hosts.[${index}].disks.disk2" ${CLUSTER_CONFIG})
+  DISK_LIST=$(yq e ".kvm-hosts.[${index}].disks.[0]" ${CLUSTER_CONFIG})
+  boot_dev=$(yq e ".kvm-hosts.[${index}].disks.[0]" ${CLUSTER_CONFIG})
+  numDisks=$(yq e ".kvm-hosts.[${index}].disks" ${CLUSTER_CONFIG} | yq e 'length' -)
+  let disk_index=1
+  while [[ ${disk_index} -lt ${numDisks} ]]
+  do
+    disk_dev=$(yq e ".kvm-hosts.[${index}].disks.[${disk_index}]" ${CLUSTER_CONFIG})
+    DISK_LIST="${DISK_LIST},${disk_dev}"
+    disk_index=$(( ${disk_index} + 1 ))
+  done
 
   IFS="." read -r i1 i2 i3 i4 <<< "${ip_addr}"
   echo "${hostname}.${DOMAIN}.   IN      A      ${ip_addr} ; ${hostname}-${DOMAIN}-kvm" >> ${WORK_DIR}/forward.zone
@@ -42,12 +51,7 @@ initrd ${install_url}/repos/BaseOS/x86_64/os/isolinux/initrd.img
 boot
 EOF
 
-PART_INFO=$(createPartInfo ${disk1} ${disk2} )
-DISK_LIST=${disk1}
-if [[ ${disk2} != "NA" ]]
-then
-  DISK_LIST="${disk1},${disk2}"
-fi
+PART_INFO=$(createPartInfo ${index})
 
 cat << EOF > ${WORK_DIR}/${mac_addr//:/-}.ks
 #version=RHEL9
@@ -64,11 +68,11 @@ timezone America/New_York --utc
 
 # Disk partitioning information
 ignoredisk --only-use=${DISK_LIST}
-bootloader --append=" crashkernel=auto" --location=mbr --boot-drive=${disk1}
+bootloader --append=" crashkernel=auto" --location=mbr --boot-drive=${boot_dev}
 clearpart --drives=${DISK_LIST} --all --initlabel
 zerombr
-part /boot --fstype="xfs" --ondisk=${disk1} --size=1024
-part /boot/efi --fstype="efi" --ondisk=${disk1} --size=600 --fsoptions="umask=0077,shortname=winnt"
+part /boot --fstype="xfs" --ondisk=${boot_dev} --size=1024
+part /boot/efi --fstype="efi" --ondisk=${boot_dev} --size=600 --fsoptions="umask=0077,shortname=winnt"
 ${PART_INFO}
 logvol swap  --fstype="swap" --size=16064 --name=swap --vgname=centos
 logvol /  --fstype="xfs" --grow --maxsize=2000000 --size=1024 --name=root --vgname=centos
@@ -146,7 +150,7 @@ function deleteKvmHost() {
 
   mac_addr=$(yq e ".kvm-hosts.[${index}].mac-addr" ${CLUSTER_CONFIG})
   host_name=$(yq e ".kvm-hosts.[${index}].host-name" ${CLUSTER_CONFIG})
-  boot_dev=$(yq e ".kvm-hosts.[${index}].disks.disk1" ${CLUSTER_CONFIG})
+  boot_dev=$(yq e ".kvm-hosts.[${index}].disks.[0]" ${CLUSTER_CONFIG})
   destroyMetal root ${host_name} "/dev/${boot_dev}" na ${p_cmd}
   deletePxeConfig ${mac_addr}
   deleteDns ${host_name}-${DOMAIN}-kvm

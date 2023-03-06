@@ -6,12 +6,11 @@ cluster:
   butane-version: v0.16.0
   butane-spec-version: 1.4.0
   butane-variant: fcos
-  ingress-ip-addr: 10.11.12.2
 bootstrap:
   metal: false
   node-spec:
     memory: 12288
-    cpu: 4
+    cpu: 8
     root-vol: 50
   kvm-host: kvm-host01
   ip-addr: 10.11.12.49
@@ -19,7 +18,7 @@ control-plane:
   metal: false
   node-spec:
     memory: 61440
-    cpu: 12
+    cpu: 8
     root-vol: 800
   okd-hosts:
     - kvm-host: kvm-host01
@@ -29,5 +28,4 @@ kvm-hosts:
     mac-addr: "YOUR_HOST_MAC_HERE"
     ip-addr: 10.11.12.200
     disks:
-      disk1: nvme0n1
-      disk2: NA
+      - nvme0n1

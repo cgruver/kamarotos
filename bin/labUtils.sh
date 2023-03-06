@@ -126,3 +126,24 @@ function pause() {
     : $((pause--))
   done
 }
+
+function createHostPwd() {
+
+  ROOT_PWD="hello"
+  ROOT_PWD_CHK="goodbye"
+  echo "Creating default root password for KVM hosts:"
+  while [[ ${ROOT_PWD} != ${ROOT_PWD_CHK} ]]
+  do
+    echo "Enter a password for the KVM host root user:"
+    read -s ROOT_PWD
+    echo "Re-Enter the password for the KVM host root user:"
+    read -s ROOT_PWD_CHK
+    if [[ ${ROOT_PWD} != ${ROOT_PWD_CHK} ]]
+    then
+      echo "Passwords do not match. Try Again."
+    fi
+  done
+  openssl passwd -1 "${ROOT_PWD}" > ${OKD_LAB_PATH}/lab_host_pw
+  ROOT_PWD=""
+  ROOT_PWD_CHK=""
+}

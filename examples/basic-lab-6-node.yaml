@@ -5,7 +5,7 @@ netmask: 255.255.255.0
 centos-mirror: rsync://mirror.facebook.net/centos-stream/
 sub-domain-configs:
 cluster-configs:
-  - name: edge-sno
+  - name: dev
     cluster-config-file: 6-node-no-pi.yaml
     domain: edge
 

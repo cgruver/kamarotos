@@ -181,10 +181,21 @@ CENTOS_MIRROR=$(yq e ".centos-mirror" ${LAB_CONFIG_FILE})
 cat << EOF > ${WORK_DIR}/MirrorSync.sh
 #!/bin/bash
 
+echo "Starting Repo Synch for CentOS Stream" > /usr/local/MirrorSync.log
+
 for i in BaseOS AppStream 
 do 
+  echo "Synching repo: \${i}" >> /usr/local/MirrorSync.log
+  echo "Detailed logs at in: /tmp/repo-mirror.\${i}.out"  >> /usr/local/MirrorSync.log
   rsync  -avSHP --delete ${CENTOS_MIRROR}9-stream/\${i}/x86_64/os/ /usr/local/www/install/repos/\${i}/x86_64/os/ > /tmp/repo-mirror.\${i}.out 2>&1
+  if [[ \$? -ne 0 ]]
+  then
+    echo "rsync for \${i} completed with errors" >> /usr/local/MirrorSync.log
+  else
+    echo "rsync for \${i} completed" >> /usr/local/MirrorSync.log
+  fi
 done
+echo "Completed Repo Synch for CentOS Stream" >> /usr/local/MirrorSync.log
 EOF
 
 cat << EOF > ${WORK_DIR}/local-repos.repo

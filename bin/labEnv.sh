@@ -194,26 +194,7 @@ function setClusterEnv() {
   export BUTANE_SPEC_VERSION=$(yq e ".cluster.butane-spec-version" ${CLUSTER_CONFIG})
   export OKD_REGISTRY=$(yq e ".cluster.remote-registry" ${CLUSTER_CONFIG})
   export PULL_SECRET=${OKD_LAB_PATH}/pull-secrets/${CLUSTER_NAME}-pull-secret.json
-  release_set=$(yq ".cluster | has(\"release\")" ${CLUSTER_CONFIG})
-  if [[ ${release_set} == "true" ]]
-  then
-    export OKD_RELEASE=$(yq e ".cluster.release" ${CLUSTER_CONFIG})
-    if [[ ! -d ${OKD_LAB_PATH}/okd-cmds/${OKD_RELEASE} ]]
-    then
-      if [[ $(yq ".cluster | has(\"scos\")" ${CLUSTER_CONFIG}) == "true" ]] && [[ $(yq e ".cluster.scos" ${CLUSTER_CONFIG}) == "true" ]]
-      then
-        getOkdCmds okd-scos
-      else
-        getOkdCmds okd
-      fi
-    fi
-    for i in $(ls ${OKD_LAB_PATH}/okd-cmds/${OKD_RELEASE})
-    do
-      rm -f ${OKD_LAB_PATH}/bin/${i}
-      ln -s ${OKD_LAB_PATH}/okd-cmds/${OKD_RELEASE}/${i} ${OKD_LAB_PATH}/bin/${i}
-    done
-    i=""
-  fi
+  setRelease
   if [[ $(yq e ".bootstrap.metal" ${CLUSTER_CONFIG}) != "true" ]]
   then
     if [[ $(yq ".bootstrap | has(\"kvm-domain\")" ${CLUSTER_CONFIG}) == "true" ]]
@@ -258,6 +239,30 @@ function fixMacArmCodeSign() {
     echo "Applying workaround for corrupt signiture on OpenShift CLI binaries"
     codesign --force -s - ${OKD_LAB_PATH}/okd-cmds/${OKD_RELEASE}/oc
     codesign --force -s - ${OKD_LAB_PATH}/okd-cmds/${OKD_RELEASE}/openshift-install
+  fi
+}
+
+function setRelease() {
+  
+  release_set=$(yq ".cluster | has(\"release\")" ${CLUSTER_CONFIG})
+  if [[ ${release_set} == "true" ]]
+  then
+    export OKD_RELEASE=$(yq e ".cluster.release" ${CLUSTER_CONFIG})
+    if [[ ! -d ${OKD_LAB_PATH}/okd-cmds/${OKD_RELEASE} ]]
+    then
+      if [[ $(yq ".cluster | has(\"scos\")" ${CLUSTER_CONFIG}) == "true" ]] && [[ $(yq e ".cluster.scos" ${CLUSTER_CONFIG}) == "true" ]]
+      then
+        getOkdCmds okd-scos
+      else
+        getOkdCmds okd
+      fi
+    fi
+    for i in $(ls ${OKD_LAB_PATH}/okd-cmds/${OKD_RELEASE})
+    do
+      rm -f ${OKD_LAB_PATH}/bin/${i}
+      ln -s ${OKD_LAB_PATH}/okd-cmds/${OKD_RELEASE}/${i} ${OKD_LAB_PATH}/bin/${i}
+    done
+    i=""
   fi
 }
 
