@@ -1,5 +1,10 @@
 function createInstallConfig() {
 
+  if [[ ! -f  ${PULL_SECRET} ]]
+  then
+    pullSecret
+  fi
+
   PULL_SECRET_TXT=$(cat ${PULL_SECRET})
 
 cat << EOF > ${WORK_DIR}/install-config-upi.yaml
