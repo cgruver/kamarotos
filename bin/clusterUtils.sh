@@ -151,7 +151,7 @@ function pullSecret() {
   then
     mkdir -p ${OKD_LAB_PATH}/pull-secrets
   fi
-  if [[ ${PROXY_REGISTRY} == "none" ]]
+  if [[ ${NO_LAB_PI} == "true" ]]
   then
     echo -n "{\"auths\": {\"fake\": {\"auth\": \"Zm9vOmJhcgo=\"}}}" > ${PULL_SECRET}
   else
