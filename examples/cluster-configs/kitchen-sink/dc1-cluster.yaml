@@ -1,0 +1,62 @@
+cluster:
+  name: okd4-region-01
+  cluster-cidr: 10.100.0.0/14
+  service-cidr: 172.30.0.0/16
+  release: 4.12.0-0.okd-scos-2022-12-02-083740
+  local-registry: nexus.my.multi-region.lab:5001
+  proxy-registry: nexus.my.multi-region.lab:5000
+  remote-registry: quay.io/okd/scos-release
+  butane-version: v0.16.0
+  butane-variant: fcos
+  butane-spec-version: 1.4.0
+  ingress-ip-addr: 10.11.11.2
+  scos: "true"
+bootstrap:
+  metal: false
+  node-spec:
+    memory: 12288
+    cpu: 4
+    root-vol: 50
+  kvm-host: dev-host
+  kvm-domain: my.multi-region.lab
+  ip-addr: 10.11.11.49
+control-plane:
+  metal: true
+  okd-hosts:
+    - name: "okd4-region-01-master-0"
+      mac-addr: "YOUR_HOST_MAC_HERE"
+      boot-dev: /dev/sda
+      ip-addr: 10.11.11.60
+    - name: "okd4-region-01-master-1"
+      mac-addr: "YOUR_HOST_MAC_HERE"
+      boot-dev: /dev/sda
+      ip-addr: 10.11.11.61
+    - name: "okd4-region-01-master-2"
+      mac-addr: "YOUR_HOST_MAC_HERE"
+      boot-dev: /dev/sda
+      ip-addr: 10.11.11.62
+compute-nodes:
+  - metal: true
+    name: "okd4-region-01-worker-0"
+    mac-addr: "YOUR_HOST_MAC_HERE"
+    boot-dev: /dev/nvme0n1
+    ceph:
+      type: part
+      ceph-dev: nvme0n1p5
+    ip-addr: 10.11.11.70
+  - metal: true
+    name: "okd4-region-01-worker-1"
+    mac-addr: "YOUR_HOST_MAC_HERE"
+    boot-dev: /dev/nvme0n1
+    ceph:
+      type: part
+      ceph-dev: nvme0n1p5
+    ip-addr: 10.11.11.71
+  - metal: true
+    name: "okd4-region-01-worker-2"
+    mac-addr: "YOUR_HOST_MAC_HERE"
+    boot-dev: /dev/nvme0n1
+    ceph:
+      type: part
+      ceph-dev: nvme0n1p5
+    ip-addr: 10.11.11.72

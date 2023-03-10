@@ -53,22 +53,21 @@ __Note:__ These utilities are very opinionated toward the equipment that I run i
 
 ## Example Configuration Files
 
-The `examples` directory in this project contains a sample `lab.yaml` file.  This file is the main configuration file for your lab.  It contains references to "sub domains" that contain the configuration for a specific OpenShift cluster.
+__Note:__ With a recent refactor, this readme is out of date.  This Blog post has updated info:  [https://upstreamwithoutapaddle.com/blog%20post/2023/03/06/Back-To-Where-It-All-Started.html](https://upstreamwithoutapaddle.com/blog%20post/2023/03/06/Back-To-Where-It-All-Started.html).  I will get this README document updated soon.
+
+The `examples` directory in this project contains a sample `lab.yaml` file.  This file is the main configuration file for your lab.  It contains references to "sub domains" that contain the configuration for a specific network, and "cluster configurations" for a specific OpenShift cluster.
 
 The OpenShift cluster configuration files are in `examples/cluster-configs`
 
 These files correspond to the following cluster configurations:
 
-| Domain Config File | Description |
+| Cluster Config File | Description |
 | --- | --- |
-| `kvm-cluster-basic.yaml` | 3 Node cluster with control-plane & worker combined nodes, deployed on a single KVM host. |
-| `kvm-cluster-3-worker.yaml` | 6 Node cluster, 3 control-plane & 3 worker nodes, deployed on 2 KVM hosts. |
-| `sno-kvm.yaml` | Single Node Cluster, deployed on a KVM host. |
-| `sno-bm.yaml` | Single Node Cluster, deployed on a bare metal server |
-| `bare-metal-basic.yaml` | 3 Node cluster with control-plane & worker combined nodes, deployed on 3 bare metal servers |
-| `bare-metal-3-worker.yaml` | 6 Node cluster, 3 control-plane & 3 worker nodes, deployed on 6 bare metal servers |
+| `3-node-no-pi.yaml` | 3 Node cluster with control-plane & compute combined nodes, deployed on a single KVM host. |
+| `3-node-no-pi.yaml` | 6 Node cluster, 3 control-plane & 3 compute nodes, deployed on 2 KVM hosts. |
+| `sno-no-pi.yaml` | Single Node Cluster, deployed on a KVM host. |
 
-## Config Files Reference:
+## Config Files Reference
 
 There are two YAML configuration files that are used by the `labcli` utilities for deploying the infrastructure for you home lab:
 

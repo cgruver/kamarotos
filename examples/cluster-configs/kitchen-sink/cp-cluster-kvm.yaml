@@ -1,26 +1,27 @@
 cluster:
-  name: okd4
+  name: okd4-control-plane
   cluster-cidr: 10.88.0.0/14
   service-cidr: 172.20.0.0/16
-  local-registry: nexus.my.awesome.lab:5001
-  proxy-registry: nexus.my.awesome.lab:5000
+  local-registry: nexus.my.multi-region.lab:5001
+  proxy-registry: nexus.my.multi-region.lab:5000
   remote-registry: quay.io/openshift/okd
   butane-version: v0.16.0
+  butane-variant: fcos
   butane-spec-version: 1.4.0
-  ingress-ip-addr: 10.11.14.2
+  ingress-ip-addr: 10.14.14.2
 kvm-hosts:
   - host-name: kvm-host01
     mac-addr: "YOUR_HOST_MAC_HERE"
-    ip-addr: 10.11.14.200
+    ip-addr: 10.14.14.200
     disks:
-      disk1: nvme0n1
-      disk2: NA
+      - sda
+      - sdb
   - host-name: kvm-host02
     mac-addr: "YOUR_HOST_MAC_HERE"
-    ip-addr: 10.11.14.201
+    ip-addr: 10.14.14.201
     disks:
-      disk1: nvme0n1
-      disk2: NA
+      - sda
+      - sdb
 bootstrap:
   metal: false
   node-spec:
@@ -28,7 +29,9 @@ bootstrap:
     cpu: 4
     root-vol: 50
   kvm-host: kvm-host01
-  ip-addr: 10.11.14.49
+  ip-addr: 10.14.14.49
+  name: okd4-control-plane-bootstrap
+  mac-addr: "52:54:00:f1:0e:f7"
 control-plane:
   metal: false
   node-spec:
@@ -37,42 +40,42 @@ control-plane:
     root-vol: 100
   okd-hosts:
     - kvm-host: kvm-host01
-      ip-addr: 10.11.14.60
+      ip-addr: 10.14.14.60
     - kvm-host: kvm-host01
-      ip-addr: 10.11.14.61
+      ip-addr: 10.14.14.61
     - kvm-host: kvm-host01
-      ip-addr: 10.11.14.62
+      ip-addr: 10.14.14.62
 compute-nodes:
   - metal: false
-    ip-addr: 10.11.14.63
+    ip-addr: 10.14.14.63
     kvm-host: kvm-host02
     node-spec:
       memory: 20480
       cpu: 6
       root-vol: 100
     ceph:
-      ceph-dev: /dev/sdb
+      ceph-dev: sdb
       ceph-vol: 200
       type: disk
   - metal: false
-    ip-addr: 10.11.14.64
+    ip-addr: 10.14.14.64
     kvm-host: kvm-host02
     node-spec:
       memory: 20480
       cpu: 6
       root-vol: 100
     ceph:
-      ceph-dev: /dev/sdb
+      ceph-dev: sdb
       ceph-vol: 200
       type: disk
   - metal: false
-    ip-addr: 10.11.14.65
+    ip-addr: 10.14.14.65
     kvm-host: kvm-host02
     node-spec:
       memory: 20480
       cpu: 6
       root-vol: 100
     ceph:
-      ceph-dev: /dev/sdb
+      ceph-dev: sdb
       ceph-vol: 200
       type: disk
