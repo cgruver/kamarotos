@@ -104,13 +104,6 @@ local mac=${1}
 local boot_dev=${2}
 
 cat << EOF >> ${WORK_DIR}/ipxe-work-dir/${mac//:/-}-config.yml
-variant: ${BUTANE_VARIANT}
-version: ${BUTANE_SPEC_VERSION}
-ignition:
-  config:
-    merge:
-      - local: ${mac//:/-}.ign
-storage:
   disks:
     - device: ${boot_dev}
       wipe_table: false
