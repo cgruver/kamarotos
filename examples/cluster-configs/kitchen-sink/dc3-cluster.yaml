@@ -2,7 +2,6 @@ cluster:
   name: okd4-region-03
   cluster-cidr: 10.108.0.0/14
   service-cidr: 172.32.0.0/16
-  release: 4.12.0-0.okd-scos-2022-12-02-083740
   local-registry: nexus.my.multi-region.lab:5001
   proxy-registry: nexus.my.multi-region.lab:5000
   remote-registry: quay.io/okd/scos-release
@@ -10,7 +9,6 @@ cluster:
   butane-variant: fcos
   butane-spec-version: 1.4.0
   ingress-ip-addr: 10.13.13.2
-  scos: "true"
 bootstrap:
   metal: false
   node-spec:
@@ -23,21 +21,17 @@ bootstrap:
 control-plane:
   metal: true
   okd-hosts:
-    - name: "okd4-region-03-master-0"
-      mac-addr: "YOUR_HOST_MAC_HERE"
+    - mac-addr: "YOUR_HOST_MAC_HERE"
       boot-dev: /dev/sda
       ip-addr: 10.13.13.60
-    - name: "okd4-region-03-master-1"
-      mac-addr: "YOUR_HOST_MAC_HERE"
+    - mac-addr: "YOUR_HOST_MAC_HERE"
       boot-dev: /dev/sda
       ip-addr: 10.13.13.61
-    - name: "okd4-region-03-master-2"
-      mac-addr: "YOUR_HOST_MAC_HERE"
+    - mac-addr: "YOUR_HOST_MAC_HERE"
       boot-dev: /dev/sda
       ip-addr: 10.13.13.62
 compute-nodes:
   - metal: true
-    name: "okd4-region-03-worker-0"
     mac-addr: "YOUR_HOST_MAC_HERE"
     boot-dev: /dev/sda
     ceph:
@@ -45,7 +39,6 @@ compute-nodes:
       ceph-dev: sdb
     ip-addr: 10.13.13.70
   - metal: true
-    name: "okd4-region-03-worker-1"
     mac-addr: "YOUR_HOST_MAC_HERE"
     boot-dev: /dev/sda
     ceph:
@@ -53,18 +46,9 @@ compute-nodes:
       ceph-dev: sdb
     ip-addr: 10.13.13.71
   - metal: true
-    name: "okd4-region-03-worker-2"
     mac-addr: "YOUR_HOST_MAC_HERE"
     boot-dev: /dev/sda
     ceph:
       type: disk
       ceph-dev: sdb
     ip-addr: 10.13.13.72
-  - metal: true
-    name: "okd4-region-03-worker-3"
-    mac-addr: "YOUR_HOST_MAC_HERE"
-    boot-dev: /dev/sda
-    ceph:
-      type: disk
-      ceph-dev: sdb
-    ip-addr: 10.13.13.73
