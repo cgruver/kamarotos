@@ -151,11 +151,11 @@ function pullSecret() {
   then
     mkdir -p ${OKD_LAB_PATH}/pull-secrets
   fi
-  if [[ ${NO_LAB_PI} == "true" ]]
+  if [[ ${DISCONNECTED_CLUSTER} == "true" ]]
   then
-    echo -n "{\"auths\": {\"fake\": {\"auth\": \"Zm9vOmJhcgo=\"}}}" > ${PULL_SECRET}
-  else
     createPullSecret
+  else
+    echo -n "{\"auths\": {\"fake\": {\"auth\": \"Zm9vOmJhcgo=\"}}}" > ${PULL_SECRET}
   fi
 }
 
@@ -532,6 +532,10 @@ function monitor() {
         host_name=$(yq e ".compute-nodes.[${W_INDEX}].name" ${CLUSTER_CONFIG})
         ${SSH} core@${host_name}.${DOMAIN} "journalctl -b -f"
       ;;
+      -s)
+        host_name=$(yq e ".control-plane.okd-hosts.[0].name" ${CLUSTER_CONFIG})
+        ${SSH} core@${host_name}.${DOMAIN} "journalctl -b -f -u release-image.service -u release-image-pivot.service"
+      ;;
       *)
         # catch all
       ;;
@@ -671,13 +675,13 @@ function initCephVars() {
   export ROOK_CEPH_VER=$(yq e ".rook-ceph" ${CEPH_WORK_DIR}/install/versions.yaml)
   export CEPH_VER=$(yq e ".ceph" ${CEPH_WORK_DIR}/install/versions.yaml)
 
-  if [[ ${NO_LAB_PI} == "true" ]]
+  if [[ ${DISCONNECTED_CLUSTER} == "true" ]]
   then
-    CEPH_OPERATOR_FILE=${CEPH_WORK_DIR}/install/operator-openshift-no-pi.yaml
-    CEPH_CLUSTER_FILE=${CEPH_WORK_DIR}/install/cluster-no-pi.yaml
-  else
     CEPH_OPERATOR_FILE=${CEPH_WORK_DIR}/install/operator-openshift.yaml
     CEPH_CLUSTER_FILE=${CEPH_WORK_DIR}/install/cluster.yaml
+  else
+    CEPH_OPERATOR_FILE=${CEPH_WORK_DIR}/install/operator-openshift-no-pi.yaml
+    CEPH_CLUSTER_FILE=${CEPH_WORK_DIR}/install/cluster-no-pi.yaml
   fi
 
   for j in "$@"
@@ -748,5 +752,61 @@ function getNodes() {
     echo ${node_name}
     node_index=$(( ${node_index} + 1 ))
   done
+
+}
+
+function deploySnoHostPath() {
+
+local CERT_MGR_VER=$(basename $(curl -Ls -o /dev/null -w %{url_effective} https://github.com/cert-manager/cert-manager/releases/latest))
+local HPP_VER=$(basename $(curl -Ls -o /dev/null -w %{url_effective} https://github.com/kubevirt/hostpath-provisioner-operator/releases/latest))
+
+${OC} create -f https://github.com/cert-manager/cert-manager/releases/download/${CERT_MGR_VER}/cert-manager.yaml
+${OC} wait --for=condition=Available -n cert-manager --timeout=120s --all deployments
+${OC} create -f https://github.com/kubevirt/hostpath-provisioner-operator/releases/download/${HPP_VER}/namespace.yaml
+${OC} create -f https://github.com/kubevirt/hostpath-provisioner-operator/releases/download/${HPP_VER}/webhook.yaml -n hostpath-provisioner
+${OC} create -f https://github.com/kubevirt/hostpath-provisioner-operator/releases/download/${HPP_VER}/operator.yaml -n hostpath-provisioner
+${OC} wait --for=condition=Available -n hostpath-provisioner --timeout=120s --all deployments
+
+cat << EOF | ${OC} apply -f -
+apiVersion: hostpathprovisioner.kubevirt.io/v1beta1
+kind: HostPathProvisioner
+metadata:
+  name: hostpath-provisioner
+spec:
+  imagePullPolicy: Always
+  storagePools:
+    - name: "local"
+      path: "/var/hostpath"
+  workload:
+    nodeSelector:
+      kubernetes.io/os: linux
+---
+apiVersion: storage.k8s.io/v1
+kind: StorageClass
+metadata:
+  name: hostpath-csi
+  annotations:
+    storageclass.kubernetes.io/is-default-class: "true"
+provisioner: kubevirt.io.hostpath-provisioner
+reclaimPolicy: Delete
+volumeBindingMode: WaitForFirstConsumer
+parameters:
+  storagePool: local
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: registry-pvc
+  namespace: openshift-image-registry
+spec:
+  accessModes:
+  - ReadWriteOnce
+  resources:
+    requests:
+      storage: 100Gi
+  storageClassName: hostpath-csi
+EOF
+
+${OC} patch configs.imageregistry.operator.openshift.io cluster --type merge --patch '{"spec":{"rolloutStrategy":"Recreate","managementState":"Managed","storage":{"pvc":{"claim":"registry-pvc"}}}}'
 
 }

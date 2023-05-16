@@ -201,20 +201,20 @@ EOF
 cat << EOF > ${WORK_DIR}/local-repos.repo
 [local-appstream]
 name=AppStream
-baseurl=http://${BASTION_HOST}/install/repos/AppStream/x86_64/os/
+baseurl=http://${INSTALL_HOST_IP}/install/repos/AppStream/x86_64/os/
 gpgcheck=0
 enabled=1
 
 [local-baseos]
 name=BaseOS
-baseurl=http://${BASTION_HOST}/install/repos/BaseOS/x86_64/os/
+baseurl=http://${INSTALL_HOST_IP}/install/repos/BaseOS/x86_64/os/
 gpgcheck=0
 enabled=1
 
 EOF
 
 cat << EOF > ${WORK_DIR}/chrony.conf
-server ${BASTION_HOST} iburst
+server ${INSTALL_HOST_IP} iburst
 driftfile /var/lib/chrony/drift
 makestep 1.0 3
 rtcsync

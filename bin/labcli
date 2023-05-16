@@ -10,6 +10,7 @@
 . ${OKD_LAB_PATH}/bin/clusterDeploy.sh
 . ${OKD_LAB_PATH}/bin/clusterDestroy.sh
 . ${OKD_LAB_PATH}/bin/clusterButaneConfig.sh
+. ${OKD_LAB_PATH}/bin/snoBipUtils.sh
 . ${OKD_LAB_PATH}/bin/hostUtils.sh
 . ${OKD_LAB_PATH}/bin/devTools.sh
 
@@ -61,6 +62,9 @@ do
     --deploy)
       deploy "$@"
     ;;
+    --bip)
+      snoBipUtils "$@"
+    ;;
     --destroy)
       destroy "$@"
     ;;
@@ -77,7 +81,7 @@ do
       trustCerts "$@"
     ;;
     --config-infra)
-        configInfraNodes
+      configInfraNodes
     ;;
     --csr)
       approveCsr
@@ -130,6 +134,9 @@ do
     ;;
     --kvm-pwd)
       createHostPwd
+    ;;
+    --hostpath)
+      deploySnoHostPath
     ;;
     *)
        # catch all

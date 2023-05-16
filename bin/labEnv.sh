@@ -179,11 +179,6 @@ function setClusterEnv() {
     setDomainEnv
   fi
   export CLUSTER_CONFIG=${OKD_LAB_PATH}/lab-config/cluster-configs/$(yq e ".cluster-configs.[${CLUSTER_INDEX}].cluster-config-file" ${LAB_CONFIG_FILE})
-  if [[ ${NO_LAB_PI} == "false" ]]
-  then
-    export LOCAL_REGISTRY=$(yq e ".cluster.local-registry" ${CLUSTER_CONFIG})
-    export PROXY_REGISTRY=$(yq e ".cluster.proxy-registry" ${CLUSTER_CONFIG})
-  fi
   export CLUSTER=$(yq e ".cluster-configs.[${CLUSTER_INDEX}].name" ${LAB_CONFIG_FILE})
   export CLUSTER_NAME=$(yq e ".cluster.name" ${CLUSTER_CONFIG})
   export KUBE_INIT_CONFIG=${OKD_LAB_PATH}/lab-config/${CLUSTER_NAME}.${DOMAIN}/kubeconfig
@@ -194,6 +189,7 @@ function setClusterEnv() {
   export BUTANE_SPEC_VERSION=$(yq e ".cluster.butane-spec-version" ${CLUSTER_CONFIG})
   export OKD_REGISTRY=$(yq e ".cluster.remote-registry" ${CLUSTER_CONFIG})
   export PULL_SECRET=${OKD_LAB_PATH}/pull-secrets/${CLUSTER_NAME}-pull-secret.json
+  export DISCONNECTED_CLUSTER=$(yq e ".cluster.disconnected" ${CLUSTER_CONFIG})
   setRelease
   if [[ $(yq e ".bootstrap.metal" ${CLUSTER_CONFIG}) != "true" ]]
   then
@@ -212,22 +208,32 @@ function setEdgeEnv() {
     echo "ENV VAR LAB_CONFIG_FILE must be set to the path to a lab config yaml."
     export LAB_CTX_ERROR="true"
   else
-    export NO_LAB_PI="false"
     export LAB_DOMAIN=$(yq e ".domain" ${LAB_CONFIG_FILE})
     export EDGE_ROUTER=$(yq e ".router-ip" ${LAB_CONFIG_FILE})
+    export INSTALL_HOST_IP=${EDGE_ROUTER}
+    export INSTALL_HOST=router
     export EDGE_NETMASK=$(yq e ".netmask" ${LAB_CONFIG_FILE})
     export EDGE_NETWORK=$(yq e ".network" ${LAB_CONFIG_FILE})
     export EDGE_CIDR=$(mask2cidr ${EDGE_NETMASK})
-    export BASTION_HOST=$(yq e ".bastion-ip" ${LAB_CONFIG_FILE})
     export GIT_SERVER=$(yq e ".git-url" ${LAB_CONFIG_FILE})
     IFS="." read -r i1 i2 i3 i4 <<< "${EDGE_NETWORK}"
     export EDGE_ARPA=${i3}.${i2}.${i1}
     if [[ $(yq ". | has(\"bastion-ip\")" ${LAB_CONFIG_FILE}) == "true" ]]
     then
       export BASTION_HOST=$(yq e ".bastion-ip" ${LAB_CONFIG_FILE})
-    else
-      export BASTION_HOST=${EDGE_ROUTER}
-      export NO_LAB_PI="true"
+      if [[ $(yq e ".install-host" ${LAB_CONFIG_FILE}) == "bastion" ]]
+      then
+        export INSTALL_HOST_IP=${BASTION_HOST}
+        export INSTALL_HOST=bastion
+      fi
+    fi
+    if [[ $(yq ". | has(\"local-registry\")" ${LAB_CONFIG_FILE}) == "true" ]]
+    then
+      export LOCAL_REGISTRY=$(yq e ".local-registry" ${LAB_CONFIG_FILE})
+    fi
+    if [[ $(yq ". | has(\"proxy-registry\")" ${LAB_CONFIG_FILE}) == "true" ]]
+    then
+      export PROXY_REGISTRY=$(yq e ".proxy-registry" ${LAB_CONFIG_FILE})
     fi
   fi
 }

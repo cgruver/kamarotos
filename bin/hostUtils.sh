@@ -21,7 +21,7 @@ function createPartInfo() {
 
 function buildHostConfig() {
 
-  install_url="http://${BASTION_HOST}/install"
+  install_url="http://${INSTALL_HOST_IP}/install"
   local index=${1}
 
   hostname=$(yq e ".kvm-hosts.[${index}].host-name" ${CLUSTER_CONFIG})
@@ -174,7 +174,7 @@ function deletePxeConfig() {
   local mac_addr=${1}
   
   ${SSH} root@${DOMAIN_ROUTER} "rm -f /data/tftpboot/ipxe/${mac_addr//:/-}.ipxe"
-  ${SSH} root@${BASTION_HOST} "rm -f /usr/local/www/install/fcos/ignition/${CLUSTER_NAME}/${mac_addr//:/-}.ign"
+  ${SSH} root@${INSTALL_HOST_IP} "rm -f /usr/local/www/install/fcos/ignition/${CLUSTER_NAME}/${mac_addr//:/-}.ign"
 }
 
 function deleteDns() {
@@ -246,18 +246,18 @@ fi
 # cat << EOF > ${WORK_DIR}/ipxe-work-dir/${mac//:/-}.ipxe
 # #!ipxe
 
-# kernel http://${BASTION_HOST}/install/fcos/${OKD_RELEASE}/vmlinuz edd=off net.ifnames=1 rd.neednet=1 ignition.firstboot ignition.config.url=http://${BASTION_HOST}/install/fcos/ignition/${CLUSTER_NAME}.${DOMAIN}/${mac//:/-}.ign ignition.platform.id=${platform} initrd=initrd initrd=rootfs.img ${CONSOLE_OPT}
-# initrd http://${BASTION_HOST}/install/fcos/${OKD_RELEASE}/initrd
-# initrd http://${BASTION_HOST}/install/fcos/${OKD_RELEASE}/rootfs.img
+# kernel http://${INSTALL_HOST_IP}/install/fcos/${OKD_RELEASE}/vmlinuz edd=off net.ifnames=1 rd.neednet=1 ignition.firstboot ignition.config.url=http://${INSTALL_HOST_IP}/install/fcos/ignition/${CLUSTER_NAME}.${DOMAIN}/${mac//:/-}.ign ignition.platform.id=${platform} initrd=initrd initrd=rootfs.img ${CONSOLE_OPT}
+# initrd http://${INSTALL_HOST_IP}/install/fcos/${OKD_RELEASE}/initrd
+# initrd http://${INSTALL_HOST_IP}/install/fcos/${OKD_RELEASE}/rootfs.img
 
 # boot
 # EOF
 cat << EOF > ${WORK_DIR}/ipxe-work-dir/${mac//:/-}.ipxe
 #!ipxe
 
-kernel http://${BASTION_HOST}/install/fcos/${OKD_RELEASE}/vmlinuz edd=off net.ifnames=1 ifname=nic0:${mac} ip=${ip_addr}::${DOMAIN_ROUTER}:${DOMAIN_NETMASK}:${hostname}.${DOMAIN}:nic0:none nameserver=${DOMAIN_ROUTER} rd.neednet=1 coreos.inst.install_dev=${boot_dev} coreos.inst.ignition_url=http://${BASTION_HOST}/install/fcos/ignition/${CLUSTER_NAME}.${DOMAIN}/${mac//:/-}.ign coreos.inst.platform_id=${platform} initrd=initrd initrd=rootfs.img ${CONSOLE_OPT}
-initrd http://${BASTION_HOST}/install/fcos/${OKD_RELEASE}/initrd
-initrd http://${BASTION_HOST}/install/fcos/${OKD_RELEASE}/rootfs.img
+kernel http://${INSTALL_HOST_IP}/install/fcos/${OKD_RELEASE}/vmlinuz edd=off net.ifnames=1 ifname=nic0:${mac} ip=${ip_addr}::${DOMAIN_ROUTER}:${DOMAIN_NETMASK}:${hostname}.${DOMAIN}:nic0:none nameserver=${DOMAIN_ROUTER} rd.neednet=1 coreos.inst.install_dev=${boot_dev} coreos.inst.ignition_url=http://${INSTALL_HOST_IP}/install/fcos/ignition/${CLUSTER_NAME}.${DOMAIN}/${mac//:/-}.ign coreos.inst.platform_id=${platform} initrd=initrd initrd=rootfs.img ${CONSOLE_OPT}
+initrd http://${INSTALL_HOST_IP}/install/fcos/${OKD_RELEASE}/initrd
+initrd http://${INSTALL_HOST_IP}/install/fcos/${OKD_RELEASE}/rootfs.img
 
 boot
 EOF
@@ -296,7 +296,7 @@ function prepNodeFiles() {
   INITRD_URL=$(openshift-install coreos print-stream-json | jq -r '.architectures.x86_64.artifacts.metal.formats.pxe.initramfs.location')
   ROOTFS_URL=$(openshift-install coreos print-stream-json | jq -r '.architectures.x86_64.artifacts.metal.formats.pxe.rootfs.location')
 
-  ${SSH} root@${BASTION_HOST} "if [[ ! -d /usr/local/www/install/fcos/${OKD_RELEASE} ]] ; \
+  ${SSH} root@${INSTALL_HOST_IP} "if [[ ! -d /usr/local/www/install/fcos/${OKD_RELEASE} ]] ; \
     then mkdir -p /usr/local/www/install/fcos/${OKD_RELEASE} ; \
     curl -o /usr/local/www/install/fcos/${OKD_RELEASE}/vmlinuz ${KERNEL_URL} ; \
     curl -o /usr/local/www/install/fcos/${OKD_RELEASE}/initrd ${INITRD_URL} ; \
@@ -307,9 +307,9 @@ function prepNodeFiles() {
   cat ${WORK_DIR}/dns-work-dir/reverse.zone | ${SSH} root@${DOMAIN_ROUTER} "cat >> /data/bind/db.${DOMAIN_ARPA}"
   ${SSH} root@${DOMAIN_ROUTER} "/etc/init.d/named stop && sleep 2 && /etc/init.d/named start && sleep 2"
   ${SSH} root@${EDGE_ROUTER} "/etc/init.d/named stop && sleep 2 && /etc/init.d/named start && sleep 2"
-  ${SSH} root@${BASTION_HOST} "mkdir -p /usr/local/www/install/fcos/ignition/${CLUSTER_NAME}.${DOMAIN}"
-  ${SCP} -r ${WORK_DIR}/ipxe-work-dir/ignition/*.ign root@${BASTION_HOST}:/usr/local/www/install/fcos/ignition/${CLUSTER_NAME}.${DOMAIN}/
-  ${SSH} root@${BASTION_HOST} "chmod 644 /usr/local/www/install/fcos/ignition/${CLUSTER_NAME}.${DOMAIN}/*"
+  ${SSH} root@${INSTALL_HOST_IP} "mkdir -p /usr/local/www/install/fcos/ignition/${CLUSTER_NAME}.${DOMAIN}"
+  ${SCP} -r ${WORK_DIR}/ipxe-work-dir/ignition/*.ign root@${INSTALL_HOST_IP}:/usr/local/www/install/fcos/ignition/${CLUSTER_NAME}.${DOMAIN}/
+  ${SSH} root@${INSTALL_HOST_IP} "chmod 644 /usr/local/www/install/fcos/ignition/${CLUSTER_NAME}.${DOMAIN}/*"
   ${SCP} -r ${WORK_DIR}/ipxe-work-dir/*.ipxe root@${DOMAIN_ROUTER}:/data/tftpboot/ipxe/
 }
 
@@ -365,7 +365,7 @@ function deployKvmHosts() {
     fi
   fi
 
-  ${SCP} -r ${WORK_DIR}/*.ks root@${BASTION_HOST}:/usr/local/www/install/kickstart
+  ${SCP} -r ${WORK_DIR}/*.ks root@${INSTALL_HOST_IP}:/usr/local/www/install/kickstart
   ${SCP} -r ${WORK_DIR}/*.ipxe root@${DOMAIN_ROUTER}:/data/tftpboot/ipxe
 
   cat ${WORK_DIR}/forward.zone | ${SSH} root@${DOMAIN_ROUTER} "cat >> /data/bind/db.${DOMAIN}"

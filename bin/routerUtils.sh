@@ -198,7 +198,7 @@ function setupRouterCommon() {
 
   ${SSH} root@${router_ip} "opkg update && opkg install ip-full procps-ng-ps bind-server bind-tools bash sfdisk rsync resize2fs wget block-mount wipefs coreutils-nohup"
   
-  if [[ ${NO_LAB_PI} == "true" ]]
+  if [[ ${INSTALL_HOST} == "router" ]]
   then
     initMicroSD ${router_ip} ${FORMAT_SD}
     ${SCP} ${WORK_DIR}/local-repos.repo root@${router_ip}:/usr/local/www/install/postinstall/local-repos.repo

@@ -101,7 +101,6 @@ function createBootstrapNode() {
 }
 
 function configSno() {
-  BIP=false
   metal=$(yq e ".control-plane.metal" ${CLUSTER_CONFIG})
   ip_addr=$(yq e ".control-plane.okd-hosts.[0].ip-addr" ${CLUSTER_CONFIG})
   host_name=${CLUSTER_NAME}-node
@@ -127,13 +126,9 @@ function configSno() {
   mac_addr=$(yq e ".control-plane.okd-hosts.[0].mac-addr" ${CLUSTER_CONFIG})
   if [[ ${BIP} == "true" ]]
   then
-    install_dev=$(yq e ".control-plane.okd-hosts.[0].sno-install-dev" ${CLUSTER_CONFIG})
-    createInstallConfig ${install_dev}
-    cp ${WORK_DIR}/install-config-upi.yaml ${WORK_DIR}/okd-install-dir/install-config.yaml
-    openshift-install --dir=${WORK_DIR}/okd-install-dir create single-node-ignition-config
-    cp ${WORK_DIR}/okd-install-dir/bootstrap-in-place-for-live-iso.ign ${WORK_DIR}/ipxe-work-dir/sno.ign
     createButaneConfig ${ip_addr} ${host_name}.${DOMAIN} ${mac_addr} sno ${platform} "false" ${boot_dev}
     createSnoBipDNS ${host_name} ${ip_addr}
+    createBipIpRes ${host_name} ${ip_addr} ${mac_addr}
   else
     createButaneConfig ${ip_addr} ${host_name}.${DOMAIN} ${mac_addr} master ${platform} "false" ${boot_dev}
     createSnoDNS ${host_name} ${ip_addr} ${bs_ip_addr}
@@ -224,25 +219,39 @@ function deployCluster() {
   mkdir -p ${OKD_LAB_PATH}/lab-config/${CLUSTER_NAME}.${DOMAIN}
   SSH_KEY=$(cat ${OKD_LAB_PATH}/ssh_key.pub)
   SNO="false"
+  BIP="false"
   CP_REPLICAS=$(yq e ".control-plane.okd-hosts" ${CLUSTER_CONFIG} | yq e 'length' -)
   if [[ ${CP_REPLICAS} == "1" ]]
   then
     SNO="true"
+    if [[ $(yq e ". | has(\"bootstrap\")" ${CLUSTER_CONFIG}) == "false" ]]
+    then
+      BIP="true"
+    fi
   elif [[ ${CP_REPLICAS} != "3" ]]
   then
     echo "There must be 3 host entries for the control plane for a full cluster, or 1 entry for a Single Node cluster."
     exit 1
   fi
   createInstallConfig
-  if [[ ${NO_LAB_PI} == "false" ]]
+  if [[ ${BIP} == "true" ]]
+  then
+    appendBootstrapInPlaceConfig
+  fi
+  if [[ ${DISCONNECTED_CLUSTER} == "true" ]]
   then
     appendDisconnectedInstallConfig
   fi
   cp ${WORK_DIR}/install-config-upi.yaml ${WORK_DIR}/okd-install-dir/install-config.yaml
-  openshift-install --dir=${WORK_DIR}/okd-install-dir create ignition-configs
-  cp ${WORK_DIR}/okd-install-dir/*.ign ${WORK_DIR}/ipxe-work-dir/
-  createBootstrapNode
-
+  if [[ ${BIP} == "true" ]]
+  then
+    openshift-install --dir=${WORK_DIR}/okd-install-dir create single-node-ignition-config
+    cp ${WORK_DIR}/okd-install-dir/bootstrap-in-place-for-live-iso.ign ${WORK_DIR}/ipxe-work-dir/sno.ign
+  else
+    openshift-install --dir=${WORK_DIR}/okd-install-dir create ignition-configs
+    cp ${WORK_DIR}/okd-install-dir/*.ign ${WORK_DIR}/ipxe-work-dir/
+    createBootstrapNode
+  fi
   #Create Control Plane Nodes:
   if [[ ${SNO} == "true" ]]
   then
@@ -324,6 +333,15 @@ function deploy() {
       ;;
       -k|--kvm-hosts)
         deployKvmHosts "$@"
+      ;;
+      -s|--sno)
+        fixSnoBootDev
+      ;;
+      -l|--logs)
+        fixSnoLogs
+      ;;
+      -n|--net)
+        fixSnoNetwork
       ;;
       *)
         # catch all

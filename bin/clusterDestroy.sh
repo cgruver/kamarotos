@@ -8,6 +8,10 @@ function deleteControlPlane() {
   then
     SNO="true"
     RESET_LB="false"
+    if [[ $(yq e ". | has(\"bootstrap\")" ${CLUSTER_CONFIG}) == "false" ]]
+    then
+      BIP="true"
+    fi
   fi
   metal=$(yq e ".control-plane.metal" ${CLUSTER_CONFIG})
   if [[ ${SNO} == "true" ]]
@@ -23,6 +27,10 @@ function deleteControlPlane() {
       deleteNodeVm ${host_name} ${kvm_host}.${DOMAIN}
     fi
     deletePxeConfig ${mac_addr}
+    if [[ ${BIP} == "true" ]]
+    then
+      deleteBipIpRes ${mac_addr}
+    fi
   else
     for node_index in 0 1 2
     do
@@ -195,6 +203,10 @@ function destroy() {
     if [[ ${CP_COUNT} == "1" ]]
     then
       SNO="true"
+      if [[ $(yq e ". | has(\"bootstrap\")" ${CLUSTER_CONFIG}) == "false" ]]
+      then
+        BIP="true"
+      fi
     fi
     if [[ ${SNO} == "false" ]]
     then

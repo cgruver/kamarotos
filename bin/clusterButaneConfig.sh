@@ -14,10 +14,10 @@ function createButaneConfig() {
   then
     writeButaneCeph ${mac} ${boot_dev}
   fi
-  if [[ ${platform} == "metal" ]]
-  then
-    writeButaneMetal ${mac}
-  fi
+  # if [[ ${platform} == "metal" ]]
+  # then
+  #   writeButaneMetal ${mac}
+  # fi
   cat ${WORK_DIR}/ipxe-work-dir/${mac//:/-}-config.yml | butane -d ${WORK_DIR}/ipxe-work-dir/ -o ${WORK_DIR}/ipxe-work-dir/ignition/${mac//:/-}.ign
 }
 
@@ -90,7 +90,7 @@ storage:
       overwrite: true
       contents:
         inline: |
-          pool ${BASTION_HOST} iburst 
+          pool ${INSTALL_HOST_IP} iburst 
           driftfile /var/lib/chrony/drift
           makestep 1.0 3
           rtcsync
