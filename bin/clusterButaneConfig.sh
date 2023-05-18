@@ -239,6 +239,22 @@ systemd:
       WantedBy=local-fs.target
     enabled: true
     name: var-hostpath.mount
+  - contents: |
+      [Unit]
+      Description=Clear Journal to Remove Corrupt File
+      DefaultDependencies=no
+      After=systemd-mkfs@${systemd_svc_name}.service
+
+      [Service]
+      Type=oneshot
+      RemainAfterExit=yes
+      ExecStart=bash -c "/usr/bin/journalctl --rotate && /usr/bin/journalctl --vacuum-time=1s"
+      TimeoutSec=0
+
+      [Install]
+      WantedBy=multi-user.target
+    enabled: true
+    name: systemd-clear-journal.service
 EOF
 )
 
