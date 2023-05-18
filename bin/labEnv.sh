@@ -1,5 +1,5 @@
 export OKD_LAB_PATH=${HOME}/okd-lab
-export PATH=$PATH:${OKD_LAB_PATH}/bin
+export PATH=${OKD_LAB_PATH}/bin:$PATH
 if [[ -z ${LAB_CONFIG_FILE} ]]
 then
   export LAB_CONFIG_FILE=${OKD_LAB_PATH}/lab-config/lab.yaml

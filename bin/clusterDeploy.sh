@@ -128,7 +128,7 @@ function configSno() {
   then
     createButaneConfig ${ip_addr} ${host_name}.${DOMAIN} ${mac_addr} sno ${platform} "false" ${boot_dev}
     createSnoBipDNS ${host_name} ${ip_addr}
-    createBipIpRes ${host_name} ${ip_addr} ${mac_addr}
+    # createBipIpRes ${host_name} ${ip_addr} ${mac_addr}
   else
     createButaneConfig ${ip_addr} ${host_name}.${DOMAIN} ${mac_addr} master ${platform} "false" ${boot_dev}
     createSnoDNS ${host_name} ${ip_addr} ${bs_ip_addr}

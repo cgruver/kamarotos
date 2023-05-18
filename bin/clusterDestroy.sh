@@ -27,10 +27,10 @@ function deleteControlPlane() {
       deleteNodeVm ${host_name} ${kvm_host}.${DOMAIN}
     fi
     deletePxeConfig ${mac_addr}
-    if [[ ${BIP} == "true" ]]
-    then
-      deleteBipIpRes ${mac_addr}
-    fi
+    # if [[ ${BIP} == "true" ]]
+    # then
+    #   deleteBipIpRes ${mac_addr}
+    # fi
   else
     for node_index in 0 1 2
     do
