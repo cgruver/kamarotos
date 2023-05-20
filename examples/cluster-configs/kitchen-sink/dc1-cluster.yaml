@@ -9,6 +9,7 @@ cluster:
   butane-variant: fcos
   butane-spec-version: 1.4.0
   ingress-ip-addr: 10.11.11.2
+  disconnected: "true"
 bootstrap:
   metal: false
   node-spec:

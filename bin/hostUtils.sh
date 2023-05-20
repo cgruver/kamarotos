@@ -230,6 +230,30 @@ EOF
 
 }
 
+function createBipIpRes() {
+
+  local hostname=${1}
+  local ip_addr=${2}
+  local mac=${3}
+
+  ${SSH} root@${DOMAIN_ROUTER} "IP_RES=\$(uci add dhcp host) ; \
+  uci set dhcp.\${IP_RES}.mac=\"${mac}\" ; \
+  uci set dhcp.\${IP_RES}.ip=\"${ip_addr}\" ; \
+  uci set dhcp.\${IP_RES}.name=\"${hostname}.${DOMAIN}\" ; \
+  uci commit ; \
+  /etc/init.d/dnsmasq restart"
+}
+
+function deleteBipIpRes() {
+  
+  local mac=${1}
+
+  host_idx=$(${SSH} root@${DOMAIN_ROUTER} "uci show dhcp | grep 'host\[' | grep \"${mac}\" | cut -d'[' -f2 | cut -d']' -f1")
+  ${SSH} root@${DOMAIN_ROUTER} "uci delete dhcp.@host[${host_idx}] ; \
+    uci commit ; \
+    /etc/init.d/dnsmasq restart"
+}
+
 function createPxeFile() {
   local mac=${1}
   local platform=${2}

@@ -6,6 +6,7 @@ cluster:
   butane-version: v0.16.0
   butane-spec-version: 1.4.0
   butane-variant: fcos
+  disconnected: "false"
 bootstrap:
   metal: false
   node-spec:

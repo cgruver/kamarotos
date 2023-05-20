@@ -32,6 +32,15 @@ sshKey: ${SSH_KEY}
 EOF
 }
 
+function appendBootstrapInPlaceConfig() {
+  install_dev=$(yq e ".control-plane.okd-hosts.[0].sno-install-dev" ${CLUSTER_CONFIG})
+
+cat << EOF >> ${WORK_DIR}/install-config-upi.yaml
+BootstrapInPlace:
+  InstallationDisk: "${install_dev}"
+EOF
+}
+
 function appendDisconnectedInstallConfig() {
 
 NEXUS_CERT=$( openssl s_client -showcerts -connect ${PROXY_REGISTRY} </dev/null 2>/dev/null|openssl x509 -outform PEM | while read line ; do echo "  ${line}" ; done )

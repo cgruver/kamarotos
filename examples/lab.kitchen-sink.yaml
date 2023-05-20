@@ -7,6 +7,7 @@ centos-mirror: rsync://mirror.facebook.net/centos-stream/
 gitea-version: 1.17.3
 openwrt-version: 22.03.2
 git-url: https://gitea.my.multi-region.lab:3000
+install-host: bastion
 cluster-configs:
 - name: dc1
   cluster-config-file: kitchen-sink/dc1-cluster.yaml

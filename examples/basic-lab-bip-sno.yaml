@@ -7,6 +7,5 @@ install-host: router
 sub-domain-configs: []
 cluster-configs:
   - name: dev
-    cluster-config-file: 3-node-no-pi.yaml
+    cluster-config-file: sno-bip-no-pi.yaml
     domain: edge
-

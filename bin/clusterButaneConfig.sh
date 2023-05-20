@@ -142,12 +142,11 @@ function createBipMC() {
   local cidr=$(mask2cidr ${DOMAIN_NETMASK})
   local hostpath_dev=$(yq e ".control-plane.okd-hosts.[0].hostpath-dev" ${CLUSTER_CONFIG})
   local systemd_svc_name=$(echo ${hostpath_dev//\//-} | cut -d"-" -f2-)
-
-# | while read line ; do echo "          ${line}" ; done 
+  local mc_version=$(${OC} version --client -o yaml | yq e ".releaseClientVersion" | cut -d"-" -f1)
 
 sno_machine_config=$(cat << EOF | butane | while IFS= read -r line ; do echo "          ${line}" ; done
 variant: openshift
-version: 4.12.0
+version: ${mc_version}
 metadata:
   labels:
     machineconfiguration.openshift.io/role: master
@@ -243,7 +242,7 @@ systemd:
       [Unit]
       Description=Clear Journal to Remove Corrupt File
       DefaultDependencies=no
-      After=systemd-mkfs@${systemd_svc_name}.service
+      After=kubelet.service
 
       [Service]
       Type=oneshot

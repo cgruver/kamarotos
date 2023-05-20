@@ -9,6 +9,7 @@ cluster:
   butane-variant: fcos
   butane-spec-version: 1.4.0
   ingress-ip-addr: 10.14.14.2
+  disconnected: "true"
 kvm-hosts:
   - host-name: kvm-host01
     mac-addr: "YOUR_HOST_MAC_HERE"
