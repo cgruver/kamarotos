@@ -184,13 +184,13 @@ function setClusterEnv() {
   export KUBE_INIT_CONFIG=${OKD_LAB_PATH}/lab-config/${CLUSTER_NAME}.${DOMAIN}/kubeconfig
   export CLUSTER_CIDR=$(yq e ".cluster.cluster-cidr" ${CLUSTER_CONFIG})
   export SERVICE_CIDR=$(yq e ".cluster.service-cidr" ${CLUSTER_CONFIG})
-  export BUTANE_VERSION=$(yq e ".cluster.butane-version" ${CLUSTER_CONFIG})
   export BUTANE_VARIANT=$(yq e ".cluster.butane-variant" ${CLUSTER_CONFIG})
   export BUTANE_SPEC_VERSION=$(yq e ".cluster.butane-spec-version" ${CLUSTER_CONFIG})
   export OKD_REGISTRY=$(yq e ".cluster.remote-registry" ${CLUSTER_CONFIG})
   export PULL_SECRET=${OKD_LAB_PATH}/pull-secrets/${CLUSTER_NAME}-pull-secret.json
   export DISCONNECTED_CLUSTER=$(yq e ".cluster.disconnected" ${CLUSTER_CONFIG})
-  setRelease
+  setOkdRelease
+  setButaneRelease
   if [[ $(yq e ".bootstrap.metal" ${CLUSTER_CONFIG}) != "true" ]]
   then
     if [[ $(yq ".bootstrap | has(\"kvm-domain\")" ${CLUSTER_CONFIG}) == "true" ]]
@@ -248,9 +248,9 @@ function fixMacArmCodeSign() {
   fi
 }
 
-function setRelease() {
+function setOkdRelease() {
   
-  release_set=$(yq ".cluster | has(\"release\")" ${CLUSTER_CONFIG})
+  local release_set=$(yq ".cluster | has(\"release\")" ${CLUSTER_CONFIG})
   if [[ ${release_set} == "true" ]]
   then
     export OKD_RELEASE=$(yq e ".cluster.release" ${CLUSTER_CONFIG})
@@ -266,17 +266,32 @@ function setRelease() {
     for i in $(ls ${OKD_LAB_PATH}/okd-cmds/${OKD_RELEASE})
     do
       rm -f ${OKD_LAB_PATH}/bin/${i}
-      ln -s ${OKD_LAB_PATH}/okd-cmds/${OKD_RELEASE}/${i} ${OKD_LAB_PATH}/bin/${i}
+      ln -sf ${OKD_LAB_PATH}/okd-cmds/${OKD_RELEASE}/${i} ${OKD_LAB_PATH}/bin/${i}
     done
     i=""
   fi
 }
 
+function setButaneRelease() {
+
+  local release_set=$(yq ".cluster | has(\"butane-version\")" ${CLUSTER_CONFIG})
+  if [[ ${release_set} == "true" ]]
+  then
+    export BUTANE_VERSION=$(yq e ".cluster.butane-version" ${CLUSTER_CONFIG})
+    if [[ ! -d ${OKD_LAB_PATH}/butane/${BUTANE_VERSION} ]]
+    then
+      getButane
+    fi
+    rm ${OKD_LAB_PATH}/bin/butane
+    ln -sf ${OKD_LAB_PATH}/butane/${BUTANE_VERSION}/butane ${OKD_LAB_PATH}/bin/butane
+  fi
+}
+
 function getOkdCmds() {
-  CONTINUE="true"
+  local CONTINUE="true"
   local okd_type=${1}
-  SYS_ARCH=$(uname)
-  PROC_ARCH=x86_64
+  local SYS_ARCH=$(uname)
+  local PROC_ARCH=x86_64
   if [[ ${SYS_ARCH} == "Darwin" ]]
   then
     BUTANE_DLD=apple-darwin
@@ -301,17 +316,36 @@ function getOkdCmds() {
     mkdir -p ${OKD_LAB_PATH}/tmp
     wget -O ${OKD_LAB_PATH}/tmp/oc.tar.gz https://github.com/okd-project/${okd_type}/releases/download/${OKD_RELEASE}/openshift-client-${OS_VER}-${OKD_RELEASE}.tar.gz
     wget -O ${OKD_LAB_PATH}/tmp/oc-install.tar.gz https://github.com/okd-project/${okd_type}/releases/download/${OKD_RELEASE}/openshift-install-${OS_VER}-${OKD_RELEASE}.tar.gz
-    wget -O ${OKD_LAB_PATH}/okd-cmds/${OKD_RELEASE}/butane https://github.com/coreos/butane/releases/download/${BUTANE_VERSION}/butane-${PROC_ARCH}-${BUTANE_DLD}
     tar -xzf ${OKD_LAB_PATH}/tmp/oc.tar.gz -C ${OKD_LAB_PATH}/okd-cmds/${OKD_RELEASE}
     tar -xzf ${OKD_LAB_PATH}/tmp/oc-install.tar.gz -C ${OKD_LAB_PATH}/okd-cmds/${OKD_RELEASE}
     chmod 700 ${OKD_LAB_PATH}/okd-cmds/${OKD_RELEASE}/*
     rm -rf ${OKD_LAB_PATH}/tmp
     fixMacArmCodeSign
-    for i in $(ls ${OKD_LAB_PATH}/okd-cmds/${OKD_RELEASE})
-    do
-      rm -f ${OKD_LAB_PATH}/bin/${i}
-      ln -s ${OKD_LAB_PATH}/okd-cmds/${OKD_RELEASE}/${i} ${OKD_LAB_PATH}/bin/${i}
-    done
+  fi
+}
+
+function getButane() {
+  local CONTINUE="true"
+  local SYS_ARCH=$(uname)
+  local PROC_ARCH=x86_64
+  if [[ ${SYS_ARCH} == "Darwin" ]]
+  then
+    BUTANE_DLD=apple-darwin
+    if [[ $(uname -m) == "arm64" ]]
+    then
+      PROC_ARCH=aarch64
+    fi
+  elif [[ ${SYS_ARCH} == "Linux" ]]
+  then
+    BUTANE_DLD=unknown-linux-gnu
+  else
+    echo "Unsupported OS: Cannot pull openshift commands"
+    CONTINUE="false"
+  fi
+  if [[ ${CONTINUE} == "true" ]]
+  then
+    mkdir -p ${OKD_LAB_PATH}/butane/${BUTANE_VERSION}
+    wget -O ${OKD_LAB_PATH}/butane/${BUTANE_VERSION}/butane https://github.com/coreos/butane/releases/download/${BUTANE_VERSION}/butane-${PROC_ARCH}-${BUTANE_DLD}
   fi
 }
 

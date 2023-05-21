@@ -6,7 +6,8 @@ function startWorker() {
     host_name=$(yq e ".compute-nodes.[${node_index}].name" ${CLUSTER_CONFIG})
     if [[ $(yq e ".compute-nodes.[${node_index}].metal" ${CLUSTER_CONFIG}) == "true" ]]
     then
-      echo "This script will not auto start a bare-metal node.  Please power on ${host_name} manually."
+      local mac=$(yq e ".compute-nodes.[${node_index}].mac-addr" ${CLUSTER_CONFIG})
+      startMetal ${mac}
     else
       if [[ ${node_index} -gt 0 ]]
       then
@@ -225,25 +226,42 @@ EOF
 }
 
 function getOkdRelease() {
-  OKD_BASE="okd"
-  yq e ".cluster.scos = \"false\"" -i ${CLUSTER_CONFIG}
-  yq e ".cluster.remote-registry = \"quay.io/openshift/okd\"" -i ${CLUSTER_CONFIG}
+
+  local OKD_BASE="okd"
+  
   for i in "$@"
   do
     case $i in
       --scos)
         OKD_BASE="okd-scos"
-        yq e ".cluster.scos = \"true\"" -i ${CLUSTER_CONFIG}
-        yq e ".cluster.remote-registry = \"quay.io/okd/scos-release\"" -i ${CLUSTER_CONFIG}
-        export OKD_REGISTRY=$(yq e ".cluster.remote-registry" ${CLUSTER_CONFIG})
       ;;
     esac
   done
 
+  case ${OKD_BASE} in
+    okd)
+      yq e ".cluster.scos = \"false\"" -i ${CLUSTER_CONFIG}
+      yq e ".cluster.remote-registry = \"quay.io/openshift/okd\"" -i ${CLUSTER_CONFIG}
+    ;;
+    okd-scos)
+      yq e ".cluster.scos = \"true\"" -i ${CLUSTER_CONFIG}
+      yq e ".cluster.remote-registry = \"quay.io/okd/scos-release\"" -i ${CLUSTER_CONFIG}
+      export OKD_REGISTRY=$(yq e ".cluster.remote-registry" ${CLUSTER_CONFIG})
+    ;;
+  esac
+
   OKD_RELEASE=$(basename $(curl -Ls -o /dev/null -w %{url_effective} https://github.com/okd-project/${OKD_BASE}/releases/latest))
-  echo ${OKD_RELEASE}
+  echo "OKD Release: ${OKD_RELEASE}"
   yq e ".cluster.release = \"${OKD_RELEASE}\"" -i ${CLUSTER_CONFIG}
-  setRelease
+  setOkdRelease
+}
+
+function getButaneRelease() {
+
+  BUTANE_VERSION=$(basename $(curl -Ls -o /dev/null -w %{url_effective} https://github.com/coreos/butane/releases/latest))
+  echo "Butane Release: ${BUTANE_VERSION}"
+  yq e ".cluster.butane-version = \"${BUTANE_VERSION}\"" -i ${CLUSTER_CONFIG}
+  setButaneRelease
 }
 
 function ocLogin() {
@@ -425,6 +443,11 @@ function startNode() {
   ${SSH} root@${kvm_host} "virsh start ${host_name}"
 }
 
+function startMetal() {
+  local mac=${1}
+  ${SSH} root@${DOMAIN_ROUTER} "etherwake -i br-lan ${mac}"
+}
+
 function startBootstrap() {
   host_name="$(yq e ".cluster.name" ${CLUSTER_CONFIG})-bootstrap"
 
@@ -447,11 +470,22 @@ function startBootstrap() {
 function startControlPlane() {
   if [[ $(yq e ".control-plane.metal" ${CLUSTER_CONFIG}) == "true" ]]
   then
-    echo "This script will not auto start bare-metal nodes.  Please power them on manually."
-    exit 0
-  fi
-
-  if [[ $(yq e ".control-plane.okd-hosts" ${CLUSTER_CONFIG} | yq e 'length' -) == "1" ]]
+    if [[ $(yq e ".control-plane.okd-hosts" ${CLUSTER_CONFIG} | yq e 'length' -) == "1" ]]
+    then
+      local mac=$(yq e ".control-plane.okd-hosts.[0].mac-addr" ${CLUSTER_CONFIG})
+      startMetal ${mac}
+    else
+      for node_index in 0 1 2
+      do
+        if [[ ${node_index} -gt 0 ]]
+        then
+          pause 30 "Pause to stagger node start up"
+        fi
+        local mac=$(yq e ".control-plane.okd-hosts.[${node_index}].mac-addr" ${CLUSTER_CONFIG})
+        startMetal ${mac}
+      done
+    fi
+  elif [[ $(yq e ".control-plane.okd-hosts" ${CLUSTER_CONFIG} | yq e 'length' -) == "1" ]]
   then
     kvm_host=$(yq e ".control-plane.okd-hosts.[0].kvm-host" ${CLUSTER_CONFIG})
     host_name=$(yq e ".control-plane.okd-hosts.[0].name" ${CLUSTER_CONFIG})

@@ -196,7 +196,7 @@ function setupRouterCommon() {
 
   local router_ip=${1}
 
-  ${SSH} root@${router_ip} "opkg update && opkg install ip-full procps-ng-ps bind-server bind-tools bash sfdisk rsync resize2fs wget block-mount wipefs coreutils-nohup"
+  ${SSH} root@${router_ip} "opkg update && opkg install ip-full procps-ng-ps bind-server bind-tools bash sfdisk rsync resize2fs wget block-mount wipefs coreutils-nohup etherwake"
   
   if [[ ${INSTALL_HOST} == "router" ]]
   then

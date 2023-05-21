@@ -90,6 +90,7 @@ do
     ;;
     --latest)
       getOkdRelease "$@"
+      getButaneRelease
     ;;
     --console)
       ocConsole "$@"

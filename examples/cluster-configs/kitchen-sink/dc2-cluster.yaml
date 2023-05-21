@@ -5,7 +5,7 @@ cluster:
   local-registry: nexus.my.multi-region.lab:5001
   proxy-registry: nexus.my.multi-region.lab:5000
   remote-registry: quay.io/okd/scos-release
-  butane-version: v0.16.0
+  butane-version: v0.18.0
   butane-variant: fcos
   butane-spec-version: 1.4.0
   ingress-ip-addr: 10.12.12.2
