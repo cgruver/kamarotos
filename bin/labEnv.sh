@@ -137,6 +137,7 @@ function labctx() {
     then
       setClusterEnv
     fi
+    echo "Your shell environment is set up for Cluster: ${CLUSTER_NAME}.${DOMAIN}"
   fi
 }
 
