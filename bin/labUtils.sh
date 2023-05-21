@@ -147,3 +147,24 @@ function createHostPwd() {
   ROOT_PWD=""
   ROOT_PWD_CHK=""
 }
+
+# function createLab() {
+#   for i in "$@"
+#   do
+#     case ${i} in
+#       --sno-bip)
+#       createSnoBipConfig
+#       ;;
+#     esac
+#   done
+# }
+
+# function createSnoBipConfig() {
+
+# local lab_yaml="${OKD_LAB_PATH}/lab-config/basic-lab-bip-sno.yaml"
+# local cluster_yaml="${OKD_LAB_PATH}/lab-config/cluster-configs/sno-bip-no-pi.yaml"
+
+# cat << EOF > 
+
+# ln -s ${lab_yaml} ${HOME}/okd-lab/lab-config/lab.yaml
+# }
