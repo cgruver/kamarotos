@@ -48,7 +48,7 @@ function deleteWorker() {
   then
     boot_dev=$(yq e ".compute-nodes.[${index}].boot-dev" ${CLUSTER_CONFIG})
     ceph_dev=$(yq e ".compute-nodes.[${index}].ceph.ceph-dev" ${CLUSTER_CONFIG})
-    destroyMetal core ${host_name} ${boot_dev} "/dev/${ceph_dev}" ${p_cmd}
+    destroyMetal core ${host_name} ${boot_dev} "${ceph_dev}" ${p_cmd}
   else
     kvm_host=$(yq e ".compute-nodes.[${index}].kvm-host" ${CLUSTER_CONFIG})
     deleteNodeVm ${host_name} ${kvm_host}.${DOMAIN}
@@ -665,7 +665,7 @@ function createControlPlaneCephCluster() {
     yq e ".spec.storage.nodes.[${node_index}].name = \"${node_name}\"" -i ${CEPH_CLUSTER_FILE}
     yq e ".spec.storage.nodes.[${node_index}].devices.[0].name = \"${ceph_dev}\"" -i ${CEPH_CLUSTER_FILE}
     yq e ".spec.storage.nodes.[${node_index}].devices.[0].config.osdsPerDevice = \"1\"" -i ${CEPH_CLUSTER_FILE}
-    ${SSH} -o ConnectTimeout=5 core@${node_name} "sudo wipefs -a -f /dev/${ceph_dev} && sudo dd if=/dev/zero of=/dev/${ceph_dev} bs=4096 count=100"
+    ${SSH} -o ConnectTimeout=5 core@${node_name} "sudo wipefs -a -f ${ceph_dev} && sudo dd if=/dev/zero of=${ceph_dev} bs=4096 count=100"
     ${OC} label nodes ${node_name} role=storage-node
   done
 }
@@ -683,7 +683,7 @@ function createWorkerCephCluster() {
       yq e ".spec.storage.nodes.[${node_index}].name = \"${node_name}\"" -i ${CEPH_CLUSTER_FILE}
       yq e ".spec.storage.nodes.[${node_index}].devices.[0].name = \"${ceph_dev}\"" -i ${CEPH_CLUSTER_FILE}
       yq e ".spec.storage.nodes.[${node_index}].devices.[0].config.osdsPerDevice = \"1\"" -i ${CEPH_CLUSTER_FILE}
-      ${SSH} -o ConnectTimeout=5 core@${node_name} "sudo wipefs -a -f /dev/${ceph_dev} && sudo dd if=/dev/zero of=/dev/${ceph_dev} bs=4096 count=100"
+      ${SSH} -o ConnectTimeout=5 core@${node_name} "sudo wipefs -a -f ${ceph_dev} && sudo dd if=/dev/zero of=${ceph_dev} bs=4096 count=100"
     fi
     node_index=$(( ${node_index} + 1 ))
     ${OC} label nodes ${node_name} role=storage-node

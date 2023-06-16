@@ -192,8 +192,6 @@ cat << EOF > ${WORK_DIR}/dns-work-dir/forward.zone
 api.${CLUSTER_NAME}.${DOMAIN}.        IN      A      ${ip_addr} ; ${CLUSTER_NAME}-${DOMAIN}-cp
 api-int.${CLUSTER_NAME}.${DOMAIN}.    IN      A      ${ip_addr} ; ${CLUSTER_NAME}-${DOMAIN}-cp
 ${host_name}.${DOMAIN}.   IN      A      ${ip_addr} ; ${CLUSTER_NAME}-${DOMAIN}-cp
-etcd-0.${DOMAIN}.          IN      A      ${ip_addr} ; ${CLUSTER_NAME}-${DOMAIN}-cp
-_etcd-server-ssl._tcp.${CLUSTER_NAME}.${DOMAIN}    86400     IN    SRV     0    10    2380    etcd-0.${CLUSTER_NAME}.${DOMAIN}. ; ${CLUSTER_NAME}-${DOMAIN}-cp
 EOF
 
 o4=$(echo ${ip_addr} | cut -d"." -f4)
@@ -217,8 +215,6 @@ api.${CLUSTER_NAME}.${DOMAIN}.        IN      A      ${bs_ip_addr} ; ${CLUSTER_N
 api-int.${CLUSTER_NAME}.${DOMAIN}.    IN      A      ${ip_addr} ; ${CLUSTER_NAME}-${DOMAIN}-cp
 api-int.${CLUSTER_NAME}.${DOMAIN}.    IN      A      ${bs_ip_addr} ; ${CLUSTER_NAME}-${DOMAIN}-bs
 ${host_name}.${DOMAIN}.   IN      A      ${ip_addr} ; ${CLUSTER_NAME}-${DOMAIN}-cp
-etcd-0.${DOMAIN}.          IN      A      ${ip_addr} ; ${CLUSTER_NAME}-${DOMAIN}-cp
-_etcd-server-ssl._tcp.${CLUSTER_NAME}.${DOMAIN}    86400     IN    SRV     0    10    2380    etcd-0.${CLUSTER_NAME}.${DOMAIN}. ; ${CLUSTER_NAME}-${DOMAIN}-cp
 EOF
 
 o4=$(echo ${ip_addr} | cut -d"." -f4)
@@ -228,30 +224,6 @@ ${o4}    IN      PTR     ${host_name}.${DOMAIN}.  ; ${CLUSTER_NAME}-${DOMAIN}-cp
 ${bs_o4}    IN      PTR     ${CLUSTER_NAME}-bootstrap.${DOMAIN}.   ; ${CLUSTER_NAME}-${DOMAIN}-bs
 EOF
 
-}
-
-function createBipIpRes() {
-
-  local hostname=${1}
-  local ip_addr=${2}
-  local mac=${3}
-
-  ${SSH} root@${DOMAIN_ROUTER} "IP_RES=\$(uci add dhcp host) ; \
-  uci set dhcp.\${IP_RES}.mac=\"${mac}\" ; \
-  uci set dhcp.\${IP_RES}.ip=\"${ip_addr}\" ; \
-  uci set dhcp.\${IP_RES}.name=\"${hostname}.${DOMAIN}\" ; \
-  uci commit ; \
-  /etc/init.d/dnsmasq restart"
-}
-
-function deleteBipIpRes() {
-  
-  local mac=${1}
-
-  host_idx=$(${SSH} root@${DOMAIN_ROUTER} "uci show dhcp | grep 'host\[' | grep \"${mac}\" | cut -d'[' -f2 | cut -d']' -f1")
-  ${SSH} root@${DOMAIN_ROUTER} "uci delete dhcp.@host[${host_idx}] ; \
-    uci commit ; \
-    /etc/init.d/dnsmasq restart"
 }
 
 function createPxeFile() {

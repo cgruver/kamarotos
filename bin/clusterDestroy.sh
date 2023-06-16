@@ -45,6 +45,7 @@ function deleteControlPlane() {
         deleteNodeVm ${host_name} ${kvm_host}.${DOMAIN}
       fi
       deletePxeConfig ${mac_addr}
+      deleteBipIpRes ${mac_addr}
     done
   fi
   if [[ ${RESET_LB} == "true" ]]
@@ -61,6 +62,8 @@ function deleteControlPlane() {
       rm -f /etc/haproxy-${CLUSTER_NAME}.cfg"
     fi
     ${SSH} root@${DOMAIN_ROUTER} "uci delete network.${INTERFACE}_lb ; \
+      uci delete network.${INTERFACE}_api_lb ; \
+      uci delete network.${INTERFACE}_ingress_lb ; \
       uci commit ; \
       /etc/init.d/network reload; \
       sleep 10"

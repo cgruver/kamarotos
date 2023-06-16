@@ -8,6 +8,7 @@
 . ${OKD_LAB_PATH}/bin/routerConfig.sh
 . ${OKD_LAB_PATH}/bin/clusterUtils.sh
 . ${OKD_LAB_PATH}/bin/clusterDeploy.sh
+. ${OKD_LAB_PATH}/bin/agentDeploy.sh
 . ${OKD_LAB_PATH}/bin/clusterDestroy.sh
 . ${OKD_LAB_PATH}/bin/clusterButaneConfig.sh
 . ${OKD_LAB_PATH}/bin/hostUtils.sh
@@ -60,6 +61,9 @@ do
     ;;
     --deploy)
       deploy "$@"
+    ;;
+    --agent-deploy)
+      agentDeploy
     ;;
     --destroy)
       destroy "$@"

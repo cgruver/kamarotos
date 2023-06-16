@@ -201,14 +201,8 @@ function configControlPlane() {
     createPxeFile ${mac_addr} ${platform} ${boot_dev} ${host_name} ${ip_addr}
     # Create control plane node DNS Records:
     echo "${host_name}.${DOMAIN}.   IN      A      ${ip_addr} ; ${CLUSTER_NAME}-${DOMAIN}-cp" >> ${WORK_DIR}/dns-work-dir/forward.zone
-    echo "etcd-${node_index}.${DOMAIN}.          IN      A      ${ip_addr} ; ${CLUSTER_NAME}-${DOMAIN}-cp" >> ${WORK_DIR}/dns-work-dir/forward.zone
     o4=$(echo ${ip_addr} | cut -d"." -f4)
     echo "${o4}    IN      PTR     ${host_name}.${DOMAIN}.  ; ${CLUSTER_NAME}-${DOMAIN}-cp" >> ${WORK_DIR}/dns-work-dir/reverse.zone
-  done
-  # Create DNS SRV Records:
-  for node_index in 0 1 2
-  do
-    echo "_etcd-server-ssl._tcp.${CLUSTER_NAME}.${DOMAIN}    86400     IN    SRV     0    10    2380    etcd-${node_index}.${CLUSTER_NAME}.${DOMAIN}. ; ${CLUSTER_NAME}-${DOMAIN}-cp" >> ${WORK_DIR}/dns-work-dir/forward.zone
   done
   # Create The HA-Proxy Load Balancer
   createLbConfig
@@ -342,15 +336,6 @@ function deploy() {
       ;;
       -k|--kvm-hosts)
         deployKvmHosts "$@"
-      ;;
-      -s|--sno)
-        fixSnoBootDev
-      ;;
-      -l|--logs)
-        fixSnoLogs
-      ;;
-      -n|--net)
-        fixSnoNetwork
       ;;
       *)
         # catch all
