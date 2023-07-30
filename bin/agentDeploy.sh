@@ -21,7 +21,7 @@ function agentDeploy() {
   fi
   setControlPlaneVars
   createAgentDnsRecords
-  pause 30 "Give DNS Time to recover"
+  pause 40 "Give DNS Time to recover"
   nslookup quay.io
   createAgentInstallConfig
   createAgentPxeBootFiles ${NODE_0_MAC} ${NODE_0_IP} ${NODE_0_NAME}

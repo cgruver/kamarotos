@@ -18,10 +18,10 @@ function createButaneConfig() {
   then
     writeButaneCeph ${mac} ${boot_dev}
   fi
-  # if [[ ${platform} == "metal" ]]
-  # then
-  #   writeButaneMetal ${mac}
-  # fi
+  if [[ ${platform} == "metal" ]]
+  then
+    writeButaneMetal ${mac}
+  fi
   cat ${WORK_DIR}/ipxe-work-dir/${mac//:/-}-config.yml | butane -d ${WORK_DIR}/ipxe-work-dir/ -o ${WORK_DIR}/ipxe-work-dir/ignition/${mac//:/-}.ign
 }
 
@@ -143,6 +143,10 @@ function createBipMC() {
   local hostpath_dev=$(yq e ".control-plane.okd-hosts.[0].hostpath-dev" ${CLUSTER_CONFIG})
   local systemd_svc_name=$(echo ${hostpath_dev//\//-} | cut -d"-" -f2-)
   local mc_version=$(${OC} version --client -o yaml | yq e ".releaseClientVersion" | cut -d"-" -f1)
+  if [[ ${mc_version} == "4.14.0" ]]
+  then
+    mc_version="4.14.0-experimental"
+  fi
 
 sno_machine_config=$(cat << EOF | butane | while IFS= read -r line ; do echo "          ${line}" ; done
 variant: openshift

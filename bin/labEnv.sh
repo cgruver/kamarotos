@@ -259,9 +259,15 @@ function setOkdRelease() {
     then
       if [[ $(yq ".cluster | has(\"scos\")" ${CLUSTER_CONFIG}) == "true" ]] && [[ $(yq e ".cluster.scos" ${CLUSTER_CONFIG}) == "true" ]]
       then
-        getOkdCmds okd-scos
+        OKD_TYPE="okd-scos"
       else
-        getOkdCmds okd
+        OKD_TYPE="okd"
+      fi
+      if [[ $(yq ".cluster | has(\"nightly\")" ${CLUSTER_CONFIG}) == "true" ]] && [[ $(yq e ".cluster.nightly" ${CLUSTER_CONFIG}) == "true" ]]
+      then
+        getNightlyOkdCmds ${OKD_TYPE}
+      else 
+        getOkdCmds ${OKD_TYPE}
       fi
     fi
     for i in $(ls ${OKD_LAB_PATH}/okd-cmds/${OKD_RELEASE})
@@ -292,21 +298,17 @@ function getOkdCmds() {
   local CONTINUE="true"
   local okd_type=${1}
   local SYS_ARCH=$(uname)
-  local PROC_ARCH=x86_64
   if [[ ${SYS_ARCH} == "Darwin" ]]
   then
-    BUTANE_DLD=apple-darwin
     if [[ $(uname -m) == "arm64" ]]
     then
       OS_VER=mac-arm64
-      PROC_ARCH=aarch64
     else
       OS_VER=mac
     fi
   elif [[ ${SYS_ARCH} == "Linux" ]]
   then
     OS_VER=linux
-    BUTANE_DLD=unknown-linux-gnu
   else
     echo "Unsupported OS: Cannot pull openshift commands"
     CONTINUE="false"
@@ -323,6 +325,31 @@ function getOkdCmds() {
     rm -rf ${OKD_LAB_PATH}/tmp
     fixMacArmCodeSign
   fi
+}
+
+function getNightlyOkdCmds() {
+
+  local okd_type=${1}
+
+  if [[ ${okd_type} == "okd" ]]
+  then
+    TOOLS_URI=registry.ci.openshift.org/origin/release:${OKD_RELEASE}
+  else
+    TOOLS_URI=quay.io/okd/scos-release:${OKD_RELEASE}
+  fi
+  mkdir -p ${OKD_LAB_PATH}/okd-cmds/${OKD_RELEASE}
+  WORK_DIR=$(mktemp -d)
+  cd ${WORK_DIR}
+  oc adm release extract --tools ${TOOLS_URI}
+  for i in $(ls *.tar.gz)
+  do
+    tar -xzvf $i
+  done
+  mv oc ${OKD_LAB_PATH}/okd-cmds/${OKD_RELEASE}
+  mv kubectl ${OKD_LAB_PATH}/okd-cmds/${OKD_RELEASE}
+  mv openshift-install ${OKD_LAB_PATH}/okd-cmds/${OKD_RELEASE}
+  cd -
+  rm -rf ${WORK_DIR}
 }
 
 function getButane() {

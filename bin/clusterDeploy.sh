@@ -22,9 +22,11 @@ networking:
 compute:
 - name: worker
   replicas: 0
+  hyperthreading: Enabled
 controlPlane:
   name: master
   replicas: ${CP_REPLICAS}
+  hyperthreading: Enabled
 platform:
   none: {}
 pullSecret: '${PULL_SECRET_TXT}'

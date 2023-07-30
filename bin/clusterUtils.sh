@@ -1,4 +1,16 @@
 function startWorker() {
+
+  STAGGER="false"
+
+  for i in "$@"
+  do
+    case $i in
+      -s)
+        STAGGER="true"
+      ;;
+    esac
+  done
+
   let node_count=$(yq e ".compute-nodes" ${CLUSTER_CONFIG} | yq e 'length' -)
   let node_index=0
   while [[ node_index -lt ${node_count} ]]
@@ -9,12 +21,12 @@ function startWorker() {
       local mac=$(yq e ".compute-nodes.[${node_index}].mac-addr" ${CLUSTER_CONFIG})
       startMetal ${mac}
     else
-      if [[ ${node_index} -gt 0 ]]
-      then
-        pause 30 "Pause to stagger node start up"
-      fi
       kvm_host=$(yq e ".compute-nodes.[${node_index}].kvm-host" ${CLUSTER_CONFIG})  
       startNode ${kvm_host}.${DOMAIN} ${host_name}
+    fi
+    if [[ ${node_index} -gt 0 ]] && [[ ${STAGGER} == "true" ]]
+    then
+      pause 30 "Pause to stagger node start up"
     fi
     node_index=$(( ${node_index} + 1 ))
   done
@@ -27,6 +39,23 @@ function stopWorkers() {
   # Cordon Compute Nodes
   cordonNode
 
+  CEPH_PDB="false"
+  let node_index=0
+  while [[ node_index -lt ${node_count} ]]
+  do
+    node_index=$(( ${node_index} + 1 ))
+    if [[ $(yq ".compute-nodes.[${node_index}] | has(\"ceph\")" ${CLUSTER_CONFIG}) == "true" ]]
+    then
+      CEPH_PDB="true"
+    fi
+  done
+  if [[ ${CEPH_PDB} == "true" ]]
+  then
+    ${OC} scale deployment rook-ceph-operator -n rook-ceph --replicas=0
+    ${OC} patch pdb rook-ceph-mgr-pdb -n rook-ceph --type=merge -p '{"spec":{"maxUnavailable":"100%"}}'
+    ${OC} patch pdb rook-ceph-mon-pdb -n rook-ceph --type=merge -p '{"spec":{"maxUnavailable":"100%"}}'
+    ${OC} patch pdb rook-ceph-osd -n rook-ceph --type=merge -p '{"spec":{"maxUnavailable":"100%"}}'
+  fi
   # Drain & Shutdown Compute Nodes
   let node_index=0
   while [[ node_index -lt ${node_count} ]]
@@ -79,6 +108,23 @@ function unCordonNode() {
     ${OC} adm uncordon ${host_name}.${DOMAIN}
     node_index=$(( ${node_index} + 1 ))
   done
+  CEPH_PDB="false"
+  let node_index=0
+  while [[ node_index -lt ${node_count} ]]
+  do
+    node_index=$(( ${node_index} + 1 ))
+    if [[ $(yq ".compute-nodes.[${node_index}] | has(\"ceph\")" ${CLUSTER_CONFIG}) == "true" ]]
+    then
+      CEPH_PDB="true"
+    fi
+  done
+  if [[ ${CEPH_PDB} == "true" ]]
+  then
+    ${OC} scale deployment rook-ceph-operator -n rook-ceph --replicas=1
+    ${OC} patch pdb rook-ceph-mgr-pdb -n rook-ceph --type=merge -p '{"spec":{"maxUnavailable":1}}'
+    ${OC} patch pdb rook-ceph-mon-pdb -n rook-ceph --type=merge -p '{"spec":{"maxUnavailable":1}}'
+    ${OC} patch pdb rook-ceph-osd -n rook-ceph --type=merge -p '{"spec":{"maxUnavailable":1}}'
+  fi
 }
 
 function stopCluster() {
@@ -228,12 +274,16 @@ EOF
 function getOkdRelease() {
 
   local OKD_BASE="okd"
+  local NIGHTLY_RELEASE=""
   
   for i in "$@"
   do
     case $i in
       --scos)
         OKD_BASE="okd-scos"
+      ;;
+      --nightly=*)
+        NIGHTLY_RELEASE="${i#*=}"
       ;;
     esac
   done
@@ -250,7 +300,14 @@ function getOkdRelease() {
     ;;
   esac
 
-  OKD_RELEASE=$(basename $(curl -Ls -o /dev/null -w %{url_effective} https://github.com/okd-project/${OKD_BASE}/releases/latest))
+  if [[ ${NIGHTLY_RELEASE} == "" ]]
+  then
+    OKD_RELEASE=$(basename $(curl -Ls -o /dev/null -w %{url_effective} https://github.com/okd-project/${OKD_BASE}/releases/latest))
+    yq e ".cluster.nightly = \"false\"" -i ${CLUSTER_CONFIG}
+  else
+    OKD_RELEASE=${NIGHTLY_RELEASE}
+    yq e ".cluster.nightly = \"true\"" -i ${CLUSTER_CONFIG}
+  fi
   echo "OKD Release: ${OKD_RELEASE}"
   yq e ".cluster.release = \"${OKD_RELEASE}\"" -i ${CLUSTER_CONFIG}
   setOkdRelease
@@ -468,6 +525,18 @@ function startBootstrap() {
 }
 
 function startControlPlane() {
+
+  STAGGER="false"
+
+  for i in "$@"
+  do
+    case $i in
+      -s)
+        STAGGER="true"
+      ;;
+    esac
+  done
+
   if [[ $(yq e ".control-plane.metal" ${CLUSTER_CONFIG}) == "true" ]]
   then
     if [[ $(yq e ".control-plane.okd-hosts" ${CLUSTER_CONFIG} | yq e 'length' -) == "1" ]]
@@ -477,7 +546,7 @@ function startControlPlane() {
     else
       for node_index in 0 1 2
       do
-        if [[ ${node_index} -gt 0 ]]
+        if [[ ${node_index} -gt 0 ]] && [[ ${STAGGER} == "true" ]]
         then
           pause 30 "Pause to stagger node start up"
         fi
@@ -522,11 +591,15 @@ function start() {
       -b)
         startBootstrap
       ;;
+      -c)
+        startControlPlane "$@"
+        startWorker "$@"
+      ;;
       -m)
-        startControlPlane
+        startControlPlane "$@"
       ;;
       -w)
-        startWorker
+        startWorker "$@"
       ;;
       -u)
         unCordonNode

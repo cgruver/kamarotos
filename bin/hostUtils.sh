@@ -103,7 +103,7 @@ mkdir -p /root/.ssh
 chmod 700 /root/.ssh
 curl -o /root/.ssh/authorized_keys ${install_url}/postinstall/authorized_keys
 chmod 600 /root/.ssh/authorized_keys
-dnf -y install wget git net-tools bind-utils bash-completion nfs-utils rsync libguestfs-tools virt-install iscsi-initiator-utils
+dnf -y install wget git net-tools bind-utils bash-completion nfs-utils rsync libguestfs-tools virt-install libvirt iscsi-initiator-utils
 dnf -y update
 echo "InitiatorName=iqn.\$(hostname)" > /etc/iscsi/initiatorname.iscsi
 echo "options kvm_intel nested=1" >> /etc/modprobe.d/kvm.conf
@@ -225,6 +225,23 @@ ${bs_o4}    IN      PTR     ${CLUSTER_NAME}-bootstrap.${DOMAIN}.   ; ${CLUSTER_N
 EOF
 
 }
+
+# function createBipPxeFile() {
+
+#   local mac=${1}
+#   local platform=${2}
+#   local hostname=${3}
+#   local ip_addr=${4}
+
+# cat << EOF > ${WORK_DIR}/ipxe-work-dir/${mac//:/-}.ipxe
+# #!ipxe
+
+# kernel http://${INSTALL_HOST_IP}/install/fcos/${OKD_RELEASE}/vmlinuz edd=off net.ifnames=1 ifname=nic0:${mac} ip=${ip_addr}::${DOMAIN_ROUTER}:${DOMAIN_NETMASK}:${hostname}.${DOMAIN}:nic0:none nameserver=${DOMAIN_ROUTER} rd.neednet=1 ignition.firstboot ignition.platform.id=${platform} initrd=initrd  coreos.live.rootfs_url=http://${INSTALL_HOST_IP}/install/fcos/${OKD_RELEASE}/rootfs.img ignition.config.url=http://${INSTALL_HOST_IP}/install/fcos/ignition/${CLUSTER_NAME}.${DOMAIN}/${mac//:/-}.ign
+# initrd http://${INSTALL_HOST_IP}/install/fcos/${OKD_RELEASE}/initrd
+
+# boot
+# EOF
+# }
 
 function createPxeFile() {
   local mac=${1}
