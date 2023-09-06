@@ -145,7 +145,8 @@ function createBipMC() {
   local mc_version=$(${OC} version --client -o yaml | yq e ".releaseClientVersion" | cut -d"-" -f1)
   if [[ ${mc_version} == "4.14.0" ]]
   then
-    mc_version="4.14.0-experimental"
+    # mc_version="4.14.0-experimental"
+    mc_version="4.13.0"
   fi
 
 sno_machine_config=$(cat << EOF | butane | while IFS= read -r line ; do echo "          ${line}" ; done

@@ -23,9 +23,9 @@ function initPiNetwork() {
   cat ${OKD_LAB_PATH}/ssh_key.pub | ssh root@192.168.1.1 "cat >> /etc/dropbear/authorized_keys"
   ssh root@192.168.1.1 "uci set dropbear.@dropbear[0].PasswordAuth=off ; \
     uci set dropbear.@dropbear[0].RootPasswordAuth=off ; \
-    uci set network.lan.ipaddr=${BASTION_HOST} ; \
+    uci set network.lan.ipaddr=${PI_IP} ; \
     uci set network.lan.netmask=${EDGE_NETMASK} ; \
-    uci set network.lan.hostname=bastion.${LAB_DOMAIN} ; \
+    uci set network.lan.hostname=raspberry-pi.${LAB_DOMAIN} ; \
     uci set network.lan.gateway=${EDGE_ROUTER} ; \
     uci set network.lan.dns=${EDGE_ROUTER} ; \
     uci commit ; \
@@ -34,7 +34,7 @@ function initPiNetwork() {
 }
 
 function initPiDisk() {
-  ${SSH} root@${BASTION_HOST} "opkg update ; \
+  ${SSH} root@${PI_IP} "opkg update ; \
     opkg install lsblk sfdisk losetup resize2fs ; \
     PART_INFO=\$(sfdisk -l /dev/mmcblk0 | grep mmcblk0p2) ; \
     let ROOT_SIZE=20971520 ; \
@@ -48,7 +48,7 @@ function initPiDisk() {
     rm /tmp/part.info ; \
     reboot"
   pause 15 "Wait for reboot"
-  ${SSH} root@${BASTION_HOST} "LOOP=\"\$(losetup -f)\" ; \
+  ${SSH} root@${PI_IP} "LOOP=\"\$(losetup -f)\" ; \
     losetup \${LOOP} /dev/mmcblk0p2 ; \
     e2fsck -y -f \${LOOP} ; \
     resize2fs \${LOOP} ; \
@@ -74,7 +74,7 @@ config device\n
 config interface 'lan'\n
 \toption device 'br-lan'\n
 \toption proto 'static'\n
-\toption ipaddr '${BASTION_HOST}'\n
+\toption ipaddr '${PI_IP}'\n
 \toption netmask '${EDGE_NETMASK}'\n
 \toption gateway '${EDGE_ROUTER}'\n
 \toption dns '${EDGE_ROUTER}'\n
@@ -97,7 +97,7 @@ config system\n
 \toption ttylogin '0'\n
 \toption log_size '64'\n
 \toption urandom_seed '0'\n
-\toption hostname 'bastion.${LAB_DOMAIN}'\n
+\toption hostname 'raspberry-pi.${LAB_DOMAIN}'\n
 \n
 config timeserver 'ntp'\n
 \toption enabled '1'\n
@@ -172,8 +172,8 @@ EOF
     umount /dev/${SD_PART}2 ; \
     umount /dev/${SD_PART}3 ; \
     rm -rf /tmp/pi"
-  echo "bastion.${LAB_DOMAIN}.         IN      A      ${BASTION_HOST}" | ${SSH} root@${EDGE_ROUTER} "cat >> /data/bind/db.${LAB_DOMAIN}"
-  echo "10    IN      PTR     bastion.${LAB_DOMAIN}."  | ${SSH} root@${EDGE_ROUTER} "cat >> /data/bind/db.${EDGE_ARPA}"
+  echo "raspberry-pi.${LAB_DOMAIN}.         IN      A      ${PI_IP}" | ${SSH} root@${EDGE_ROUTER} "cat >> /data/bind/db.${LAB_DOMAIN}"
+  echo "10    IN      PTR     raspberry-pi.${LAB_DOMAIN}."  | ${SSH} root@${EDGE_ROUTER} "cat >> /data/bind/db.${EDGE_ARPA}"
   ${SSH} root@${EDGE_ROUTER} "/etc/init.d/named stop && /etc/init.d/named start"
 
 }
@@ -194,20 +194,20 @@ EOF
 cat << EOF > ${PI_WORK_DIR}/local-repos.repo
 [local-appstream]
 name=AppStream
-baseurl=http://${BASTION_HOST}/install/repos/AppStream/x86_64/os/
+baseurl=http://${PI_IP}/install/repos/AppStream/x86_64/os/
 gpgcheck=0
 enabled=1
 
 [local-baseos]
 name=BaseOS
-baseurl=http://${BASTION_HOST}/install/repos/BaseOS/x86_64/os/
+baseurl=http://${PI_IP}/install/repos/BaseOS/x86_64/os/
 gpgcheck=0
 enabled=1
 
 EOF
 
 cat << EOF > ${PI_WORK_DIR}/chrony.conf
-server ${BASTION_HOST} iburst
+server ${PI_IP} iburst
 driftfile /var/lib/chrony/drift
 makestep 1.0 3
 rtcsync
@@ -224,7 +224,7 @@ del uhttpd.main.cert
 del uhttpd.main.key
 del uhttpd.main.cgi_prefix
 del uhttpd.main.lua_prefix
-add_list uhttpd.main.listen_http="${BASTION_HOST}:80"
+add_list uhttpd.main.listen_http="${PI_IP}:80"
 add_list uhttpd.main.listen_http="127.0.0.1:80"
 set uhttpd.main.home='/usr/local/www'
 set system.ntp.enable_server="1"
@@ -232,7 +232,7 @@ commit
 EOF
 
   echo "Installing packages"
-  ${SSH} root@${BASTION_HOST} "opkg update && opkg install ip-full uhttpd shadow bash wget git-http ca-bundle procps-ng-ps rsync curl libstdcpp6 libjpeg libnss lftp block-mount unzip ; \
+  ${SSH} root@${PI_IP} "opkg update && opkg install ip-full uhttpd shadow bash wget git-http ca-bundle procps-ng-ps rsync curl libstdcpp6 libjpeg libnss lftp block-mount unzip ; \
     opkg list | grep \"^coreutils-\" | while read i ; \
     do opkg install \$(echo \${i} | cut -d\" \" -f1) ; \
     done
@@ -263,7 +263,7 @@ EOF
     dropbearkey -y -f /root/.ssh/id_dropbear | grep \"ssh-\" > /usr/local/www/install/postinstall/authorized_keys"
 
   echo "Installing Java 8 and 11"
-  ${SSH} root@${BASTION_HOST} "mkdir /tmp/work-dir ; \
+  ${SSH} root@${PI_IP} "mkdir /tmp/work-dir ; \
     cd /tmp/work-dir; \
     PKG=\"openjdk8-8 openjdk8-jre-8 openjdk8-jre-lib-8 openjdk8-jre-base-8 java-cacerts openjdk11-11 openjdk11-jdk-11 openjdk11-jre-headless-11\" ; \
     for package in \${PKG}; 
@@ -286,14 +286,14 @@ EOF
     cd ; \
     rm -rf /tmp/work-dir"
 
-  ${SCP} ${PI_WORK_DIR}/local-repos.repo root@${BASTION_HOST}:/usr/local/www/install/postinstall/local-repos.repo
-  ${SCP} ${PI_WORK_DIR}/chrony.conf root@${BASTION_HOST}:/usr/local/www/install/postinstall/chrony.conf
-  ${SCP} ${PI_WORK_DIR}/MirrorSync.sh root@${BASTION_HOST}:/root/bin/MirrorSync.sh
-  ${SSH} root@${BASTION_HOST} "chmod 750 /root/bin/MirrorSync.sh"
+  ${SCP} ${PI_WORK_DIR}/local-repos.repo root@${PI_IP}:/usr/local/www/install/postinstall/local-repos.repo
+  ${SCP} ${PI_WORK_DIR}/chrony.conf root@${PI_IP}:/usr/local/www/install/postinstall/chrony.conf
+  ${SCP} ${PI_WORK_DIR}/MirrorSync.sh root@${PI_IP}:/root/bin/MirrorSync.sh
+  ${SSH} root@${PI_IP} "chmod 750 /root/bin/MirrorSync.sh"
   echo "Apply UCI config, disable root password, and reboot"
-  ${SCP} ${PI_WORK_DIR}/uci.batch root@${BASTION_HOST}:/tmp/uci.batch
-  cat ${OKD_LAB_PATH}/ssh_key.pub | ${SSH} root@${BASTION_HOST} "cat >> /usr/local/www/install/postinstall/authorized_keys"
-  ${SSH} root@${BASTION_HOST} "cat /tmp/uci.batch | uci batch ; passwd -l root ; reboot"
+  ${SCP} ${PI_WORK_DIR}/uci.batch root@${PI_IP}:/tmp/uci.batch
+  cat ${OKD_LAB_PATH}/ssh_key.pub | ${SSH} root@${PI_IP} "cat >> /usr/local/www/install/postinstall/authorized_keys"
+  ${SSH} root@${PI_IP} "cat /tmp/uci.batch | uci batch ; passwd -l root ; reboot"
   echo "Setup complete."
-  echo "After the Pi reboots, run ${SSH} root@${BASTION_HOST} \"nohup /root/bin/MirrorSync.sh &\""
+  echo "After the Pi reboots, run ${SSH} root@${PI_IP} \"nohup /root/bin/MirrorSync.sh &\""
 }

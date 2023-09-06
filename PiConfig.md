@@ -17,13 +17,13 @@ export SD_DEV=/dev/disk4
 
 ```bash
 sudo bash
-TEMP_DIR=$(mktemp -d)
-wget https://downloads.openwrt.org/releases/${OPENWRT_PATH} -O ${TEMP_DIR}/openwrt.img.gz
-gunzip ${TEMP_DIR}/openwrt.img.gz
-dd if=${TEMP_DIR}/openwrt.img of=/dev/disk4 bs=4M conv=fsync
-diskutil eject /dev/disk4
-rm -rf ${TEMP_DIR}
-exit
+TEMP_DIR=$(sudo mktemp -d)
+sudo wget https://downloads.openwrt.org/releases/${OPENWRT_PATH} -O ${TEMP_DIR}/openwrt.img.gz
+sudo gunzip ${TEMP_DIR}/openwrt.img.gz
+sudo umount ${SD_DEV}s1
+sudo dd if=${TEMP_DIR}/openwrt.img of=${SD_DEV} bs=4M conv=fsync
+sudo diskutil eject ${SD_DEV}
+sudo rm -rf ${TEMP_DIR}
 ```
 
 ## Set Up Network
@@ -32,7 +32,7 @@ exit
 cat ${OKD_LAB_PATH}/ssh_key.pub | ssh root@192.168.1.1 "cat >> /etc/dropbear/authorized_keys"
 ssh root@192.168.1.1 "uci set dropbear.@dropbear[0].PasswordAuth=off ; \
   uci set dropbear.@dropbear[0].RootPasswordAuth=off ; \
-  uci set network.lan.ipaddr="${BASTION_HOST}" ; \
+  uci set network.lan.ipaddr="${PI_IP}" ; \
   uci set network.lan.netmask=${EDGE_NETMASK} ; \
   uci set network.lan.hostname=bastion.${LAB_DOMAIN} ; \
   uci set network.lan.gateway=${EDGE_ROUTER} ; \
@@ -134,7 +134,7 @@ exit
 cat ${OKD_LAB_PATH}/ssh_key.pub | ssh root@192.168.1.1 "cat >> /etc/dropbear/authorized_keys"
 ssh root@192.168.1.1 "uci set dropbear.@dropbear[0].PasswordAuth=off ; \
   uci set dropbear.@dropbear[0].RootPasswordAuth=off ; \
-  uci set network.lan.ipaddr="${BASTION_HOST}" ; \
+  uci set network.lan.ipaddr="${PI_IP}" ; \
   uci set network.lan.netmask=${EDGE_NETMASK} ; \
   uci set network.lan.hostname=bastion.${LAB_DOMAIN} ; \
   uci set network.lan.gateway=${EDGE_ROUTER} ; \
@@ -147,7 +147,7 @@ ssh root@192.168.1.1 "uci set dropbear.@dropbear[0].PasswordAuth=off ; \
 ### Initialize Pi
 
 ```bash
-ssh root@${BASTION_HOST} "opkg update && 
+ssh root@${PI_IP} "opkg update && 
   opkg install lsblk sfdisk losetup resize2fs ip-full uhttpd shadow bash wget git-http ca-bundle procps-ng-ps rsync curl libstdcpp6 libjpeg libnss lftp block-mount unzip wipefs &&
   opkg list | grep \"^coreutils-\" | while read i ; \
   do opkg install \$(echo \${i} | cut -d\" \" -f1) ; \
@@ -164,15 +164,15 @@ echo \"/dev/\${SD_PART}2 : start= \${P2_START}, size= \${ROOT_SIZE}, type=83\" >
 echo \"/dev/\${SD_PART}3 : start= \${P3_START}, type=83\" >> /tmp/part.info ; \
 sfdisk --no-reread -f /dev/\${SD_DEV} < /tmp/part.info ; \
 rm /tmp/part.info ; \
-reboot
+reboot"
 
-ssh root@${BASTION_HOST} "LOOP=\"\$(losetup -f)\" ; \
+ssh root@${PI_IP} "LOOP=\"\$(losetup -f)\" ; \
   losetup \${LOOP} /dev/mmcblk0p2 ; \
   e2fsck -y -f \${LOOP} ; \
   resize2fs \${LOOP} ; \
   reboot"
 
-ssh root@${BASTION_HOST} "echo \"Creating SSH keys\" ; \
+ssh root@${PI_IP} "echo \"Creating SSH keys\" ; \
   rm -rf /root/.ssh ; \
   mkdir -p /root/.ssh ; \
   dropbearkey -t ed25519 -f /root/.ssh/id_dropbear ; \

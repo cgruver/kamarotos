@@ -64,7 +64,7 @@ nexus-args=\${jetty.etc}/jetty.xml,\${jetty.etc}/jetty-https.xml,\${jetty.etc}/j
 application-port-ssl=8443
 EOF
 
-  ${SSH} root@${BASTION_HOST} "mkdir -p /usr/local/nexus/home ; \
+  ${SSH} root@${PI_IP} "mkdir -p /usr/local/nexus/home ; \
     cd /usr/local/nexus ; \
     wget https://download.sonatype.com/nexus/3/latest-unix.tar.gz -O latest-unix.tar.gz ; \
     tar -xzf latest-unix.tar.gz ; \
@@ -74,19 +74,19 @@ EOF
     groupadd nexus ; \
     useradd -g nexus -d /usr/local/nexus/home nexus ; \
     chown -R nexus:nexus /usr/local/nexus"
-  ${SSH} root@${BASTION_HOST} 'sed -i "s|#run_as_user=\"\"|run_as_user=\"nexus\"|g" /usr/local/nexus/nexus-3/bin/nexus.rc'
+  ${SSH} root@${PI_IP} 'sed -i "s|#run_as_user=\"\"|run_as_user=\"nexus\"|g" /usr/local/nexus/nexus-3/bin/nexus.rc'
   
-  ${SCP} ${PI_WORK_DIR}/nexus root@${BASTION_HOST}:/etc/init.d/nexus
-  ${SSH} root@${BASTION_HOST} "chmod 755 /etc/init.d/nexus"
+  ${SCP} ${PI_WORK_DIR}/nexus root@${PI_IP}:/etc/init.d/nexus
+  ${SSH} root@${PI_IP} "chmod 755 /etc/init.d/nexus"
 
-  ${SSH} root@${BASTION_HOST} "/usr/local/java-1.8-openjdk/bin/keytool -genkeypair -keystore /usr/local/nexus/nexus-3/etc/ssl/keystore.jks -deststoretype pkcs12 -storepass password -keypass password -alias jetty -keyalg RSA -keysize 4096 -validity 5000 -dname \"CN=nexus.${LAB_DOMAIN}, OU=okd4-lab, O=okd4-lab, L=City, ST=State, C=US\" -ext \"SAN=DNS:nexus.${LAB_DOMAIN},IP:${BASTION_HOST}\" -ext \"BC=ca:true\" ; \
+  ${SSH} root@${PI_IP} "/usr/local/java-1.8-openjdk/bin/keytool -genkeypair -keystore /usr/local/nexus/nexus-3/etc/ssl/keystore.jks -deststoretype pkcs12 -storepass password -keypass password -alias jetty -keyalg RSA -keysize 4096 -validity 5000 -dname \"CN=nexus.${LAB_DOMAIN}, OU=okd4-lab, O=okd4-lab, L=City, ST=State, C=US\" -ext \"SAN=DNS:nexus.${LAB_DOMAIN},IP:${PI_IP}\" -ext \"BC=ca:true\" ; \
     /usr/local/java-1.8-openjdk/bin/keytool -importkeystore -srckeystore /usr/local/nexus/nexus-3/etc/ssl/keystore.jks -destkeystore /usr/local/nexus/nexus-3/etc/ssl/keystore.jks -deststoretype pkcs12 -srcstorepass password  ; \
     rm -f /usr/local/nexus/nexus-3/etc/ssl/keystore.jks.old  ; \
     chown nexus:nexus /usr/local/nexus/nexus-3/etc/ssl/keystore.jks  ; \
     mkdir -p /usr/local/nexus/sonatype-work/nexus3/etc"
-  cat ${PI_WORK_DIR}/nexus.properties | ${SSH} root@${BASTION_HOST} "cat >> /usr/local/nexus/sonatype-work/nexus3/etc/nexus.properties"
-  ${SSH} root@${BASTION_HOST} "chown -R nexus:nexus /usr/local/nexus/sonatype-work/nexus3/etc ; /etc/init.d/nexus enable"
-  echo "nexus.${LAB_DOMAIN}.           IN      A      ${BASTION_HOST}" | ${SSH} root@${EDGE_ROUTER} "cat >> /data/bind/db.${LAB_DOMAIN}"
+  cat ${PI_WORK_DIR}/nexus.properties | ${SSH} root@${PI_IP} "cat >> /usr/local/nexus/sonatype-work/nexus3/etc/nexus.properties"
+  ${SSH} root@${PI_IP} "chown -R nexus:nexus /usr/local/nexus/sonatype-work/nexus3/etc ; /etc/init.d/nexus enable"
+  echo "nexus.${LAB_DOMAIN}.           IN      A      ${PI_IP}" | ${SSH} root@${EDGE_ROUTER} "cat >> /data/bind/db.${LAB_DOMAIN}"
   ${SSH} root@${EDGE_ROUTER} "/etc/init.d/named stop && /etc/init.d/named start"
 }
 
@@ -99,7 +99,7 @@ function installGitea() {
     yq e ".gitea-version = \"${GITEA_VERSION}\"" -i ${LAB_CONFIG_FILE}
   fi
   GITEA_VERSION=$(yq e ".gitea-version" ${LAB_CONFIG_FILE})
-  ${SSH} root@${BASTION_HOST} "opkg update && opkg install sqlite3-cli openssh-keygen ; \
+  ${SSH} root@${PI_IP} "opkg update && opkg install sqlite3-cli openssh-keygen ; \
     mkdir -p /usr/local/gitea ; \
     for i in bin etc custom data db git ; \
     do mkdir /usr/local/gitea/\${i} ; \
@@ -111,9 +111,9 @@ function installGitea() {
     groupadd gitea ; \
     useradd -g gitea -d /usr/local/gitea gitea ; \
     chown -R gitea:gitea /usr/local/gitea"
-  INTERNAL_TOKEN=$(${SSH} root@${BASTION_HOST} "/usr/local/gitea/bin/gitea generate secret INTERNAL_TOKEN")
-  SECRET_KEY=$(${SSH} root@${BASTION_HOST} "/usr/local/gitea/bin/gitea generate secret SECRET_KEY")
-  JWT_SECRET=$(${SSH} root@${BASTION_HOST} "/usr/local/gitea/bin/gitea generate secret JWT_SECRET")
+  INTERNAL_TOKEN=$(${SSH} root@${PI_IP} "/usr/local/gitea/bin/gitea generate secret INTERNAL_TOKEN")
+  SECRET_KEY=$(${SSH} root@${PI_IP} "/usr/local/gitea/bin/gitea generate secret SECRET_KEY")
+  JWT_SECRET=$(${SSH} root@${PI_IP} "/usr/local/gitea/bin/gitea generate secret JWT_SECRET")
 
 cat << EOF > ${PI_WORK_DIR}/app.ini
 RUN_USER = gitea
@@ -190,11 +190,11 @@ su - gitea -c "GITEA_WORK_DIR=/usr/local/gitea /usr/local/gitea/bin/gitea --conf
 su - gitea -c "GITEA_WORK_DIR=/usr/local/gitea /usr/local/gitea/bin/gitea --config /usr/local/gitea/etc/app.ini admin user create --username devuser --password password --email devuser@gitea.${LAB_DOMAIN} --must-change-password"
 EOF
 
-  ${SCP} ${PI_WORK_DIR}/app.ini root@${BASTION_HOST}:/usr/local/gitea/etc/app.ini
-  ${SCP} ${PI_WORK_DIR}/gitea root@${BASTION_HOST}:/etc/init.d/gitea
-  ${SCP} ${PI_WORK_DIR}/giteaInit.sh root@${BASTION_HOST}:/tmp/giteaInit.sh
-  ${SSH} root@${BASTION_HOST} "chown -R gitea:gitea /usr/local/gitea ; chmod 755 /etc/init.d/gitea ; chmod 755 /tmp/giteaInit.sh ; /tmp/giteaInit.sh ; /etc/init.d/gitea enable"
-  echo "gitea.${LAB_DOMAIN}.           IN      A      ${BASTION_HOST}" | ${SSH} root@${EDGE_ROUTER} "cat >> /data/bind/db.${LAB_DOMAIN}"
+  ${SCP} ${PI_WORK_DIR}/app.ini root@${PI_IP}:/usr/local/gitea/etc/app.ini
+  ${SCP} ${PI_WORK_DIR}/gitea root@${PI_IP}:/etc/init.d/gitea
+  ${SCP} ${PI_WORK_DIR}/giteaInit.sh root@${PI_IP}:/tmp/giteaInit.sh
+  ${SSH} root@${PI_IP} "chown -R gitea:gitea /usr/local/gitea ; chmod 755 /etc/init.d/gitea ; chmod 755 /tmp/giteaInit.sh ; /tmp/giteaInit.sh ; /etc/init.d/gitea enable"
+  echo "gitea.${LAB_DOMAIN}.           IN      A      ${PI_IP}" | ${SSH} root@${EDGE_ROUTER} "cat >> /data/bind/db.${LAB_DOMAIN}"
   ${SSH} root@${EDGE_ROUTER} "/etc/init.d/named stop && /etc/init.d/named start"
 }
 
@@ -235,21 +235,21 @@ stop() {
 }
 EOF
 
-  ${SSH} root@${BASTION_HOST} "mkdir -p /usr/local/keycloak ; \
+  ${SSH} root@${PI_IP} "mkdir -p /usr/local/keycloak ; \
     cd /usr/local/keycloak ; \
     wget -O keycloak-${KEYCLOAK_VER}.zip https://github.com/keycloak/keycloak/releases/download/${KEYCLOAK_VER}/keycloak-${KEYCLOAK_VER}.zip ; \
     unzip keycloak-${KEYCLOAK_VER}.zip ; \
     ln -s keycloak-${KEYCLOAK_VER} keycloak-server ; \
-    /usr/local/java-11-openjdk/bin/keytool -genkeypair -keystore /usr/local/keycloak/keystore.jks -deststoretype pkcs12 -storepass password -keypass password -alias jetty -keyalg RSA -keysize 4096 -validity 5000 -dname \"CN=keycloak.${LAB_DOMAIN}, OU=okd4-lab, O=okd4-lab, L=City, ST=State, C=US\" -ext \"SAN=DNS:keycloak.${LAB_DOMAIN},IP:${BASTION_HOST}\" -ext \"BC=ca:true\" ; \
+    /usr/local/java-11-openjdk/bin/keytool -genkeypair -keystore /usr/local/keycloak/keystore.jks -deststoretype pkcs12 -storepass password -keypass password -alias jetty -keyalg RSA -keysize 4096 -validity 5000 -dname \"CN=keycloak.${LAB_DOMAIN}, OU=okd4-lab, O=okd4-lab, L=City, ST=State, C=US\" -ext \"SAN=DNS:keycloak.${LAB_DOMAIN},IP:${PI_IP}\" -ext \"BC=ca:true\" ; \
     mv /usr/local/keycloak/keycloak-server/conf/keycloak.conf /usr/local/keycloak/keycloak-server/conf/keycloak.conf.orig ; \
     mkdir -p /usr/local/keycloak/home ; \
     groupadd keycloak ; \
     useradd -g keycloak -d /usr/local/keycloak/home keycloak"
-  echo "keycloak.${LAB_DOMAIN}.           IN      A      ${BASTION_HOST}" | ${SSH} root@${EDGE_ROUTER} "cat >> /data/bind/db.${LAB_DOMAIN}"
+  echo "keycloak.${LAB_DOMAIN}.           IN      A      ${PI_IP}" | ${SSH} root@${EDGE_ROUTER} "cat >> /data/bind/db.${LAB_DOMAIN}"
   ${SSH} root@${EDGE_ROUTER} "/etc/init.d/named stop && /etc/init.d/named start"
-  ${SCP} ${PI_WORK_DIR}/keycloak.conf root@${BASTION_HOST}:/usr/local/keycloak/keycloak-server/conf/keycloak.conf
-  ${SCP} ${PI_WORK_DIR}/keycloak root@${BASTION_HOST}:/etc/init.d/keycloak
-  ${SSH} root@${BASTION_HOST} "chown -R keycloak:keycloak /usr/local/keycloak ; chmod 750 /etc/init.d/keycloak ; /etc/init.d/keycloak enable"
+  ${SCP} ${PI_WORK_DIR}/keycloak.conf root@${PI_IP}:/usr/local/keycloak/keycloak-server/conf/keycloak.conf
+  ${SCP} ${PI_WORK_DIR}/keycloak root@${PI_IP}:/etc/init.d/keycloak
+  ${SSH} root@${PI_IP} "chown -R keycloak:keycloak /usr/local/keycloak ; chmod 750 /etc/init.d/keycloak ; /etc/init.d/keycloak enable"
 }
 
 function installApicurio() {
@@ -262,12 +262,12 @@ STOP=80
 SERVICE_USE_PID=0
 
 start() {
-  service_start /usr/bin/su - apicurio -c 'PATH=/usr/local/java-11-openjdk/bin:${PATH} /usr/local/apicurio/apicurio-studio/bin/standalone.sh -c standalone-apicurio.xml -Djboss.bind.address=${BASTION_HOST} -Djboss.socket.binding.port-offset=1000 -Dapicurio.kc.auth.rootUrl="https://keycloak.${LAB_DOMAIN}:7443" -Dapicurio.kc.auth.realm="apicurio" -Dapicurio-ui.editing.url="wss://apicurio.${LAB_DOMAIN}:9443/api-editing" -Dapicurio-ui.hub-api.url="https://apicurio.${LAB_DOMAIN}:9443/api-hub" -Dapicurio-ui.url="https://apicurio.${LAB_DOMAIN}:9443/studio" > /dev/null 2>&1 &'
+  service_start /usr/bin/su - apicurio -c 'PATH=/usr/local/java-11-openjdk/bin:${PATH} /usr/local/apicurio/apicurio-studio/bin/standalone.sh -c standalone-apicurio.xml -Djboss.bind.address=${PI_IP} -Djboss.socket.binding.port-offset=1000 -Dapicurio.kc.auth.rootUrl="https://keycloak.${LAB_DOMAIN}:7443" -Dapicurio.kc.auth.realm="apicurio" -Dapicurio-ui.editing.url="wss://apicurio.${LAB_DOMAIN}:9443/api-editing" -Dapicurio-ui.hub-api.url="https://apicurio.${LAB_DOMAIN}:9443/api-hub" -Dapicurio-ui.url="https://apicurio.${LAB_DOMAIN}:9443/studio" > /dev/null 2>&1 &'
 }
 
 restart() {
   /usr/bin/su - apicurio -c 'kill \$(ps -x | grep apicurio | grep java | cut -d" " -f2)'
-  service_start /usr/bin/su - apicurio -c 'PATH=/usr/local/java-11-openjdk/bin:${PATH} /usr/local/apicurio/apicurio-studio/bin/standalone.sh -c standalone-apicurio.xml -Djboss.bind.address=${BASTION_HOST} -Djboss.socket.binding.port-offset=1000 -Dapicurio.kc.auth.rootUrl="https://keycloak.${LAB_DOMAIN}:7443" -Dapicurio.kc.auth.realm="apicurio" -Dapicurio-ui.editing.url="wss://apicurio.${LAB_DOMAIN}:9443/api-editing" -Dapicurio-ui.hub-api.url="https://apicurio.${LAB_DOMAIN}:9443/api-hub" -Dapicurio-ui.url="https://apicurio.${LAB_DOMAIN}:9443/studio" > /dev/null 2>&1 &'
+  service_start /usr/bin/su - apicurio -c 'PATH=/usr/local/java-11-openjdk/bin:${PATH} /usr/local/apicurio/apicurio-studio/bin/standalone.sh -c standalone-apicurio.xml -Djboss.bind.address=${PI_IP} -Djboss.socket.binding.port-offset=1000 -Dapicurio.kc.auth.rootUrl="https://keycloak.${LAB_DOMAIN}:7443" -Dapicurio.kc.auth.realm="apicurio" -Dapicurio-ui.editing.url="wss://apicurio.${LAB_DOMAIN}:9443/api-editing" -Dapicurio-ui.hub-api.url="https://apicurio.${LAB_DOMAIN}:9443/api-hub" -Dapicurio-ui.url="https://apicurio.${LAB_DOMAIN}:9443/studio" > /dev/null 2>&1 &'
 }
 
 stop() {
@@ -281,8 +281,8 @@ EOF
     yq e ".apicurio-version = \"${APICURIO_VER}\"" -i ${LAB_CONFIG_FILE}
   fi
   APICURIO_VER=$(yq e ".apicurio-version" ${LAB_CONFIG_FILE})
-  ${SCP} ${PI_WORK_DIR}/apicurio root@${BASTION_HOST}:/etc/init.d/apicurio
-  ${SSH} root@${BASTION_HOST} "mkdir -p /usr/local/apicurio/home ; \
+  ${SCP} ${PI_WORK_DIR}/apicurio root@${PI_IP}:/etc/init.d/apicurio
+  ${SSH} root@${PI_IP} "mkdir -p /usr/local/apicurio/home ; \
     cd /usr/local/apicurio ; \
     wget -O apicurio-studio-${APICURIO_VER}-quickstart.zip https://github.com/Apicurio/apicurio-studio/releases/download/${APICURIO_VER}/apicurio-studio-${APICURIO_VER}-quickstart.zip ; \
     unzip apicurio-studio-${APICURIO_VER}-quickstart.zip ; \
@@ -292,12 +292,12 @@ EOF
     mv /usr/local/apicurio/apicurio-studio/standalone/configuration/standalone-apicurio.xml /usr/local/apicurio/apicurio-studio/standalone/configuration/standalone-apicurio.xml.orig ; \
     mv /tmp/standalone-apicurio.xml /usr/local/apicurio/apicurio-studio/standalone/configuration/standalone-apicurio.xml ; \
     sed -i \"s|generate-self-signed-certificate-host=\\\"localhost\\\"||g\" /usr/local/apicurio/apicurio-studio/standalone/configuration/standalone-apicurio.xml ; \
-    /usr/local/java-11-openjdk/bin/keytool -genkeypair -keystore /usr/local/apicurio/apicurio-studio/standalone/configuration/application.keystore -deststoretype pkcs12 -storepass password -keypass password -alias server -keyalg RSA -keysize 4096 -validity 5000 -dname \"CN=apicurio.${LAB_DOMAIN}, OU=okd4-lab, O=okd4-lab, L=City, ST=State, C=US\" -ext \"SAN=DNS:apicurio.${LAB_DOMAIN},IP:${BASTION_HOST}\" -ext \"BC=ca:true\" ; \
+    /usr/local/java-11-openjdk/bin/keytool -genkeypair -keystore /usr/local/apicurio/apicurio-studio/standalone/configuration/application.keystore -deststoretype pkcs12 -storepass password -keypass password -alias server -keyalg RSA -keysize 4096 -validity 5000 -dname \"CN=apicurio.${LAB_DOMAIN}, OU=okd4-lab, O=okd4-lab, L=City, ST=State, C=US\" -ext \"SAN=DNS:apicurio.${LAB_DOMAIN},IP:${PI_IP}\" -ext \"BC=ca:true\" ; \
     groupadd apicurio ; \
     useradd -g apicurio -d /usr/local/apicurio/home apicurio ; \
     chown -R apicurio:apicurio /usr/local/apicurio ; \
     chmod 750 /etc/init.d/apicurio ; \
     /etc/init.d/apicurio enable"
-  echo "apicurio.${LAB_DOMAIN}.           IN      A      ${BASTION_HOST}" | ${SSH} root@${EDGE_ROUTER} "cat >> /data/bind/db.${LAB_DOMAIN}"
+  echo "apicurio.${LAB_DOMAIN}.           IN      A      ${PI_IP}" | ${SSH} root@${EDGE_ROUTER} "cat >> /data/bind/db.${LAB_DOMAIN}"
   ${SSH} root@${EDGE_ROUTER} "/etc/init.d/named stop && /etc/init.d/named start"
 }

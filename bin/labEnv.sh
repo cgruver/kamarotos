@@ -219,13 +219,13 @@ function setEdgeEnv() {
     export GIT_SERVER=$(yq e ".git-url" ${LAB_CONFIG_FILE})
     IFS="." read -r i1 i2 i3 i4 <<< "${EDGE_NETWORK}"
     export EDGE_ARPA=${i3}.${i2}.${i1}
-    if [[ $(yq ". | has(\"bastion-ip\")" ${LAB_CONFIG_FILE}) == "true" ]]
+    if [[ $(yq ". | has(\"pi-ip\")" ${LAB_CONFIG_FILE}) == "true" ]]
     then
-      export BASTION_HOST=$(yq e ".bastion-ip" ${LAB_CONFIG_FILE})
-      if [[ $(yq e ".install-host" ${LAB_CONFIG_FILE}) == "bastion" ]]
+      export PI_IP=$(yq e ".pi-ip" ${LAB_CONFIG_FILE})
+      if [[ $(yq e ".install-host" ${LAB_CONFIG_FILE}) == "raspberry-pi" ]]
       then
-        export INSTALL_HOST_IP=${BASTION_HOST}
-        export INSTALL_HOST=bastion
+        export INSTALL_HOST_IP=${PI_IP}
+        export INSTALL_HOST=raspberry-pi
       fi
     fi
     if [[ $(yq ". | has(\"local-registry\")" ${LAB_CONFIG_FILE}) == "true" ]]
@@ -410,7 +410,7 @@ function clearLabEnv() {
   unset EDGE_NETMASK
   unset EDGE_NETWORK
   unset EDGE_CIDR
-  unset BASTION_HOST
+  unset PI_IP
   unset GIT_SERVER
   unset EDGE_ARPA
   unset KUBECONFIG
