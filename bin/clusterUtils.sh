@@ -202,7 +202,13 @@ function pullSecret() {
   then
     createPullSecret
   else
-    echo -n "{\"auths\": {\"fake\": {\"auth\": \"Zm9vOmJhcgo=\"}}}" > ${PULL_SECRET}
+    release_type=$(yq e ".cluster.release-type" ${CLUSTER_CONFIG})
+    if [[ ${release_type} == "ocp" ]]
+    then
+      cp ${OKD_LAB_PATH}/ocp-pull-secret ${PULL_SECRET}
+    else
+      echo -n "{\"auths\": {\"fake\": {\"auth\": \"Zm9vOmJhcgo=\"}}}" > ${PULL_SECRET}
+    fi
   fi
 }
 
@@ -269,48 +275,6 @@ data:
 EOF
 
   ${OC} patch sa pipeline --type json --patch '[{"op": "add", "path": "/secrets/-", "value": {"name":"git-secret"}}]' -n ${NAMESPACE}
-}
-
-function getOkdRelease() {
-
-  local OKD_BASE="okd"
-  local NIGHTLY_RELEASE=""
-  
-  for i in "$@"
-  do
-    case $i in
-      --scos)
-        OKD_BASE="okd-scos"
-      ;;
-      --nightly=*)
-        NIGHTLY_RELEASE="${i#*=}"
-      ;;
-    esac
-  done
-
-  case ${OKD_BASE} in
-    okd)
-      yq e ".cluster.scos = \"false\"" -i ${CLUSTER_CONFIG}
-      yq e ".cluster.remote-registry = \"quay.io/openshift/okd\"" -i ${CLUSTER_CONFIG}
-    ;;
-    okd-scos)
-      yq e ".cluster.scos = \"true\"" -i ${CLUSTER_CONFIG}
-      yq e ".cluster.remote-registry = \"quay.io/okd/scos-release\"" -i ${CLUSTER_CONFIG}
-      export OKD_REGISTRY=$(yq e ".cluster.remote-registry" ${CLUSTER_CONFIG})
-    ;;
-  esac
-
-  if [[ ${NIGHTLY_RELEASE} == "" ]]
-  then
-    OKD_RELEASE=$(basename $(curl -Ls -o /dev/null -w %{url_effective} https://github.com/okd-project/${OKD_BASE}/releases/latest))
-    yq e ".cluster.nightly = \"false\"" -i ${CLUSTER_CONFIG}
-  else
-    OKD_RELEASE=${NIGHTLY_RELEASE}
-    yq e ".cluster.nightly = \"true\"" -i ${CLUSTER_CONFIG}
-  fi
-  echo "OKD Release: ${OKD_RELEASE}"
-  yq e ".cluster.release = \"${OKD_RELEASE}\"" -i ${CLUSTER_CONFIG}
-  setOkdRelease
 }
 
 function getButaneRelease() {
@@ -487,10 +451,10 @@ function mirrorOkdRelease() {
   rm -rf ${OKD_LAB_PATH}/lab-config/work-dir
   mkdir -p ${OKD_LAB_PATH}/lab-config/work-dir
   mkdir -p ${OKD_LAB_PATH}/lab-config/release-sigs
-  oc adm -a ${PULL_SECRET} release mirror --from=${OKD_REGISTRY}:${OKD_RELEASE} --to=${LOCAL_REGISTRY}/okd --to-release-image=${LOCAL_REGISTRY}/okd:${OKD_RELEASE} --release-image-signature-to-dir=${OKD_LAB_PATH}/lab-config/work-dir
+  oc adm -a ${PULL_SECRET} release mirror --from=${OPENSHIFT_REGISTRY}:${OPENSHIFT_RELEASE} --to=${LOCAL_REGISTRY}/okd --to-release-image=${LOCAL_REGISTRY}/okd:${OPENSHIFT_RELEASE} --release-image-signature-to-dir=${OKD_LAB_PATH}/lab-config/work-dir
 
   SIG_FILE=$(ls ${OKD_LAB_PATH}/lab-config/work-dir)
-  mv ${OKD_LAB_PATH}/lab-config/work-dir/${SIG_FILE} ${OKD_LAB_PATH}/lab-config/release-sigs/${OKD_RELEASE}-sig.yaml
+  mv ${OKD_LAB_PATH}/lab-config/work-dir/${SIG_FILE} ${OKD_LAB_PATH}/lab-config/release-sigs/${OPENSHIFT_RELEASE}-sig.yaml
   rm -rf ${OKD_LAB_PATH}/lab-config/work-dir
 }
 

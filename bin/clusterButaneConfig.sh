@@ -142,7 +142,7 @@ function createBipMC() {
   local cidr=$(mask2cidr ${DOMAIN_NETMASK})
   local hostpath_dev=$(yq e ".control-plane.okd-hosts.[0].hostpath-dev" ${CLUSTER_CONFIG})
   local systemd_svc_name=$(echo ${hostpath_dev//\//-} | cut -d"-" -f2-)
-  local mc_version=$(${OC} version --client -o yaml | yq e ".releaseClientVersion" | cut -d"-" -f1)
+  local mc_version="$(${OC} version --client -o yaml | yq e ".releaseClientVersion" | cut -d"-" -f1 | cut -d"." -f "-2" ).0"
   if [[ ${mc_version} == "4.14.0" ]]
   then
     # mc_version="4.14.0-experimental"

@@ -1,5 +1,7 @@
 export OKD_LAB_PATH=${HOME}/okd-lab
 export PATH=${OKD_LAB_PATH}/bin:$PATH
+export OC_INIT=${OKD_LAB_PATH}/okd-cmds/init/oc
+
 if [[ -z ${LAB_CONFIG_FILE} ]]
 then
   export LAB_CONFIG_FILE=${OKD_LAB_PATH}/lab-config/lab.yaml
@@ -187,10 +189,10 @@ function setClusterEnv() {
   export SERVICE_CIDR=$(yq e ".cluster.service-cidr" ${CLUSTER_CONFIG})
   export BUTANE_VARIANT=$(yq e ".cluster.butane-variant" ${CLUSTER_CONFIG})
   export BUTANE_SPEC_VERSION=$(yq e ".cluster.butane-spec-version" ${CLUSTER_CONFIG})
-  export OKD_REGISTRY=$(yq e ".cluster.remote-registry" ${CLUSTER_CONFIG})
+  export OPENSHIFT_REGISTRY=$(yq e ".cluster.remote-registry" ${CLUSTER_CONFIG})
   export PULL_SECRET=${OKD_LAB_PATH}/pull-secrets/${CLUSTER_NAME}-pull-secret.json
   export DISCONNECTED_CLUSTER=$(yq e ".cluster.disconnected" ${CLUSTER_CONFIG})
-  setOkdRelease
+  setOpenShiftRelease
   setButaneRelease
   if [[ $(yq e ".bootstrap.metal" ${CLUSTER_CONFIG}) != "true" ]]
   then
@@ -244,36 +246,25 @@ function fixMacArmCodeSign() {
   if [[ $(uname) == "Darwin" ]] && [[ $(uname -m) == "arm64" ]]
   then
     echo "Applying workaround for corrupt signiture on OpenShift CLI binaries"
-    codesign --force -s - ${OKD_LAB_PATH}/okd-cmds/${OKD_RELEASE}/oc
-    codesign --force -s - ${OKD_LAB_PATH}/okd-cmds/${OKD_RELEASE}/openshift-install
+    codesign --force -s - ${OKD_LAB_PATH}/okd-cmds/${OPENSHIFT_RELEASE}/oc
+    codesign --force -s - ${OKD_LAB_PATH}/okd-cmds/${OPENSHIFT_RELEASE}/openshift-install
   fi
 }
 
-function setOkdRelease() {
+function setOpenShiftRelease() {
   
   local release_set=$(yq ".cluster | has(\"release\")" ${CLUSTER_CONFIG})
   if [[ ${release_set} == "true" ]]
   then
-    export OKD_RELEASE=$(yq e ".cluster.release" ${CLUSTER_CONFIG})
-    if [[ ! -d ${OKD_LAB_PATH}/okd-cmds/${OKD_RELEASE} ]]
+    export OPENSHIFT_RELEASE=$(yq e ".cluster.release" ${CLUSTER_CONFIG})
+    if [[ ! -d ${OKD_LAB_PATH}/okd-cmds/${OPENSHIFT_RELEASE} ]]
     then
-      if [[ $(yq ".cluster | has(\"scos\")" ${CLUSTER_CONFIG}) == "true" ]] && [[ $(yq e ".cluster.scos" ${CLUSTER_CONFIG}) == "true" ]]
-      then
-        OKD_TYPE="okd-scos"
-      else
-        OKD_TYPE="okd"
-      fi
-      if [[ $(yq ".cluster | has(\"nightly\")" ${CLUSTER_CONFIG}) == "true" ]] && [[ $(yq e ".cluster.nightly" ${CLUSTER_CONFIG}) == "true" ]]
-      then
-        getNightlyOkdCmds ${OKD_TYPE}
-      else 
-        getOkdCmds ${OKD_TYPE}
-      fi
+      getCliCmds 
     fi
-    for i in $(ls ${OKD_LAB_PATH}/okd-cmds/${OKD_RELEASE})
+    for i in $(ls ${OKD_LAB_PATH}/okd-cmds/${OPENSHIFT_RELEASE})
     do
       rm -f ${OKD_LAB_PATH}/bin/${i}
-      ln -sf ${OKD_LAB_PATH}/okd-cmds/${OKD_RELEASE}/${i} ${OKD_LAB_PATH}/bin/${i}
+      ln -sf ${OKD_LAB_PATH}/okd-cmds/${OPENSHIFT_RELEASE}/${i} ${OKD_LAB_PATH}/bin/${i}
     done
     i=""
   fi
@@ -294,9 +285,11 @@ function setButaneRelease() {
   fi
 }
 
-function getOkdCmds() {
+function getInitCli() {
+  
+  OKD_RELEASE=$(basename $(curl -Ls -o /dev/null -w %{url_effective} https://github.com/okd-project/okd/releases/latest))
+
   local CONTINUE="true"
-  local okd_type=${1}
   local SYS_ARCH=$(uname)
   if [[ ${SYS_ARCH} == "Darwin" ]]
   then
@@ -315,41 +308,47 @@ function getOkdCmds() {
   fi
   if [[ ${CONTINUE} == "true" ]]
   then
-    mkdir -p ${OKD_LAB_PATH}/okd-cmds/${OKD_RELEASE}
-    mkdir -p ${OKD_LAB_PATH}/tmp
-    wget -O ${OKD_LAB_PATH}/tmp/oc.tar.gz https://github.com/okd-project/${okd_type}/releases/download/${OKD_RELEASE}/openshift-client-${OS_VER}-${OKD_RELEASE}.tar.gz
-    wget -O ${OKD_LAB_PATH}/tmp/oc-install.tar.gz https://github.com/okd-project/${okd_type}/releases/download/${OKD_RELEASE}/openshift-install-${OS_VER}-${OKD_RELEASE}.tar.gz
-    tar -xzf ${OKD_LAB_PATH}/tmp/oc.tar.gz -C ${OKD_LAB_PATH}/okd-cmds/${OKD_RELEASE}
-    tar -xzf ${OKD_LAB_PATH}/tmp/oc-install.tar.gz -C ${OKD_LAB_PATH}/okd-cmds/${OKD_RELEASE}
-    chmod 700 ${OKD_LAB_PATH}/okd-cmds/${OKD_RELEASE}/*
-    rm -rf ${OKD_LAB_PATH}/tmp
-    fixMacArmCodeSign
+    WORK_DIR=$(mktemp -d)
+    mkdir -p ${OKD_LAB_PATH}/okd-cmds/init
+    wget -O ${WORK_DIR}/oc.tar.gz https://github.com/okd-project/okd/releases/download/${OKD_RELEASE}/openshift-client-${OS_VER}-${OKD_RELEASE}.tar.gz
+    tar -xzf ${WORK_DIR}/oc.tar.gz -C ${OKD_LAB_PATH}/okd-cmds/init
+    chmod 700 ${OKD_LAB_PATH}/okd-cmds/init/*
+    rm -rf ${WORK_DIR}
+    # fixMacArmCodeSign
   fi
 }
 
-function getNightlyOkdCmds() {
+function getCliCmds() {
 
-  local okd_type=${1}
-
-  if [[ ${okd_type} == "okd" ]]
+  if [[ ! -d ${OKD_LAB_PATH}/okd-cmds/init ]]
   then
-    TOOLS_URI=registry.ci.openshift.org/origin/release:${OKD_RELEASE}
-  else
-    TOOLS_URI=quay.io/okd/scos-release:${OKD_RELEASE}
+    getInitCli
   fi
-  mkdir -p ${OKD_LAB_PATH}/okd-cmds/${OKD_RELEASE}
+
+  local release_type=$(yq e ".cluster.release-type" ${CLUSTER_CONFIG})
+  local registry_config=""
+
+  case ${release_type} in
+    okd)
+      TOOLS_URI=registry.ci.openshift.org/origin/release:${OPENSHIFT_RELEASE}
+    ;;
+    okd-scos)
+      TOOLS_URI=quay.io/okd/scos-release:${OPENSHIFT_RELEASE}
+    ;;
+    ocp)
+      TOOLS_URI=quay.io/openshift-release-dev/ocp-release:${OPENSHIFT_RELEASE}
+      registry_config="--registry-config=${OKD_LAB_PATH}/ocp-pull-secret"
+    ;;
+  esac
+  mkdir -p ${OKD_LAB_PATH}/okd-cmds/${OPENSHIFT_RELEASE}
   WORK_DIR=$(mktemp -d)
-  cd ${WORK_DIR}
-  oc adm release extract --tools ${TOOLS_URI}
-  for i in $(ls *.tar.gz)
+  ${OC_INIT} adm release extract ${registry_config} --to="${WORK_DIR}" --tools ${TOOLS_URI}
+  for i in $(ls ${WORK_DIR}/*.tar.gz)
   do
-    tar -xzvf $i
+    tar -xzf ${i} -C ${OKD_LAB_PATH}/okd-cmds/${OPENSHIFT_RELEASE}
   done
-  mv oc ${OKD_LAB_PATH}/okd-cmds/${OKD_RELEASE}
-  mv kubectl ${OKD_LAB_PATH}/okd-cmds/${OKD_RELEASE}
-  mv openshift-install ${OKD_LAB_PATH}/okd-cmds/${OKD_RELEASE}
-  cd -
   rm -rf ${WORK_DIR}
+  # fixMacArmCodeSign
 }
 
 function getButane() {
@@ -378,9 +377,9 @@ function getButane() {
 }
 
 function clearLabEnv() {
-  if [[ ! -z ${OKD_RELEASE} ]]
+  if [[ ! -z ${OPENSHIFT_RELEASE} ]]
   then
-    for i in $(ls ${OKD_LAB_PATH}/okd-cmds/${OKD_RELEASE})
+    for i in $(ls ${OKD_LAB_PATH}/okd-cmds/${OPENSHIFT_RELEASE})
     do
       rm -f ${OKD_LAB_PATH}/bin/${i}
     done
@@ -396,13 +395,13 @@ function clearLabEnv() {
   unset PROXY_REGISTRY
   unset CLUSTER_NAME
   unset KUBE_INIT_CONFIG
-  unset OKD_RELEASE
+  unset OPENSHIFT_RELEASE
   unset DOMAIN_CIDR
   unset CLUSTER_CIDR
   unset SERVICE_CIDR
   unset BUTANE_VERSION
   unset BUTANE_SPEC_VERSION
-  unset OKD_REGISTRY
+  unset OPENSHIFT_REGISTRY
   unset PULL_SECRET
   unset DOMAIN_ARPA
   unset LAB_DOMAIN

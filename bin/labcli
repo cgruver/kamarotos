@@ -92,8 +92,7 @@ do
     --git-secret)
       gitSecret "$@"
     ;;
-    --latest)
-      getOkdRelease "$@"
+    --butane)
       getButaneRelease
     ;;
     --console)

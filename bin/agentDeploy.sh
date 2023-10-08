@@ -148,11 +148,11 @@ function createAgentInstallConfig() {
   INITRD_URL=$(openshift-install coreos print-stream-json | jq -r '.architectures.x86_64.artifacts.metal.formats.pxe.initramfs.location')
   ROOTFS_URL=$(openshift-install coreos print-stream-json | jq -r '.architectures.x86_64.artifacts.metal.formats.pxe.rootfs.location')
 
-  ${SSH} root@${INSTALL_HOST_IP} "if [[ ! -d /usr/local/www/install/fcos/${OKD_RELEASE} ]] ; \
-    then mkdir -p /usr/local/www/install/fcos/${OKD_RELEASE} ; \
-    curl -o /usr/local/www/install/fcos/${OKD_RELEASE}/vmlinuz ${KERNEL_URL} ; \
-    curl -o /usr/local/www/install/fcos/${OKD_RELEASE}/initrd ${INITRD_URL} ; \
-    curl -o /usr/local/www/install/fcos/${OKD_RELEASE}/rootfs.img ${ROOTFS_URL} ; \
+  ${SSH} root@${INSTALL_HOST_IP} "if [[ ! -d /usr/local/www/install/fcos/${OPENSHIFT_RELEASE} ]] ; \
+    then mkdir -p /usr/local/www/install/fcos/${OPENSHIFT_RELEASE} ; \
+    curl -o /usr/local/www/install/fcos/${OPENSHIFT_RELEASE}/vmlinuz ${KERNEL_URL} ; \
+    curl -o /usr/local/www/install/fcos/${OPENSHIFT_RELEASE}/initrd ${INITRD_URL} ; \
+    curl -o /usr/local/www/install/fcos/${OPENSHIFT_RELEASE}/rootfs.img ${ROOTFS_URL} ; \
     fi"
 }
 
@@ -189,8 +189,8 @@ function createAgentPxeBootFiles() {
 cat << EOF > ${WORK_DIR}/ipxe-work-dir/${mac//:/-}.ipxe
 #!ipxe
 
-kernel http://${INSTALL_HOST_IP}/install/fcos/${OKD_RELEASE}/vmlinuz edd=off net.ifnames=1 ifname=nic0:${mac} ip=${ip_addr}::${DOMAIN_ROUTER}:${DOMAIN_NETMASK}:${hostname}:nic0:none nameserver=${DOMAIN_ROUTER} rd.neednet=1 ignition.firstboot ignition.platform.id=metal initrd=initrd  coreos.live.rootfs_url=http://${INSTALL_HOST_IP}/install/fcos/${OKD_RELEASE}/rootfs.img ignition.config.url=http://${INSTALL_HOST_IP}/install/fcos/agent-boot/${CLUSTER_NAME}.${DOMAIN}/agent-install.ign
-initrd http://${INSTALL_HOST_IP}/install/fcos/${OKD_RELEASE}/initrd
+kernel http://${INSTALL_HOST_IP}/install/fcos/${OPENSHIFT_RELEASE}/vmlinuz edd=off net.ifnames=1 ifname=nic0:${mac} ip=${ip_addr}::${DOMAIN_ROUTER}:${DOMAIN_NETMASK}:${hostname}:nic0:none nameserver=${DOMAIN_ROUTER} rd.neednet=1 ignition.firstboot ignition.platform.id=metal initrd=initrd  coreos.live.rootfs_url=http://${INSTALL_HOST_IP}/install/fcos/${OPENSHIFT_RELEASE}/rootfs.img ignition.config.url=http://${INSTALL_HOST_IP}/install/fcos/agent-boot/${CLUSTER_NAME}.${DOMAIN}/agent-install.ign
+initrd http://${INSTALL_HOST_IP}/install/fcos/${OPENSHIFT_RELEASE}/initrd
 
 boot
 EOF
@@ -198,9 +198,9 @@ EOF
 # cat << EOF > ${WORK_DIR}/ipxe-work-dir/${mac//:/-}.ipxe
 # #!ipxe
 
-# kernel http://${INSTALL_HOST_IP}/install/fcos/${OKD_RELEASE}/vmlinuz edd=off net.ifnames=1 ifname=nic0:${mac} ip=${ip_addr}::${DOMAIN_ROUTER}:${DOMAIN_NETMASK}:${hostname}:nic0:none nameserver=${DOMAIN_ROUTER} rd.neednet=1 coreos.inst.install_dev=/dev/nvme0n1 coreos.inst.ignition_url=http://${INSTALL_HOST_IP}/install/fcos/agent-boot/${CLUSTER_NAME}.${DOMAIN}/agent-install.ign coreos.inst.platform_id=${platform} initrd=initrd initrd=rootfs.img ${CONSOLE_OPT}
-# initrd http://${INSTALL_HOST_IP}/install/fcos/${OKD_RELEASE}/initrd
-# initrd http://${INSTALL_HOST_IP}/install/fcos/${OKD_RELEASE}/rootfs.img
+# kernel http://${INSTALL_HOST_IP}/install/fcos/${OPENSHIFT_RELEASE}/vmlinuz edd=off net.ifnames=1 ifname=nic0:${mac} ip=${ip_addr}::${DOMAIN_ROUTER}:${DOMAIN_NETMASK}:${hostname}:nic0:none nameserver=${DOMAIN_ROUTER} rd.neednet=1 coreos.inst.install_dev=/dev/nvme0n1 coreos.inst.ignition_url=http://${INSTALL_HOST_IP}/install/fcos/agent-boot/${CLUSTER_NAME}.${DOMAIN}/agent-install.ign coreos.inst.platform_id=${platform} initrd=initrd initrd=rootfs.img ${CONSOLE_OPT}
+# initrd http://${INSTALL_HOST_IP}/install/fcos/${OPENSHIFT_RELEASE}/initrd
+# initrd http://${INSTALL_HOST_IP}/install/fcos/${OPENSHIFT_RELEASE}/rootfs.img
 
 # boot
 # EOF
