@@ -265,6 +265,24 @@ fi
 
 # boot
 # EOF
+
+# kernel http://${INSTALL_HOST_IP}/install/fcos/${OPENSHIFT_RELEASE}/vmlinuz edd=off net.ifnames=1 ifname=nic0:${mac} ip=${ip_addr}::${DOMAIN_ROUTER}:${DOMAIN_NETMASK}:${hostname}.${DOMAIN}:nic0:none nameserver=${DOMAIN_ROUTER} rd.neednet=1 ignition.firstboot ignition.platform.id=${platform} initrd=initrd  coreos.live.rootfs_url=http://${INSTALL_HOST_IP}/install/fcos/${OPENSHIFT_RELEASE}/rootfs.img ignition.config.url=http://${INSTALL_HOST_IP}/install/fcos/ignition/${CLUSTER_NAME}.${DOMAIN}/${mac//:/-}.ign
+
+if [[ ${AGENT} == "true" ]]
+then
+
+cat << EOF > ${WORK_DIR}/ipxe-work-dir/${mac//:/-}.ipxe
+#!ipxe
+
+kernel http://${INSTALL_HOST_IP}/install/fcos/${OPENSHIFT_RELEASE}/vmlinuz edd=off net.ifnames=1 ifname=nic0:${mac} ip=${ip_addr}::${DOMAIN_ROUTER}:${DOMAIN_NETMASK}:${hostname}.${DOMAIN}:nic0:none nameserver=${DOMAIN_ROUTER} rd.neednet=1 ignition.firstboot ignition.platform.id=${platform} initrd=initrd initrd=rootfs.img ignition.config.url=http://${INSTALL_HOST_IP}/install/fcos/ignition/${CLUSTER_NAME}.${DOMAIN}/${mac//:/-}.ign
+
+initrd http://${INSTALL_HOST_IP}/install/fcos/${OPENSHIFT_RELEASE}/initrd
+initrd http://${INSTALL_HOST_IP}/install/fcos/${OPENSHIFT_RELEASE}/rootfs.img
+boot
+EOF
+
+else
+
 cat << EOF > ${WORK_DIR}/ipxe-work-dir/${mac//:/-}.ipxe
 #!ipxe
 
@@ -275,6 +293,7 @@ initrd http://${INSTALL_HOST_IP}/install/fcos/${OPENSHIFT_RELEASE}/rootfs.img
 boot
 EOF
 
+fi
 }
 
 function createOkdVmNode() {

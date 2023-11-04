@@ -72,7 +72,7 @@ function deleteWorker() {
   local p_cmd=${2}
 
   host_name=$(yq e ".compute-nodes.[${index}].name" ${CLUSTER_CONFIG})
-  mac_addr=$(yq e ".control-plane.okd-hosts.[${index}].mac-addr" ${CLUSTER_CONFIG})
+  mac_addr=$(yq e ".control-plane.nodes.[${index}].mac-addr" ${CLUSTER_CONFIG})
   if [[ $(yq e ".compute-nodes.[${index}].metal" ${CLUSTER_CONFIG})  == "true" ]]
   then
     boot_dev=$(yq e ".compute-nodes.[${index}].boot-dev" ${CLUSTER_CONFIG})
@@ -353,7 +353,7 @@ function configInfraNodes() {
   
   for node_index in 0 1 2
   do
-    ${OC} label nodes ${CLUSTER_NAME}-master-${node_index}.${DOMAIN} node-role.kubernetes.io/infra=""
+    ${OC} label nodes ${CLUSTER_NAME}-cp-${node_index}.${DOMAIN} node-role.kubernetes.io/infra=""
   done
   ${OC} patch scheduler cluster --patch '{"spec":{"mastersSchedulable":false}}' --type=merge
   ${OC} patch -n openshift-ingress-operator ingresscontroller default --patch '{"spec":{"nodePlacement":{"nodeSelector":{"matchLabels":{"node-role.kubernetes.io/infra":""}},"tolerations":[{"key":"node.kubernetes.io/unschedulable","effect":"NoSchedule"},{"key":"node-role.kubernetes.io/master","effect":"NoSchedule"}]}}}' --type=merge
@@ -503,9 +503,9 @@ function startControlPlane() {
 
   if [[ $(yq e ".control-plane.metal" ${CLUSTER_CONFIG}) == "true" ]]
   then
-    if [[ $(yq e ".control-plane.okd-hosts" ${CLUSTER_CONFIG} | yq e 'length' -) == "1" ]]
+    if [[ $(yq e ".control-plane.nodes" ${CLUSTER_CONFIG} | yq e 'length' -) == "1" ]]
     then
-      local mac=$(yq e ".control-plane.okd-hosts.[0].mac-addr" ${CLUSTER_CONFIG})
+      local mac=$(yq e ".control-plane.nodes.[0].mac-addr" ${CLUSTER_CONFIG})
       startMetal ${mac}
     else
       for node_index in 0 1 2
@@ -514,14 +514,14 @@ function startControlPlane() {
         then
           pause 30 "Pause to stagger node start up"
         fi
-        local mac=$(yq e ".control-plane.okd-hosts.[${node_index}].mac-addr" ${CLUSTER_CONFIG})
+        local mac=$(yq e ".control-plane.nodes.[${node_index}].mac-addr" ${CLUSTER_CONFIG})
         startMetal ${mac}
       done
     fi
-  elif [[ $(yq e ".control-plane.okd-hosts" ${CLUSTER_CONFIG} | yq e 'length' -) == "1" ]]
+  elif [[ $(yq e ".control-plane.nodes" ${CLUSTER_CONFIG} | yq e 'length' -) == "1" ]]
   then
-    kvm_host=$(yq e ".control-plane.okd-hosts.[0].kvm-host" ${CLUSTER_CONFIG})
-    host_name=$(yq e ".control-plane.okd-hosts.[0].name" ${CLUSTER_CONFIG})
+    kvm_host=$(yq e ".control-plane.nodes.[0].kvm-host" ${CLUSTER_CONFIG})
+    host_name=$(yq e ".control-plane.nodes.[0].name" ${CLUSTER_CONFIG})
     startNode ${kvm_host}.${DOMAIN} ${host_name}
   else
     for node_index in 0 1 2
@@ -530,19 +530,19 @@ function startControlPlane() {
       then
         pause 30 "Pause to stagger node start up"
       fi
-      kvm_host=$(yq e ".control-plane.okd-hosts.[${node_index}].kvm-host" ${CLUSTER_CONFIG})
-      host_name=$(yq e ".control-plane.okd-hosts.[${node_index}].name" ${CLUSTER_CONFIG})
+      kvm_host=$(yq e ".control-plane.nodes.[${node_index}].kvm-host" ${CLUSTER_CONFIG})
+      host_name=$(yq e ".control-plane.nodes.[${node_index}].name" ${CLUSTER_CONFIG})
       startNode ${kvm_host}.${DOMAIN} ${host_name}
     done
   fi
 }
 
 function stopControlPlane() {
-  let node_count=$(yq e ".control-plane.okd-hosts" ${CLUSTER_CONFIG} | yq e 'length' -)
+  let node_count=$(yq e ".control-plane.nodes" ${CLUSTER_CONFIG} | yq e 'length' -)
   let node_index=0
   while [[ ${node_index} -lt ${node_count} ]]
   do
-    host_name=$(yq e ".control-plane.okd-hosts.[${node_index}].name" ${CLUSTER_CONFIG})
+    host_name=$(yq e ".control-plane.nodes.[${node_index}].name" ${CLUSTER_CONFIG})
     ${SSH} -o ConnectTimeout=5 core@${host_name}.${DOMAIN} "sudo systemctl poweroff"
     node_index=$(( ${node_index} + 1 ))
   done
@@ -595,7 +595,7 @@ function monitor() {
       ;;
       -m=*)
         CP_INDEX="${i#*=}"
-        host_name=$(yq e ".control-plane.okd-hosts.[${CP_INDEX}].name" ${CLUSTER_CONFIG})
+        host_name=$(yq e ".control-plane.nodes.[${CP_INDEX}].name" ${CLUSTER_CONFIG})
         ${SSH} core@${host_name}.${DOMAIN} "journalctl -b -f"
       ;;
       -w=*)
@@ -604,7 +604,7 @@ function monitor() {
         ${SSH} core@${host_name}.${DOMAIN} "journalctl -b -f"
       ;;
       -s)
-        host_name=$(yq e ".control-plane.okd-hosts.[0].name" ${CLUSTER_CONFIG})
+        host_name=$(yq e ".control-plane.nodes.[0].name" ${CLUSTER_CONFIG})
         ${SSH} core@${host_name}.${DOMAIN} "journalctl -b -f -u release-image.service -u release-image-pivot.service"
       ;;
       *)
@@ -697,7 +697,7 @@ function createCephCluster() {
 function createControlPlaneCephCluster() {
   for node_index in 0 1 2
   do
-    node_name=$(yq e ".control-plane.okd-hosts.[${node_index}].name" ${CLUSTER_CONFIG}).${DOMAIN}
+    node_name=$(yq e ".control-plane.nodes.[${node_index}].name" ${CLUSTER_CONFIG}).${DOMAIN}
     ceph_dev=$(yq e ".control-plane.ceph.ceph-dev" ${CLUSTER_CONFIG})
     yq e ".spec.storage.nodes.[${node_index}].name = \"${node_name}\"" -i ${CEPH_CLUSTER_FILE}
     yq e ".spec.storage.nodes.[${node_index}].devices.[0].name = \"${ceph_dev}\"" -i ${CEPH_CLUSTER_FILE}
@@ -806,8 +806,8 @@ function getNodes() {
   do
     case $j in
       -cp)
-        YQ_PATH="control-plane.okd-hosts"
-        let NODE_COUNT=$(yq e ".control-plane.okd-hosts" ${CLUSTER_CONFIG} | yq e 'length' -)
+        YQ_PATH="control-plane.nodes"
+        let NODE_COUNT=$(yq e ".control-plane.nodes" ${CLUSTER_CONFIG} | yq e 'length' -)
       ;;
       -cn)
         YQ_PATH="compute-nodes"

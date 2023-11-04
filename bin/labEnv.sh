@@ -192,6 +192,7 @@ function setClusterEnv() {
   export OPENSHIFT_REGISTRY=$(yq e ".cluster.remote-registry" ${CLUSTER_CONFIG})
   export PULL_SECRET=${OKD_LAB_PATH}/pull-secrets/${CLUSTER_NAME}-pull-secret.json
   export DISCONNECTED_CLUSTER=$(yq e ".cluster.disconnected" ${CLUSTER_CONFIG})
+  export INSTALL_METHOD=$(yq e ".cluster.install-method" ${CLUSTER_CONFIG})
   setOpenShiftRelease
   setButaneRelease
   if [[ $(yq e ".bootstrap.metal" ${CLUSTER_CONFIG}) != "true" ]]

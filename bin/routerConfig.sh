@@ -275,10 +275,20 @@ EOF
 function configHaProxy() {
 
   local lb_ip=${1}
-  local cp_0=$(yq e ".control-plane.okd-hosts.[0].ip-addr" ${CLUSTER_CONFIG})
-  local cp_1=$(yq e ".control-plane.okd-hosts.[1].ip-addr" ${CLUSTER_CONFIG})
-  local cp_2=$(yq e ".control-plane.okd-hosts.[2].ip-addr" ${CLUSTER_CONFIG})
+  local cp_0=$(yq e ".control-plane.nodes.[0].ip-addr" ${CLUSTER_CONFIG})
+  local cp_1=$(yq e ".control-plane.nodes.[1].ip-addr" ${CLUSTER_CONFIG})
+  local cp_2=$(yq e ".control-plane.nodes.[2].ip-addr" ${CLUSTER_CONFIG})
   local bs=$(yq e ".bootstrap.ip-addr" ${CLUSTER_CONFIG})
+  local bs_api=""
+  local bs_mc=""
+  local bs=""
+
+  if [[ ${AGENT} == "false" ]]
+  then
+    bs=$(yq e ".bootstrap.ip-addr" ${CLUSTER_CONFIG})
+    bs_api="server okd4-bootstrap ${bs}:6443 check weight 1"
+    bs_mc="server okd4-bootstrap ${bs}:22623 check weight 1"
+  fi
 
 cat << EOF > ${WORK_DIR}/haproxy-${CLUSTER_NAME}.init
 #!/bin/sh /etc/rc.common
@@ -348,10 +358,10 @@ listen okd4-api
     mode tcp
     option tcpka
     option tcp-check
-    server okd4-bootstrap ${bs}:6443 check weight 1
     server okd4-master-0 ${cp_0}:6443 check weight 1
     server okd4-master-1 ${cp_1}:6443 check weight 1
     server okd4-master-2 ${cp_2}:6443 check weight 1
+    ${bs_api}
 
 listen okd4-mc 
     bind ${lb_ip}:22623
@@ -359,10 +369,10 @@ listen okd4-mc
     option                  tcplog
     mode tcp
     option tcpka
-    server okd4-bootstrap ${bs}:22623 check weight 1
     server okd4-master-0 ${cp_0}:22623 check weight 1
     server okd4-master-1 ${cp_1}:22623 check weight 1
     server okd4-master-2 ${cp_2}:22623 check weight 1
+    ${bs_mc}
 
 listen okd4-apps 
     bind ${lb_ip}:80
@@ -391,24 +401,33 @@ EOF
 function configNginx() {
 
   local lb_ip=${1}
-  local cp_0=$(yq e ".control-plane.okd-hosts.[0].ip-addr" ${CLUSTER_CONFIG})
-  local cp_1=$(yq e ".control-plane.okd-hosts.[1].ip-addr" ${CLUSTER_CONFIG})
-  local cp_2=$(yq e ".control-plane.okd-hosts.[2].ip-addr" ${CLUSTER_CONFIG})
-  local bs=$(yq e ".bootstrap.ip-addr" ${CLUSTER_CONFIG})
+  local cp_0=$(yq e ".control-plane.nodes.[0].ip-addr" ${CLUSTER_CONFIG})
+  local cp_1=$(yq e ".control-plane.nodes.[1].ip-addr" ${CLUSTER_CONFIG})
+  local cp_2=$(yq e ".control-plane.nodes.[2].ip-addr" ${CLUSTER_CONFIG})
+  local bs_api=""
+  local bs_mc=""
+  local bs=""
+
+  if [[ ${AGENT} == "false" ]]
+  then
+    bs=$(yq e ".bootstrap.ip-addr" ${CLUSTER_CONFIG})
+    bs_api="server ${bs}:6443 max_fails=3 fail_timeout=1s;  # bootstrap"
+    bs_mc="server ${bs}:22623 max_fails=3 fail_timeout=1s; # bootstrap"
+  fi
 
 cat << EOF > ${WORK_DIR}/nginx-${CLUSTER_NAME}.conf
 stream {
     upstream okd4-api {
-        server ${bs}:6443 max_fails=3 fail_timeout=1s;  # bootstrap
         server ${cp_0}:6443 max_fails=3 fail_timeout=1s;
         server ${cp_1}:6443 max_fails=3 fail_timeout=1s;
         server ${cp_2}:6443 max_fails=3 fail_timeout=1s;
+        ${bs_api}
     }
     upstream okd4-mc {
-        server ${bs}:22623 max_fails=3 fail_timeout=1s; # bootstrap
         server ${cp_0}:22623 max_fails=3 fail_timeout=1s;
         server ${cp_1}:22623 max_fails=3 fail_timeout=1s;
         server ${cp_2}:22623 max_fails=3 fail_timeout=1s;
+        ${bs_mc}
     }
     upstream okd4-https {
         server ${cp_0}:443 max_fails=3 fail_timeout=1s;

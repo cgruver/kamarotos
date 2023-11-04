@@ -3,7 +3,7 @@ function deleteControlPlane() {
 
   #Delete Control Plane Nodes:
   RESET_LB="true"
-  CP_COUNT=$(yq e ".control-plane.okd-hosts" ${CLUSTER_CONFIG} | yq e 'length' -)
+  CP_COUNT=$(yq e ".control-plane.nodes" ${CLUSTER_CONFIG} | yq e 'length' -)
   if [[ ${CP_COUNT} == "1" ]]
   then
     SNO="true"
@@ -16,14 +16,14 @@ function deleteControlPlane() {
   metal=$(yq e ".control-plane.metal" ${CLUSTER_CONFIG})
   if [[ ${SNO} == "true" ]]
   then
-    mac_addr=$(yq e ".control-plane.okd-hosts.[0].mac-addr" ${CLUSTER_CONFIG})
-    host_name=$(yq e ".control-plane.okd-hosts.[0].name" ${CLUSTER_CONFIG})
+    mac_addr=$(yq e ".control-plane.nodes.[0].mac-addr" ${CLUSTER_CONFIG})
+    host_name=$(yq e ".control-plane.nodes.[0].name" ${CLUSTER_CONFIG})
     if [[ ${metal} == "true" ]]
     then
-      install_dev=$(yq e ".control-plane.okd-hosts.[0].sno-install-dev" ${CLUSTER_CONFIG})
+      install_dev=$(yq e ".control-plane.nodes.[0].sno-install-dev" ${CLUSTER_CONFIG})
       destroyMetal core ${host_name} ${install_dev} na ${p_cmd}
     else
-      kvm_host=$(yq e ".control-plane.okd-hosts.[0].kvm-host" ${CLUSTER_CONFIG})
+      kvm_host=$(yq e ".control-plane.nodes.[0].kvm-host" ${CLUSTER_CONFIG})
       deleteNodeVm ${host_name} ${kvm_host}.${DOMAIN}
     fi
     deletePxeConfig ${mac_addr}
@@ -34,14 +34,14 @@ function deleteControlPlane() {
   else
     for node_index in 0 1 2
     do
-      mac_addr=$(yq e ".control-plane.okd-hosts.[${node_index}].mac-addr" ${CLUSTER_CONFIG})
-      host_name=$(yq e ".control-plane.okd-hosts.[${node_index}].name" ${CLUSTER_CONFIG})
+      mac_addr=$(yq e ".control-plane.nodes.[${node_index}].mac-addr" ${CLUSTER_CONFIG})
+      host_name=$(yq e ".control-plane.nodes.[${node_index}].name" ${CLUSTER_CONFIG})
       if [[ ${metal} == "true" ]]
       then
-        boot_dev=$(yq e ".control-plane.okd-hosts.[${node_index}].boot-dev" ${CLUSTER_CONFIG})
+        boot_dev=$(yq e ".control-plane.nodes.[${node_index}].boot-dev" ${CLUSTER_CONFIG})
         destroyMetal core ${host_name} ${boot_dev} na ${p_cmd}
       else
-        kvm_host=$(yq e ".control-plane.okd-hosts.[${node_index}].kvm-host" ${CLUSTER_CONFIG})
+        kvm_host=$(yq e ".control-plane.nodes.[${node_index}].kvm-host" ${CLUSTER_CONFIG})
         deleteNodeVm ${host_name} ${kvm_host}.${DOMAIN}
       fi
       deletePxeConfig ${mac_addr}
@@ -202,7 +202,7 @@ function destroy() {
     fi
     deletePxeConfig $(yq e ".bootstrap.mac-addr" ${CLUSTER_CONFIG})
     deleteDns ${CLUSTER_NAME}-${DOMAIN}-bs
-    CP_COUNT=$(yq e ".control-plane.okd-hosts" ${CLUSTER_CONFIG} | yq e 'length' -)
+    CP_COUNT=$(yq e ".control-plane.nodes" ${CLUSTER_CONFIG} | yq e 'length' -)
     if [[ ${CP_COUNT} == "1" ]]
     then
       SNO="true"

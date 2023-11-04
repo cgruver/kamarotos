@@ -13,7 +13,7 @@ function agentDeploy() {
   fi
   mkdir -p ${OKD_LAB_PATH}/lab-config/${CLUSTER_NAME}.${DOMAIN}
   SSH_KEY=$(cat ${OKD_LAB_PATH}/ssh_key.pub)
-  CP_REPLICAS=$(yq e ".control-plane.okd-hosts" ${CLUSTER_CONFIG} | yq e 'length' -)
+  CP_REPLICAS=$(yq e ".control-plane.nodes" ${CLUSTER_CONFIG} | yq e 'length' -)
   if [[ ${CP_REPLICAS} != "3" ]]
   then
     echo "There must be 3 host entries for the control plane for a full cluster, or 1 entry for a Single Node cluster."
@@ -27,9 +27,9 @@ function agentDeploy() {
   createAgentPxeBootFiles ${NODE_0_MAC} ${NODE_0_IP} ${NODE_0_NAME}
   createAgentPxeBootFiles ${NODE_1_MAC} ${NODE_1_IP} ${NODE_1_NAME}
   createAgentPxeBootFiles ${NODE_2_MAC} ${NODE_2_IP} ${NODE_2_NAME}
-  createBipIpRes ${NODE_0_MAC} ${NODE_0_IP} ${NODE_0_NAME}
-  createBipIpRes ${NODE_1_MAC} ${NODE_1_IP} ${NODE_1_NAME}
-  createBipIpRes ${NODE_2_MAC} ${NODE_2_IP} ${NODE_2_NAME}
+  # createBipIpRes ${NODE_0_MAC} ${NODE_0_IP} ${NODE_0_NAME}
+  # createBipIpRes ${NODE_1_MAC} ${NODE_1_IP} ${NODE_1_NAME}
+  # createBipIpRes ${NODE_2_MAC} ${NODE_2_IP} ${NODE_2_NAME}
   ${SSH} root@${DOMAIN_ROUTER} "/etc/init.d/dnsmasq restart"
   # createAgentLbConfig
   # configNginx
@@ -41,18 +41,18 @@ function setControlPlaneVars() {
   INGRESS_VIP=$(yq e ".cluster.ingress-ip-addr" ${CLUSTER_CONFIG})
   API_VIP=$(yq e ".cluster.api-ip-addr" ${CLUSTER_CONFIG})
   DOMAIN_CIDR=$(mask2cidr ${DOMAIN_NETMASK})
-  NODE_0_IP=$(yq e ".control-plane.okd-hosts.[0].ip-addr" ${CLUSTER_CONFIG})
-  NODE_1_IP=$(yq e ".control-plane.okd-hosts.[1].ip-addr" ${CLUSTER_CONFIG})
-  NODE_2_IP=$(yq e ".control-plane.okd-hosts.[2].ip-addr" ${CLUSTER_CONFIG})
+  NODE_0_IP=$(yq e ".control-plane.nodes.[0].ip-addr" ${CLUSTER_CONFIG})
+  NODE_1_IP=$(yq e ".control-plane.nodes.[1].ip-addr" ${CLUSTER_CONFIG})
+  NODE_2_IP=$(yq e ".control-plane.nodes.[2].ip-addr" ${CLUSTER_CONFIG})
   NODE_0_NAME=${CLUSTER_NAME}-master-0.${DOMAIN}
   NODE_1_NAME=${CLUSTER_NAME}-master-1.${DOMAIN}
   NODE_2_NAME=${CLUSTER_NAME}-master-2.${DOMAIN}
-  NODE_0_MAC=$(yq e ".control-plane.okd-hosts.[0].mac-addr" ${CLUSTER_CONFIG})
-  NODE_1_MAC=$(yq e ".control-plane.okd-hosts.[1].mac-addr" ${CLUSTER_CONFIG})
-  NODE_2_MAC=$(yq e ".control-plane.okd-hosts.[2].mac-addr" ${CLUSTER_CONFIG})
-  yq e ".control-plane.okd-hosts.[0].name = \"${CLUSTER_NAME}-master-0\"" -i ${CLUSTER_CONFIG}
-  yq e ".control-plane.okd-hosts.[1].name = \"${CLUSTER_NAME}-master-1\"" -i ${CLUSTER_CONFIG}
-  yq e ".control-plane.okd-hosts.[2].name = \"${CLUSTER_NAME}-master-2\"" -i ${CLUSTER_CONFIG}
+  NODE_0_MAC=$(yq e ".control-plane.nodes.[0].mac-addr" ${CLUSTER_CONFIG})
+  NODE_1_MAC=$(yq e ".control-plane.nodes.[1].mac-addr" ${CLUSTER_CONFIG})
+  NODE_2_MAC=$(yq e ".control-plane.nodes.[2].mac-addr" ${CLUSTER_CONFIG})
+  yq e ".control-plane.nodes.[0].name = \"${CLUSTER_NAME}-master-0\"" -i ${CLUSTER_CONFIG}
+  yq e ".control-plane.nodes.[1].name = \"${CLUSTER_NAME}-master-1\"" -i ${CLUSTER_CONFIG}
+  yq e ".control-plane.nodes.[2].name = \"${CLUSTER_NAME}-master-2\"" -i ${CLUSTER_CONFIG}
 
 }
 
