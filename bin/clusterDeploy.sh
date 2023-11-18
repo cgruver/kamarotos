@@ -43,6 +43,9 @@ function createClusterConfig() {
   if [[ $(yq ".control-plane | has(\"ceph\")" ${CLUSTER_CONFIG}) == "true" ]]
   then
     createClusterCephMC
+  elif [[ $(yq ".control-plane | has(\"hostpath-dev\")" ${CLUSTER_CONFIG}) == "true" ]]
+  then
+    createHostPathMC
   fi
 
   yq e ".apiVersion = \"v1alpha1\"" -n > ${WORK_DIR}/agent-config.yaml

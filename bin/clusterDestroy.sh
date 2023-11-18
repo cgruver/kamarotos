@@ -10,38 +10,28 @@ function deleteControlPlane() {
     RESET_LB="false"
   fi
   metal=$(yq e ".control-plane.metal" ${CLUSTER_CONFIG})
-  if [[ ${SNO} == "true" ]]
-  then
-    mac_addr=$(yq e ".control-plane.nodes.[0].mac-addr" ${CLUSTER_CONFIG})
-    host_name=$(yq e ".control-plane.nodes.[0].name" ${CLUSTER_CONFIG})
+  let node_count=$(yq e ".control-plane.nodes" ${CLUSTER_CONFIG} | yq e 'length' -)
+  let node_index=0
+  while [[ node_index -lt ${node_count} ]]
+  do
+    mac_addr=$(yq e ".control-plane.nodes.[${node_index}].mac-addr" ${CLUSTER_CONFIG})
+    host_name=$(yq e ".control-plane.nodes.[${node_index}].name" ${CLUSTER_CONFIG})
     if [[ ${metal} == "true" ]]
     then
       boot_dev=$(yq e ".control-plane.boot-dev" ${CLUSTER_CONFIG})
-      hostpath_dev=$(yq e ".control-plane.hostpath-dev" ${CLUSTER_CONFIG})
-      destroyMetal core ${host_name} ${boot_dev} ${hostpath_dev} ${p_cmd}
-      
+      storage_dev=na
+      if [[ $(yq ".control-plane | has(\"hostpath-dev\")" ${CLUSTER_CONFIG}) == "true" ]]
+      then
+        storage_dev=$(yq e ".control-plane.hostpath-dev" ${CLUSTER_CONFIG})
+      fi
+      destroyMetal core ${host_name} ${boot_dev} na ${p_cmd}
     else
-      kvm_host=$(yq e ".control-plane.nodes.[0].kvm-host" ${CLUSTER_CONFIG})
+      kvm_host=$(yq e ".control-plane.nodes.[${node_index}].kvm-host" ${CLUSTER_CONFIG})
       deleteNodeVm ${host_name} ${kvm_host}.${DOMAIN}
     fi
     deletePxeConfig ${mac_addr}
-  else
-    for node_index in 0 1 2
-    do
-      mac_addr=$(yq e ".control-plane.nodes.[${node_index}].mac-addr" ${CLUSTER_CONFIG})
-      host_name=$(yq e ".control-plane.nodes.[${node_index}].name" ${CLUSTER_CONFIG})
-      if [[ ${metal} == "true" ]]
-      then
-        boot_dev=$(yq e ".control-plane.boot-dev" ${CLUSTER_CONFIG})
-        destroyMetal core ${host_name} ${boot_dev} na ${p_cmd}
-      else
-        kvm_host=$(yq e ".control-plane.nodes.[${node_index}].kvm-host" ${CLUSTER_CONFIG})
-        deleteNodeVm ${host_name} ${kvm_host}.${DOMAIN}
-      fi
-      deletePxeConfig ${mac_addr}
-      deleteIpRes ${mac_addr}
-    done
-  fi
+    node_index=$(( ${node_index} + 1 ))
+  done
   if [[ ${RESET_LB} == "true" ]]
   then
     INTERFACE=$(echo "${CLUSTER_NAME//-/_}" | tr "[:upper:]" "[:lower:]")
