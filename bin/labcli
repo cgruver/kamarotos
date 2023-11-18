@@ -62,9 +62,6 @@ do
     --deploy)
       deploy "$@"
     ;;
-    --agent-deploy)
-      agentDeploy
-    ;;
     --destroy)
       destroy "$@"
     ;;

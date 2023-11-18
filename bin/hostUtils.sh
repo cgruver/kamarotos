@@ -183,66 +183,6 @@ function deleteDns() {
   ${SSH} root@${DOMAIN_ROUTER} "cat /data/bind/db.${DOMAIN_ARPA} | grep -v ${key} > /data/bind/db.${DOMAIN_ARPA}.tmp &&  mv /data/bind/db.${DOMAIN_ARPA}.tmp /data/bind/db.${DOMAIN_ARPA}"
 }
 
-function createSnoBipDNS() {
-  local host_name=${1}
-  local ip_addr=${2}
-
-cat << EOF > ${WORK_DIR}/dns-work-dir/forward.zone
-*.apps.${CLUSTER_NAME}.${DOMAIN}.     IN      A      ${ip_addr} ; ${CLUSTER_NAME}-${DOMAIN}-cp
-api.${CLUSTER_NAME}.${DOMAIN}.        IN      A      ${ip_addr} ; ${CLUSTER_NAME}-${DOMAIN}-cp
-api-int.${CLUSTER_NAME}.${DOMAIN}.    IN      A      ${ip_addr} ; ${CLUSTER_NAME}-${DOMAIN}-cp
-${host_name}.${DOMAIN}.   IN      A      ${ip_addr} ; ${CLUSTER_NAME}-${DOMAIN}-cp
-EOF
-
-o4=$(echo ${ip_addr} | cut -d"." -f4)
-
-cat << EOF > ${WORK_DIR}/dns-work-dir/reverse.zone
-${o4}    IN      PTR     ${host_name}.${DOMAIN}.  ; ${CLUSTER_NAME}-${DOMAIN}-cp
-EOF
-
-}
-
-function createSnoDNS() {
-  local host_name=${1}
-  local ip_addr=${2}
-  local bs_ip_addr=${3}
-
-cat << EOF > ${WORK_DIR}/dns-work-dir/forward.zone
-${CLUSTER_NAME}-bootstrap.${DOMAIN}.  IN      A      ${bs_ip_addr} ; ${CLUSTER_NAME}-${DOMAIN}-bs
-*.apps.${CLUSTER_NAME}.${DOMAIN}.     IN      A      ${ip_addr} ; ${CLUSTER_NAME}-${DOMAIN}-cp
-api.${CLUSTER_NAME}.${DOMAIN}.        IN      A      ${ip_addr} ; ${CLUSTER_NAME}-${DOMAIN}-cp
-api.${CLUSTER_NAME}.${DOMAIN}.        IN      A      ${bs_ip_addr} ; ${CLUSTER_NAME}-${DOMAIN}-bs
-api-int.${CLUSTER_NAME}.${DOMAIN}.    IN      A      ${ip_addr} ; ${CLUSTER_NAME}-${DOMAIN}-cp
-api-int.${CLUSTER_NAME}.${DOMAIN}.    IN      A      ${bs_ip_addr} ; ${CLUSTER_NAME}-${DOMAIN}-bs
-${host_name}.${DOMAIN}.   IN      A      ${ip_addr} ; ${CLUSTER_NAME}-${DOMAIN}-cp
-EOF
-
-o4=$(echo ${ip_addr} | cut -d"." -f4)
-bs_o4=$(echo ${bs_ip_addr} | cut -d"." -f4)
-cat << EOF > ${WORK_DIR}/dns-work-dir/reverse.zone
-${o4}    IN      PTR     ${host_name}.${DOMAIN}.  ; ${CLUSTER_NAME}-${DOMAIN}-cp
-${bs_o4}    IN      PTR     ${CLUSTER_NAME}-bootstrap.${DOMAIN}.   ; ${CLUSTER_NAME}-${DOMAIN}-bs
-EOF
-
-}
-
-# function createBipPxeFile() {
-
-#   local mac=${1}
-#   local platform=${2}
-#   local hostname=${3}
-#   local ip_addr=${4}
-
-# cat << EOF > ${WORK_DIR}/ipxe-work-dir/${mac//:/-}.ipxe
-# #!ipxe
-
-# kernel http://${INSTALL_HOST_IP}/install/fcos/${OPENSHIFT_RELEASE}/vmlinuz edd=off net.ifnames=1 ifname=nic0:${mac} ip=${ip_addr}::${DOMAIN_ROUTER}:${DOMAIN_NETMASK}:${hostname}.${DOMAIN}:nic0:none nameserver=${DOMAIN_ROUTER} rd.neednet=1 ignition.firstboot ignition.platform.id=${platform} initrd=initrd  coreos.live.rootfs_url=http://${INSTALL_HOST_IP}/install/fcos/${OPENSHIFT_RELEASE}/rootfs.img ignition.config.url=http://${INSTALL_HOST_IP}/install/fcos/ignition/${CLUSTER_NAME}.${DOMAIN}/${mac//:/-}.ign
-# initrd http://${INSTALL_HOST_IP}/install/fcos/${OPENSHIFT_RELEASE}/initrd
-
-# boot
-# EOF
-# }
-
 function createPxeFile() {
   local mac=${1}
   local platform=${2}
@@ -255,29 +195,15 @@ then
   CONSOLE_OPT="console=ttyS0"
 fi
 
-# Save for when BIP is working
-# cat << EOF > ${WORK_DIR}/ipxe-work-dir/${mac//:/-}.ipxe
-# #!ipxe
-
-# kernel http://${INSTALL_HOST_IP}/install/fcos/${OPENSHIFT_RELEASE}/vmlinuz edd=off net.ifnames=1 rd.neednet=1 ignition.firstboot ignition.config.url=http://${INSTALL_HOST_IP}/install/fcos/ignition/${CLUSTER_NAME}.${DOMAIN}/${mac//:/-}.ign ignition.platform.id=${platform} initrd=initrd initrd=rootfs.img ${CONSOLE_OPT}
-# initrd http://${INSTALL_HOST_IP}/install/fcos/${OPENSHIFT_RELEASE}/initrd
-# initrd http://${INSTALL_HOST_IP}/install/fcos/${OPENSHIFT_RELEASE}/rootfs.img
-
-# boot
-# EOF
-
-# kernel http://${INSTALL_HOST_IP}/install/fcos/${OPENSHIFT_RELEASE}/vmlinuz edd=off net.ifnames=1 ifname=nic0:${mac} ip=${ip_addr}::${DOMAIN_ROUTER}:${DOMAIN_NETMASK}:${hostname}.${DOMAIN}:nic0:none nameserver=${DOMAIN_ROUTER} rd.neednet=1 ignition.firstboot ignition.platform.id=${platform} initrd=initrd  coreos.live.rootfs_url=http://${INSTALL_HOST_IP}/install/fcos/${OPENSHIFT_RELEASE}/rootfs.img ignition.config.url=http://${INSTALL_HOST_IP}/install/fcos/ignition/${CLUSTER_NAME}.${DOMAIN}/${mac//:/-}.ign
-
 if [[ ${AGENT} == "true" ]]
 then
 
 cat << EOF > ${WORK_DIR}/ipxe-work-dir/${mac//:/-}.ipxe
 #!ipxe
 
-kernel http://${INSTALL_HOST_IP}/install/fcos/${OPENSHIFT_RELEASE}/vmlinuz edd=off net.ifnames=1 ifname=nic0:${mac} ip=${ip_addr}::${DOMAIN_ROUTER}:${DOMAIN_NETMASK}:${hostname}.${DOMAIN}:nic0:none nameserver=${DOMAIN_ROUTER} rd.neednet=1 ignition.firstboot ignition.platform.id=${platform} initrd=initrd initrd=rootfs.img ignition.config.url=http://${INSTALL_HOST_IP}/install/fcos/ignition/${CLUSTER_NAME}.${DOMAIN}/${mac//:/-}.ign
+initrd --name initrd http://${INSTALL_HOST_IP}/install/fcos/ignition/${CLUSTER_NAME}.${DOMAIN}/initrd
+kernel http://${INSTALL_HOST_IP}/install/fcos/ignition/${CLUSTER_NAME}.${DOMAIN}/vmlinuz ignition.firstboot ignition.platform.id=${platform} initrd=initrd coreos.live.rootfs_url=http://${INSTALL_HOST_IP}/install/fcos/ignition/${CLUSTER_NAME}.${DOMAIN}/rootfs.img
 
-initrd http://${INSTALL_HOST_IP}/install/fcos/${OPENSHIFT_RELEASE}/initrd
-initrd http://${INSTALL_HOST_IP}/install/fcos/${OPENSHIFT_RELEASE}/rootfs.img
 boot
 EOF
 
@@ -334,13 +260,20 @@ function prepNodeFiles() {
     curl -o /usr/local/www/install/fcos/${OPENSHIFT_RELEASE}/initrd ${INITRD_URL} ; \
     curl -o /usr/local/www/install/fcos/${OPENSHIFT_RELEASE}/rootfs.img ${ROOTFS_URL} ; \
     fi"
-  
+
   cat ${WORK_DIR}/dns-work-dir/forward.zone | ${SSH} root@${DOMAIN_ROUTER} "cat >> /data/bind/db.${DOMAIN}"
   cat ${WORK_DIR}/dns-work-dir/reverse.zone | ${SSH} root@${DOMAIN_ROUTER} "cat >> /data/bind/db.${DOMAIN_ARPA}"
   ${SSH} root@${DOMAIN_ROUTER} "/etc/init.d/named stop && sleep 2 && /etc/init.d/named start && sleep 2"
   ${SSH} root@${EDGE_ROUTER} "/etc/init.d/named stop && sleep 2 && /etc/init.d/named start && sleep 2"
   ${SSH} root@${INSTALL_HOST_IP} "mkdir -p /usr/local/www/install/fcos/ignition/${CLUSTER_NAME}.${DOMAIN}"
-  ${SCP} -r ${WORK_DIR}/ipxe-work-dir/ignition/*.ign root@${INSTALL_HOST_IP}:/usr/local/www/install/fcos/ignition/${CLUSTER_NAME}.${DOMAIN}/
+  if [[ ${AGENT} == "true" ]]
+  then
+    ${SCP} ${WORK_DIR}/okd-install-dir/boot-artifacts/agent.x86_64-initrd.img root@${INSTALL_HOST_IP}:/usr/local/www/install/fcos/ignition/${CLUSTER_NAME}.${DOMAIN}/initrd
+    ${SCP} ${WORK_DIR}/okd-install-dir/boot-artifacts/agent.x86_64-vmlinuz root@${INSTALL_HOST_IP}:/usr/local/www/install/fcos/ignition/${CLUSTER_NAME}.${DOMAIN}/vmlinuz
+    ${SCP} ${WORK_DIR}/okd-install-dir/boot-artifacts/agent.x86_64-rootfs.img root@${INSTALL_HOST_IP}:/usr/local/www/install/fcos/ignition/${CLUSTER_NAME}.${DOMAIN}/rootfs.img
+  # else
+  #   ${SCP} -r ${WORK_DIR}/ipxe-work-dir/ignition/*.ign root@${INSTALL_HOST_IP}:/usr/local/www/install/fcos/ignition/${CLUSTER_NAME}.${DOMAIN}/
+  fi
   ${SSH} root@${INSTALL_HOST_IP} "chmod 644 /usr/local/www/install/fcos/ignition/${CLUSTER_NAME}.${DOMAIN}/*"
   ${SCP} -r ${WORK_DIR}/ipxe-work-dir/*.ipxe root@${DOMAIN_ROUTER}:/data/tftpboot/ipxe/
 }

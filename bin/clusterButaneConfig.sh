@@ -7,21 +7,18 @@ function createButaneConfig() {
   local platform=${5}
   local config_ceph=${6}
   local boot_dev=${7}
+  local mc_version="$(${OC} version --client -o yaml | yq e ".releaseClientVersion" | cut -d"-" -f1 | cut -d"." -f "-2" ).0"
 
   writeButaneHeader ${mac} ${role}
   writeButaneFiles ${ip_addr} ${host_name} ${mac} ${role}
-  if [[ ${BIP} == "true" ]]
-  then
-    createBipMC ${ip_addr} ${host_name} ${mac} ${boot_dev}
-  fi
   if [[ ${config_ceph} == "true" ]]
   then
     writeButaneCeph ${mac} ${boot_dev}
   fi
-  # if [[ ${platform} == "metal" ]]
-  # then
-  #   writeButaneMetal ${mac}
-  # fi
+  if [[ ${platform} == "metal" ]]
+  then
+    writeButaneMetal ${mac}
+  fi
   cat ${WORK_DIR}/ipxe-work-dir/${mac//:/-}-config.yml | butane -d ${WORK_DIR}/ipxe-work-dir/ -o ${WORK_DIR}/ipxe-work-dir/ignition/${mac//:/-}.ign
 }
 
@@ -82,6 +79,9 @@ storage:
           gateway=${DOMAIN_ROUTER}
           dns=${DOMAIN_ROUTER}
           dns-search=${DOMAIN}
+
+          [ipv6]
+          method=disabled
     - path: /etc/hostname
       mode: 0420
       overwrite: true
@@ -134,68 +134,19 @@ kernel_arguments:
 EOF
 }
 
-function createBipMC() {
+function createClusterCustomMC() {
 
-  local ip_addr=${1}
-  local host_name=${2}
-  local mac=${3}
-  local cidr=$(mask2cidr ${DOMAIN_NETMASK})
-  local hostpath_dev=$(yq e ".control-plane.nodes.[0].hostpath-dev" ${CLUSTER_CONFIG})
-  local systemd_svc_name=$(echo ${hostpath_dev//\//-} | cut -d"-" -f2-)
-  local mc_version="$(${OC} version --client -o yaml | yq e ".releaseClientVersion" | cut -d"-" -f1 | cut -d"." -f "-2" ).0"
-  # if [[ ${mc_version} == "4.14.0" ]]
-  # then
-  #   # mc_version="4.14.0-experimental"
-  #   mc_version="4.13.0"
-  # fi
+local mc_version="$(${OC} version --client -o yaml | yq e ".releaseClientVersion" | cut -d"-" -f1 | cut -d"." -f "-2" ).0"
 
-sno_machine_config=$(cat << EOF | butane | while IFS= read -r line ; do echo "          ${line}" ; done
+cat << EOF | butane > ${WORK_DIR}/98-cluster-config.yaml
 variant: openshift
 version: ${mc_version}
 metadata:
   labels:
     machineconfiguration.openshift.io/role: master
-  name: config-bip
+  name: 98-cluster-config
 storage:
   files:
-    - path: /etc/zincati/config.d/90-disable-feature.toml
-      mode: 0644
-      contents:
-        inline: |
-          [updates]
-          enabled = false
-    - path: /etc/systemd/network/25-nic0.link
-      mode: 0644
-      contents:
-        inline: |
-          [Match]
-          MACAddress=${mac}
-          [Link]
-          Name=nic0
-    - path: /etc/NetworkManager/system-connections/nic0.nmconnection
-      mode: 0600
-      overwrite: true
-      contents:
-        inline: |
-          [connection]
-          type=ethernet
-          interface-name=nic0
-
-          [ethernet]
-          mac-address=${mac}
-
-          [ipv4]
-          method=manual
-          addresses=${ip_addr}/${cidr}
-          gateway=${DOMAIN_ROUTER}
-          dns=${DOMAIN_ROUTER}
-          dns-search=${DOMAIN}
-    - path: /etc/hostname
-      mode: 0420
-      overwrite: true
-      contents:
-        inline: |
-          ${host_name}
     - path: /etc/chrony.conf
       mode: 0644
       overwrite: true
@@ -206,6 +157,46 @@ storage:
           makestep 1.0 3
           rtcsync
           logdir /var/log/chrony
+EOF
+cp ${WORK_DIR}/98-cluster-config.yaml ${WORK_DIR}/okd-install-dir/openshift/98-cluster-config.yaml
+}
+
+function createClusterCephMC() {
+
+local mc_version="$(${OC} version --client -o yaml | yq e ".releaseClientVersion" | cut -d"-" -f1 | cut -d"." -f "-2" ).0"
+local boot_dev=$(yq e ".control-plane.boot-dev" ${CLUSTER_CONFIG})
+
+cat << EOF | butane > ${WORK_DIR}/98-cluster-config.yaml
+variant: openshift
+version: ${mc_version}
+metadata:
+  labels:
+    machineconfiguration.openshift.io/role: master
+  name: 98-cluster-ceph-config
+storage:
+  disks:
+  - device: ${boot_dev} 
+    partitions:
+    - label: ceph
+      start_mib: 102400 
+      size_mib: 0
+EOF
+cp ${WORK_DIR}/98-cluster-ceph-config.yaml ${WORK_DIR}/okd-install-dir/openshift/98-cluster-ceph-config.yaml
+}
+
+function createHostPathMC() {
+
+  local hostpath_dev=$(yq e ".control-plane.hostpath-dev" ${CLUSTER_CONFIG})
+  local systemd_svc_name=$(echo ${hostpath_dev//\//-} | cut -d"-" -f2-)
+  local mc_version="$(${OC} version --client -o yaml | yq e ".releaseClientVersion" | cut -d"-" -f1 | cut -d"." -f "-2" ).0"
+
+cat << EOF | butane > ${WORK_DIR}/98-hostpath-config.yaml
+variant: openshift
+version: ${mc_version}
+metadata:
+  labels:
+    machineconfiguration.openshift.io/role: master
+  name: 98-hostpath-config
 systemd:
   units:
   - contents: |
@@ -243,58 +234,6 @@ systemd:
       WantedBy=local-fs.target
     enabled: true
     name: var-hostpath.mount
-  - contents: |
-      [Unit]
-      Description=Clear Journal to Remove Corrupt File
-      DefaultDependencies=no
-      After=kubelet.service
-
-      [Service]
-      Type=oneshot
-      RemainAfterExit=yes
-      ExecStart=bash -c "/usr/bin/journalctl --rotate && /usr/bin/journalctl --vacuum-time=1s"
-      TimeoutSec=0
-
-      [Install]
-      WantedBy=multi-user.target
-    enabled: true
-    name: systemd-clear-journal.service
 EOF
-)
-
-writeButaneSnoBip "${sno_machine_config}" ${mac}
-
-}
-
-function writeButaneSnoBip() {
-
-local sno_machine_config="${1}"
-local mac=${2}
-local boot_dev=$(yq e ".control-plane.nodes.[0].boot-dev" ${CLUSTER_CONFIG})
-
-cat << EOF >> ${WORK_DIR}/ipxe-work-dir/${mac//:/-}-config.yml
-    - path: /opt/openshift/openshift/98_openshift-machineconfig_98-cp-config-bip.yaml
-      mode: 0644
-      overwrite: true
-      contents:
-        inline: |
-${sno_machine_config}
-systemd:
-  units:
-  - contents: |
-      [Unit]
-      Description=Wipe Boot Disk After BootKube Completes
-      Wants=bootkube.service
-      After=bootkube.service
-      ConditionPathExists=/opt/openshift/.bootkube.done
-
-      [Service]
-      WorkingDirectory=/
-      ExecStart=/bin/bash -c "/usr/sbin/wipefs -af ${boot_dev} && /usr/sbin/reboot"
-
-      [Install]
-      WantedBy=multi-user.target
-    enabled: true
-    name: wipe-boot-dev.service
-EOF
+cp ${WORK_DIR}/98-hostpath-config.yaml ${WORK_DIR}/okd-install-dir/openshift/98-hostpath-config.yaml
 }

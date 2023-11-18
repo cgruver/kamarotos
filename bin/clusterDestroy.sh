@@ -8,10 +8,6 @@ function deleteControlPlane() {
   then
     SNO="true"
     RESET_LB="false"
-    if [[ $(yq e ". | has(\"bootstrap\")" ${CLUSTER_CONFIG}) == "false" ]]
-    then
-      BIP="true"
-    fi
   fi
   metal=$(yq e ".control-plane.metal" ${CLUSTER_CONFIG})
   if [[ ${SNO} == "true" ]]
@@ -20,17 +16,15 @@ function deleteControlPlane() {
     host_name=$(yq e ".control-plane.nodes.[0].name" ${CLUSTER_CONFIG})
     if [[ ${metal} == "true" ]]
     then
-      install_dev=$(yq e ".control-plane.nodes.[0].sno-install-dev" ${CLUSTER_CONFIG})
-      destroyMetal core ${host_name} ${install_dev} na ${p_cmd}
+      boot_dev=$(yq e ".control-plane.boot-dev" ${CLUSTER_CONFIG})
+      hostpath_dev=$(yq e ".control-plane.hostpath-dev" ${CLUSTER_CONFIG})
+      destroyMetal core ${host_name} ${boot_dev} ${hostpath_dev} ${p_cmd}
+      
     else
       kvm_host=$(yq e ".control-plane.nodes.[0].kvm-host" ${CLUSTER_CONFIG})
       deleteNodeVm ${host_name} ${kvm_host}.${DOMAIN}
     fi
     deletePxeConfig ${mac_addr}
-    # if [[ ${BIP} == "true" ]]
-    # then
-    #   deleteBipIpRes ${mac_addr}
-    # fi
   else
     for node_index in 0 1 2
     do
@@ -38,14 +32,14 @@ function deleteControlPlane() {
       host_name=$(yq e ".control-plane.nodes.[${node_index}].name" ${CLUSTER_CONFIG})
       if [[ ${metal} == "true" ]]
       then
-        boot_dev=$(yq e ".control-plane.nodes.[${node_index}].boot-dev" ${CLUSTER_CONFIG})
+        boot_dev=$(yq e ".control-plane.boot-dev" ${CLUSTER_CONFIG})
         destroyMetal core ${host_name} ${boot_dev} na ${p_cmd}
       else
         kvm_host=$(yq e ".control-plane.nodes.[${node_index}].kvm-host" ${CLUSTER_CONFIG})
         deleteNodeVm ${host_name} ${kvm_host}.${DOMAIN}
       fi
       deletePxeConfig ${mac_addr}
-      deleteBipIpRes ${mac_addr}
+      deleteIpRes ${mac_addr}
     done
   fi
   if [[ ${RESET_LB} == "true" ]]
@@ -79,9 +73,6 @@ function destroy() {
   for i in "$@"
   do
     case $i in
-      -b|--bootstrap)
-        DELETE_BOOTSTRAP=true
-      ;;
       -w=*|--worker=*)
         DELETE_WORKER=true
         W_HOST_NAME="${i#*=}"
@@ -189,47 +180,13 @@ function destroy() {
     fi
   fi
 
-  if [[ ${DELETE_BOOTSTRAP} == "true" ]]
-  then
-    if [[ $(yq e ".bootstrap.metal" ${CLUSTER_CONFIG}) == "true" ]]
-    then
-      kill $(ps -ef | grep qemu | grep bootstrap | awk '{print $2}')
-      rm -rf ${WORK_DIR}/bootstrap
-    else
-      host_name="${CLUSTER_NAME}-bootstrap"
-      kvm_host=$(yq e ".bootstrap.kvm-host" ${CLUSTER_CONFIG})
-      deleteNodeVm ${host_name} ${kvm_host}.${BOOTSTRAP_KVM_DOMAIN}
-    fi
-    deletePxeConfig $(yq e ".bootstrap.mac-addr" ${CLUSTER_CONFIG})
-    deleteDns ${CLUSTER_NAME}-${DOMAIN}-bs
-    CP_COUNT=$(yq e ".control-plane.nodes" ${CLUSTER_CONFIG} | yq e 'length' -)
-    if [[ ${CP_COUNT} == "1" ]]
-    then
-      SNO="true"
-      if [[ $(yq e ". | has(\"bootstrap\")" ${CLUSTER_CONFIG}) == "false" ]]
-      then
-        BIP="true"
-      fi
-    fi
-    if [[ ${SNO} == "false" ]]
-    then
-      if [[ ${GL_MODEL} == "GL-AXT1800" ]]
-      then
-        ${SSH} root@${DOMAIN_ROUTER} "cat /usr/local/nginx/nginx-${CLUSTER_NAME}.conf | grep -v bootstrap > /usr/local/nginx/nginx-${CLUSTER_NAME}.no-bootstrap ; \
-          mv /usr/local/nginx/nginx-${CLUSTER_NAME}.no-bootstrap /usr/local/nginx/nginx-${CLUSTER_NAME}.conf ; \
-          /etc/init.d/nginx restart"
-      else
-        ${SSH} root@${DOMAIN_ROUTER} "cat /etc/haproxy-${CLUSTER_NAME}.cfg | grep -v bootstrap > /etc/haproxy-${CLUSTER_NAME}.no-bootstrap ; \
-        mv /etc/haproxy-${CLUSTER_NAME}.no-bootstrap /etc/haproxy-${CLUSTER_NAME}.cfg ; \
-        /etc/init.d/haproxy-${CLUSTER_NAME} stop ; \
-        /etc/init.d/haproxy-${CLUSTER_NAME} start"
-      fi
-    fi
-  fi
-
   if [[ ${DELETE_CLUSTER} == "true" ]]
   then
     deleteControlPlane ${P_CMD}
+    if [[ ! -f  ${PULL_SECRET} ]]
+    then
+      rm ${PULL_SECRET}
+    fi
   fi
 
   ${SSH} root@${DOMAIN_ROUTER} "/etc/init.d/named stop && sleep 2 && /etc/init.d/named start && sleep 2"

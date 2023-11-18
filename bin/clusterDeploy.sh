@@ -19,6 +19,8 @@ networking:
     hostPrefix: 23 
   serviceNetwork: 
   - ${SERVICE_CIDR}
+  machineNetwork:
+  - cidr: 10.11.12.0/24
 compute:
 - name: worker
   replicas: 0
@@ -34,49 +36,50 @@ sshKey: ${SSH_KEY}
 EOF
 }
 
-function createAgentConfig() {
+function createClusterConfig() {
 
-cat << EOF > ${WORK_DIR}/okd-install-dir/extract-ignition.sh
-#!/usr/bin/env bash
-coreos-installer iso ignition show agent.x86_64.iso > master.ign
-EOF
+  mkdir ${WORK_DIR}/okd-install-dir/openshift
+  createClusterCustomMC
+  if [[ $(yq ".control-plane | has(\"ceph\")" ${CLUSTER_CONFIG}) == "true" ]]
+  then
+    createClusterCephMC
+  fi
 
-cat << EOF > ${WORK_DIR}/agent-config.yaml
-apiVersion: v1alpha1
-kind: AgentConfig
-metadata:
-  name: ${CLUSTER_NAME}
-rendezvousIP: $(yq e ".control-plane.nodes.[0].ip-addr" ${CLUSTER_CONFIG})
-hosts:
-EOF
+  yq e ".apiVersion = \"v1alpha1\"" -n > ${WORK_DIR}/agent-config.yaml
+  yq e ".kind = \"AgentConfig\"" -i ${WORK_DIR}/agent-config.yaml
+  yq e ".metadata.name = \"${CLUSTER_NAME}\"" -i ${WORK_DIR}/agent-config.yaml
+  yq e ".rendezvousIP = \"$(yq e ".control-plane.nodes.[0].ip-addr" ${CLUSTER_CONFIG})\"" -i ${WORK_DIR}/agent-config.yaml
 
-  for node_index in 0 1 2
+  node_boot_dev=$(yq e ".control-plane.boot-dev" ${CLUSTER_CONFIG})
+  let node_count=$(yq e ".control-plane.nodes" ${CLUSTER_CONFIG} | yq e 'length' -)
+  let node_index=0
+  while [[ node_index -lt ${node_count} ]]
   do
-    node_name=${CLUSTER_NAME}-cp-${node_index}.${DOMAIN}
+    node_name=${CLUSTER_NAME}-cp-${node_index}
     node_mac=$(yq e ".control-plane.nodes.[${node_index}].mac-addr" ${CLUSTER_CONFIG})
-    node_boot_dev=$(yq e ".control-plane.nodes.[${node_index}].boot-dev" ${CLUSTER_CONFIG})
+    node_ip=$(yq e ".control-plane.nodes.[${node_index}].ip-addr" ${CLUSTER_CONFIG})
     yq e ".hosts.[${node_index}].hostname = \"${node_name}\"" -i ${WORK_DIR}/agent-config.yaml
     yq e ".hosts.[${node_index}].role = \"master\"" -i ${WORK_DIR}/agent-config.yaml
     yq e ".hosts.[${node_index}].rootDeviceHints.deviceName = \"${node_boot_dev}\"" -i ${WORK_DIR}/agent-config.yaml
     yq e ".hosts.[${node_index}].interfaces.[0].name = \"nic0\"" -i ${WORK_DIR}/agent-config.yaml
     yq e ".hosts.[${node_index}].interfaces.[0].macAddress = \"${node_mac}\"" -i ${WORK_DIR}/agent-config.yaml
+    yq e ".hosts.[${node_index}].networkConfig.interfaces.[0].name = \"nic0\"" -i ${WORK_DIR}/agent-config.yaml
+    yq e ".hosts.[${node_index}].networkConfig.interfaces.[0].type = \"ethernet\"" -i ${WORK_DIR}/agent-config.yaml
+    yq e ".hosts.[${node_index}].networkConfig.interfaces.[0].state = \"up\"" -i ${WORK_DIR}/agent-config.yaml
+    yq e ".hosts.[${node_index}].networkConfig.interfaces.[0].mac-address = \"${node_mac}\"" -i ${WORK_DIR}/agent-config.yaml
+    yq e ".hosts.[${node_index}].networkConfig.interfaces.[0].ipv4.enabled = true" -i ${WORK_DIR}/agent-config.yaml
+    yq e ".hosts.[${node_index}].networkConfig.interfaces.[0].ipv4.address.[0].ip = \"${node_ip}\"" -i ${WORK_DIR}/agent-config.yaml
+    yq e ".hosts.[${node_index}].networkConfig.interfaces.[0].ipv4.address.[0].prefix-length = 24" -i ${WORK_DIR}/agent-config.yaml
+    yq e ".hosts.[${node_index}].networkConfig.interfaces.[0].ipv4.dhcp = false" -i ${WORK_DIR}/agent-config.yaml
+    yq e ".hosts.[${node_index}].networkConfig.interfaces.[0].ipv6.enabled = false" -i ${WORK_DIR}/agent-config.yaml
+    yq e ".hosts.[${node_index}].networkConfig.dns-resolver.config.server.[0] = \"${DOMAIN_ROUTER}\"" -i ${WORK_DIR}/agent-config.yaml
+    yq e ".hosts.[${node_index}].networkConfig.routes.config.[0].destination = \"0.0.0.0/0\"" -i ${WORK_DIR}/agent-config.yaml
+    yq e ".hosts.[${node_index}].networkConfig.routes.config.[0].next-hop-address = \"${DOMAIN_ROUTER}\"" -i ${WORK_DIR}/agent-config.yaml
+    yq e ".hosts.[${node_index}].networkConfig.routes.config.[0].next-hop-interface = \"nic0\"" -i ${WORK_DIR}/agent-config.yaml
+    yq e ".hosts.[${node_index}].networkConfig.routes.config.[0].table-id = 254" -i ${WORK_DIR}/agent-config.yaml
+    node_index=$(( ${node_index} + 1 ))
   done
-
-  chmod 755 ${WORK_DIR}/okd-install-dir/extract-ignition.sh
-  cp ${WORK_DIR}/install-config-upi.yaml ${WORK_DIR}/okd-install-dir/install-config.yaml
   cp ${WORK_DIR}/agent-config.yaml ${WORK_DIR}/okd-install-dir/agent-config.yaml
-  openshift-install --dir=${WORK_DIR}/okd-install-dir agent create image
-  podman run --rm -v ${WORK_DIR}/okd-install-dir:/data -w /data --entrypoint /data/extract-ignition.sh $(yq e ".cluster.coreos-installer" ${CLUSTER_CONFIG})
-
-}
-
-function appendBootstrapInPlaceConfig() {
-  install_dev=$(yq e ".control-plane.nodes.[0].sno-install-dev" ${CLUSTER_CONFIG})
-
-cat << EOF >> ${WORK_DIR}/install-config-upi.yaml
-BootstrapInPlace:
-  InstallationDisk: "${install_dev}"
-EOF
 }
 
 function appendDisconnectedInstallConfig() {
@@ -127,100 +130,38 @@ function createLbConfig() {
   fi
 }
 
-function createBootstrapNode() {
-  host_name=${CLUSTER_NAME}-bootstrap
-  yq e ".bootstrap.name = \"${host_name}\"" -i ${CLUSTER_CONFIG}
-  bs_ip_addr=$(yq e ".bootstrap.ip-addr" ${CLUSTER_CONFIG})
-  boot_dev=/dev/sda
-  platform=qemu
-  if [[ $(yq e ".bootstrap.metal" ${CLUSTER_CONFIG}) == "false" ]]
-  then
-    kvm_host=$(yq e ".bootstrap.kvm-host" ${CLUSTER_CONFIG})
-    memory=$(yq e ".bootstrap.node-spec.memory" ${CLUSTER_CONFIG})
-    cpu=$(yq e ".bootstrap.node-spec.cpu" ${CLUSTER_CONFIG})
-    root_vol=$(yq e ".bootstrap.node-spec.root-vol" ${CLUSTER_CONFIG})
-    createOkdVmNode ${bs_ip_addr} ${host_name} ${kvm_host}.${BOOTSTRAP_KVM_DOMAIN} bootstrap ${memory} ${cpu} ${root_vol} 0 ".bootstrap.mac-addr"
-  fi
-  # Create the ignition and iPXE boot files
-  mac_addr=$(yq e ".bootstrap.mac-addr" ${CLUSTER_CONFIG})
-  createButaneConfig ${bs_ip_addr} ${host_name}.${DOMAIN} ${mac_addr} bootstrap ${platform} "false" ${boot_dev}
-  createPxeFile ${mac_addr} ${platform} ${boot_dev} ${host_name} ${bs_ip_addr}
-}
-
-function configSno() {
-  metal=$(yq e ".control-plane.metal" ${CLUSTER_CONFIG})
-  ip_addr=$(yq e ".control-plane.nodes.[0].ip-addr" ${CLUSTER_CONFIG})
-  host_name=${CLUSTER_NAME}-node
-  yq e ".control-plane.nodes.[0].name = \"${host_name}\"" -i ${CLUSTER_CONFIG}
-  if [[ ${metal} == "false" ]]
-  then
-    memory=$(yq e ".control-plane.node-spec.memory" ${CLUSTER_CONFIG})
-    cpu=$(yq e ".control-plane.node-spec.cpu" ${CLUSTER_CONFIG})
-    root_vol=$(yq e ".control-plane.node-spec.root-vol" ${CLUSTER_CONFIG})
-    kvm_host=$(yq e ".control-plane.nodes.[0].kvm-host" ${CLUSTER_CONFIG})
-    # Create the VM
-    createOkdVmNode ${ip_addr} ${host_name} ${kvm_host}.${DOMAIN} sno ${memory} ${cpu} ${root_vol} 0 ".control-plane.nodes.[0].mac-addr"
-  fi
-  # Create the ignition and iPXE boot files
-  if [[ ${metal} == "true" ]]
-  then
-    platform=metal
-    boot_dev=$(yq e ".control-plane.nodes.[0].boot-dev" ${CLUSTER_CONFIG})
-  else
-    platform=qemu
-    boot_dev=/dev/sda
-  fi
-  mac_addr=$(yq e ".control-plane.nodes.[0].mac-addr" ${CLUSTER_CONFIG})
-  if [[ ${BIP} == "true" ]]
-  then
-    createButaneConfig ${ip_addr} ${host_name}.${DOMAIN} ${mac_addr} sno ${platform} "false" ${boot_dev}
-    createSnoBipDNS ${host_name} ${ip_addr}
-  else
-    createButaneConfig ${ip_addr} ${host_name}.${DOMAIN} ${mac_addr} master ${platform} "false" ${boot_dev}
-    createSnoDNS ${host_name} ${ip_addr} ${bs_ip_addr}
-  fi
-  createPxeFile ${mac_addr} ${platform} ${boot_dev} ${host_name} ${ip_addr}
-}
-
 function configControlPlane() {
 
   metal=$(yq e ".control-plane.metal" ${CLUSTER_CONFIG})
-  ceph_node=$(yq ".control-plane | has(\"ceph\")" ${CLUSTER_CONFIG})
-  config_ceph=false
-  if [[ ${ceph_node} == "true" ]]
+  if [[ ${SNO} == "true" ]]
   then
-    ceph_type=$(yq e ".control-plane.ceph.type" ${CLUSTER_CONFIG})
-    if [[ ${ceph_type} == "part" ]]
-    then
-      config_ceph=true
-    fi
-  fi
-  # Create DNS Entries:
-  ingress_ip=$(yq e ".cluster.ingress-ip-addr" ${CLUSTER_CONFIG})
-  if [[ ${AGENT} == "false" ]]
-  then
-    echo "${CLUSTER_NAME}-bootstrap.${DOMAIN}.  IN      A      ${bs_ip_addr} ; ${CLUSTER_NAME}-${DOMAIN}-bs" >> ${WORK_DIR}/dns-work-dir/forward.zone
-    bs_o4=$(echo ${bs_ip_addr} | cut -d"." -f4)
-    echo "${bs_o4}    IN      PTR     ${CLUSTER_NAME}-bootstrap.${DOMAIN}.   ; ${CLUSTER_NAME}-${DOMAIN}-bs" >> ${WORK_DIR}/dns-work-dir/reverse.zone
+    ingress_ip=$(yq e ".control-plane.nodes.[0].ip-addr" ${CLUSTER_CONFIG})
+  else
+    createLbConfig
+    ingress_ip=$(yq e ".cluster.ingress-ip-addr" ${CLUSTER_CONFIG})
   fi
   echo "*.apps.${CLUSTER_NAME}.${DOMAIN}.     IN      A      ${ingress_ip} ; ${CLUSTER_NAME}-${DOMAIN}-cp" >> ${WORK_DIR}/dns-work-dir/forward.zone
   echo "api.${CLUSTER_NAME}.${DOMAIN}.        IN      A      ${ingress_ip} ; ${CLUSTER_NAME}-${DOMAIN}-cp" >> ${WORK_DIR}/dns-work-dir/forward.zone
   echo "api-int.${CLUSTER_NAME}.${DOMAIN}.    IN      A      ${ingress_ip} ; ${CLUSTER_NAME}-${DOMAIN}-cp" >> ${WORK_DIR}/dns-work-dir/forward.zone
-  
-  for node_index in 0 1 2
+  if [[ ${metal} == "true" ]]
+  then
+    boot_dev=$(yq e ".control-plane.boot-dev" ${CLUSTER_CONFIG})
+  fi
+  let node_count=$(yq e ".control-plane.nodes" ${CLUSTER_CONFIG} | yq e 'length' -)
+  let node_index=0
+  while [[ node_index -lt ${node_count} ]]
   do
     ip_addr=$(yq e ".control-plane.nodes.[${node_index}].ip-addr" ${CLUSTER_CONFIG})
     host_name=${CLUSTER_NAME}-cp-${node_index}
     yq e ".control-plane.nodes.[${node_index}].name = \"${host_name}\"" -i ${CLUSTER_CONFIG}
-    if [[ ${metal} == "true" ]]
+    if [[ ${metal} == "false" ]]
     then
-      boot_dev=$(yq e ".control-plane.nodes.[${node_index}].boot-dev" ${CLUSTER_CONFIG})
-    else
       memory=$(yq e ".control-plane.node-spec.memory" ${CLUSTER_CONFIG})
       cpu=$(yq e ".control-plane.node-spec.cpu" ${CLUSTER_CONFIG})
       root_vol=$(yq e ".control-plane.node-spec.root-vol" ${CLUSTER_CONFIG})
       kvm_host=$(yq e ".control-plane.nodes.[${node_index}].kvm-host" ${CLUSTER_CONFIG})
       boot_dev="/dev/sda"
+      ceph_node=$(yq ".control-plane | has(\"ceph\")" ${CLUSTER_CONFIG})
       if [[ ${ceph_node} == "true" ]]
       then
         ceph_vol=$(yq e ".control-plane.ceph.ceph-vol" ${CLUSTER_CONFIG})
@@ -237,15 +178,13 @@ function configControlPlane() {
       platform=metal
     fi
     mac_addr=$(yq e ".control-plane.nodes.[${node_index}].mac-addr" ${CLUSTER_CONFIG})
-    createButaneConfig ${ip_addr} ${host_name}.${DOMAIN} ${mac_addr} master ${platform} ${config_ceph} ${boot_dev}
     createPxeFile ${mac_addr} ${platform} ${boot_dev} ${host_name} ${ip_addr}
     # Create control plane node DNS Records:
     echo "${host_name}.${DOMAIN}.   IN      A      ${ip_addr} ; ${CLUSTER_NAME}-${DOMAIN}-cp" >> ${WORK_DIR}/dns-work-dir/forward.zone
     o4=$(echo ${ip_addr} | cut -d"." -f4)
     echo "${o4}    IN      PTR     ${host_name}.${DOMAIN}.  ; ${CLUSTER_NAME}-${DOMAIN}-cp" >> ${WORK_DIR}/dns-work-dir/reverse.zone
+    node_index=$(( ${node_index} + 1 ))
   done
-  # Create The HA-Proxy Load Balancer
-  createLbConfig
 }
 
 function deployCluster() {
@@ -262,56 +201,25 @@ function deployCluster() {
   mkdir -p ${OKD_LAB_PATH}/lab-config/${CLUSTER_NAME}.${DOMAIN}
   SSH_KEY=$(cat ${OKD_LAB_PATH}/ssh_key.pub)
   SNO="false"
-  BIP="false"
-  AGENT="false"
+  AGENT="true"
   CP_REPLICAS=$(yq e ".control-plane.nodes" ${CLUSTER_CONFIG} | yq e 'length' -)
   if [[ ${CP_REPLICAS} == "1" ]]
   then
     SNO="true"
-    if [[ $(yq e ". | has(\"bootstrap\")" ${CLUSTER_CONFIG}) == "false" ]]
-    then
-      BIP="true"
-    fi
-  elif [[ ${CP_REPLICAS} == "3" ]]
+  elif [[ ${CP_REPLICAS} != "3" ]]
   then
-    if [[ $(yq e ". | has(\"bootstrap\")" ${CLUSTER_CONFIG}) == "false" ]]
-    then
-      AGENT="true"
-    fi
-  else
     echo "There must be 3 host entries for the control plane for a full cluster, or 1 entry for a Single Node cluster."
     exit 1
   fi
   createInstallConfig
-  if [[ ${BIP} == "true" ]]
-  then
-    appendBootstrapInPlaceConfig
-  fi
   if [[ ${DISCONNECTED_CLUSTER} == "true" ]]
   then
     appendDisconnectedInstallConfig
   fi
   cp ${WORK_DIR}/install-config-upi.yaml ${WORK_DIR}/okd-install-dir/install-config.yaml
-  if [[ ${BIP} == "true" ]]
-  then
-    openshift-install --dir=${WORK_DIR}/okd-install-dir create single-node-ignition-config
-    cp ${WORK_DIR}/okd-install-dir/bootstrap-in-place-for-live-iso.ign ${WORK_DIR}/ipxe-work-dir/sno.ign
-  elif [[ ${AGENT} == "true" ]]
-  then
-    createAgentConfig
-    cp ${WORK_DIR}/okd-install-dir/*.ign ${WORK_DIR}/ipxe-work-dir/
-  else
-    openshift-install --dir=${WORK_DIR}/okd-install-dir create ignition-configs
-    cp ${WORK_DIR}/okd-install-dir/*.ign ${WORK_DIR}/ipxe-work-dir/
-    createBootstrapNode
-  fi
-  #Create Control Plane Nodes:
-  if [[ ${SNO} == "true" ]]
-  then
-    configSno
-  else
-    configControlPlane
-  fi
+  createClusterConfig
+  openshift-install --dir=${WORK_DIR}/okd-install-dir agent create pxe-files 
+  configControlPlane
   cp ${WORK_DIR}/okd-install-dir/auth/kubeconfig ${OKD_LAB_PATH}/lab-config/${CLUSTER_NAME}.${DOMAIN}/
   chmod 400 ${OKD_LAB_PATH}/lab-config/${CLUSTER_NAME}.${DOMAIN}/kubeconfig
   prepNodeFiles

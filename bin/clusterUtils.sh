@@ -584,14 +584,10 @@ function monitor() {
   do
     case $i in
       -b)
-        openshift-install --dir=${OKD_LAB_PATH}/${CLUSTER_NAME}.${DOMAIN}/okd-install-dir wait-for bootstrap-complete --log-level debug
+        openshift-install agent wait-for bootstrap-complete --dir=${OKD_LAB_PATH}/${CLUSTER_NAME}.${DOMAIN}/okd-install-dir --log-level debug
       ;;
       -i)
-        openshift-install --dir=${OKD_LAB_PATH}/${CLUSTER_NAME}.${DOMAIN}/okd-install-dir wait-for install-complete --log-level debug
-      ;;
-      -j)
-        host_name=$(yq e ".bootstrap.name" ${CLUSTER_CONFIG})
-        ${SSH} core@${host_name}.${DOMAIN} "journalctl -b -f -u release-image.service -u bootkube.service -u release-image-pivot.service"
+        openshift-install agent wait-for install-complete --dir=${OKD_LAB_PATH}/${CLUSTER_NAME}.${DOMAIN}/okd-install-dir --log-level debug
       ;;
       -m=*)
         CP_INDEX="${i#*=}"
