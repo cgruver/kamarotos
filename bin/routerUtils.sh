@@ -83,6 +83,16 @@ function initRouter() {
       uci set firewall.\${FW}.src=wan ; \
       uci set firewall.\${FW}.dest=lan ; \
       uci commit firewall"
+    ${SSH} root@${EDGE_ROUTER} "unset ROUTE ; \
+      ROUTE=\$(uci add network route) ; \
+      uci set network.\${ROUTE}.interface=lan ; \
+      uci set network.\${ROUTE}.target=${DOMAIN_NETWORK} ; \
+      uci set network.\${ROUTE}.netmask=${DOMAIN_NETMASK} ; \
+      uci set network.\${ROUTE}.gateway=${DOMAIN_ROUTER_EDGE} ; \
+      uci commit network ; \
+      /etc/init.d/network restart"
+    pause 30 "Give the Router network time to restart"
+    ${SSH} root@${EDGE_ROUTER} "/etc/init.d/named stop && /etc/init.d/named start"
   fi
   ${SSH} root@${INIT_IP} "rm /etc/hotplug.d/block/11-mount"
   echo "Generating SSH keys"
@@ -140,15 +150,6 @@ function setupRouter() {
     createDhcpConfig ${DOMAIN_ROUTER} ${DOMAIN}
     createIpxeHostConfig ${DOMAIN_ROUTER}
     createRouterDnsConfig  ${DOMAIN_ROUTER} ${DOMAIN} ${DOMAIN_ARPA} "domain"
-    ${SSH} root@${EDGE_ROUTER} "unset ROUTE ; \
-      ROUTE=\$(uci add network route) ; \
-      uci set network.\${ROUTE}.interface=lan ; \
-      uci set network.\${ROUTE}.target=${DOMAIN_NETWORK} ; \
-      uci set network.\${ROUTE}.netmask=${DOMAIN_NETMASK} ; \
-      uci set network.\${ROUTE}.gateway=${DOMAIN_ROUTER_EDGE} ; \
-      uci commit network ; \
-      /etc/init.d/network restart"
-    pause 15 "Give the Router network time to restart"
     ${SSH} root@${EDGE_ROUTER} "/etc/init.d/named stop && /etc/init.d/named start"
     cat ${WORK_DIR}/edge-zone | ${SSH} root@${EDGE_ROUTER} "cat >> /data/bind/named.conf"
     setupRouterCommon ${DOMAIN_ROUTER}
@@ -163,14 +164,14 @@ function setupHaProxy() {
   then
     ${SSH} root@${router_ip} "echo 'src/gz OpenWrt https://downloads.openwrt.org/snapshots/packages/arm_cortex-a7/packages' >> /etc/opkg/customfeeds.conf ; \
     opkg update ; \
-    opkg install haproxy"
+    opkg install haproxy shadow-useradd shadow-groupadd"
   else
     ${SSH} root@${router_ip} "opkg update ; \
-    opkg install haproxy"
+    opkg install haproxy shadow-useradd shadow-groupadd"
   fi
   ${SSH} root@${router_ip} "mv /etc/haproxy.cfg /etc/haproxy.cfg.orig ; \
-    addgroup haproxy ; \
-    adduser -g haproxy -h /data/haproxy -G haproxy haproxy -D -H -s /bin/false ; \
+    groupadd haproxy ; \
+    useradd -g haproxy -d /data/haproxy -G haproxy haproxy -M -s /bin/false ; \
     mkdir -p /data/haproxy ; \
     chown -R haproxy:haproxy /data/haproxy ; \
     rm -f /etc/init.d/haproxy"
@@ -200,12 +201,17 @@ function setupRouterCommon() {
   
   if [[ ${INSTALL_HOST} == "router" ]]
   then
-    initMicroSD ${router_ip} ${FORMAT_SD}
-    ${SCP} ${WORK_DIR}/local-repos.repo root@${router_ip}:/usr/local/www/install/postinstall/local-repos.repo
-    ${SCP} ${WORK_DIR}/chrony.conf root@${router_ip}:/usr/local/www/install/postinstall/chrony.conf
-    ${SCP} ${WORK_DIR}/MirrorSync.sh root@${router_ip}:/root/bin/MirrorSync.sh
-    ${SSH} root@${router_ip} "chmod 750 /root/bin/MirrorSync.sh"
+    if [[ ${GL_MODEL} == "GL-MV1000" ]]
+    then
+      initMV1000Data
+    else
+      initMicroSD ${router_ip} ${FORMAT_SD}
+      ${SCP} ${WORK_DIR}/local-repos.repo root@${router_ip}:/usr/local/www/install/postinstall/local-repos.repo
+      ${SCP} ${WORK_DIR}/chrony.conf root@${router_ip}:/usr/local/www/install/postinstall/chrony.conf
+      ${SCP} ${WORK_DIR}/MirrorSync.sh root@${router_ip}:/root/bin/MirrorSync.sh
+      ${SSH} root@${router_ip} "chmod 750 /root/bin/MirrorSync.sh"
     cat ~/.ssh/id_rsa.pub | ${SSH} root@${router_ip} "cat >> /usr/local/www/install/postinstall/authorized_keys"
+    fi
   fi
   if [[ ${GL_MODEL} == "GL-AXT1800" ]]
   then
@@ -332,7 +338,6 @@ set network.lan.netmask=${DOMAIN_NETMASK}
 set network.lan.hostname=router.${DOMAIN}
 delete network.guest
 delete network.wan6
-set system.@system[0].hostname=router.${DOMAIN}
 EOF
 
 unset zone
@@ -367,6 +372,18 @@ echo "commit" >> ${WORK_DIR}/uci.batch
 function getBootFile() {
   mkdir -p ${OKD_LAB_PATH}/boot-files
   wget http://boot.ipxe.org/ipxe.efi -O ${OKD_LAB_PATH}/boot-files/ipxe.efi
+}
+
+function initMV1000Data() {
+  if [[ ${format} == "true" ]]
+  then
+    rm -rf /data/*
+  fi
+  ${SSH} root@${router_ip} "mkdir -p /usr/local ; \
+    mkdir -p /usr/local/www/install/fcos ; \
+    ln -sf /usr/local /data ; \
+    ln -sf /usr/local/www/install /www/install ; \
+    mkdir -p /root/bin"
 }
 
 function initMicroSD() {

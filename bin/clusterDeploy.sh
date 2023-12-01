@@ -42,7 +42,10 @@ function createClusterConfig() {
   createClusterCustomMC
   if [[ $(yq ".control-plane | has(\"ceph\")" ${CLUSTER_CONFIG}) == "true" ]]
   then
-    createClusterCephMC
+    if [[ $(yq e ".control-plane.ceph.type" ${CLUSTER_CONFIG}) == "part"  ]]
+    then
+      createClusterCephMC
+    fi
   elif [[ $(yq ".control-plane | has(\"hostpath-dev\")" ${CLUSTER_CONFIG}) == "true" ]]
   then
     createHostPathMC

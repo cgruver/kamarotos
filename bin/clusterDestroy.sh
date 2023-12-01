@@ -6,7 +6,6 @@ function deleteControlPlane() {
   CP_COUNT=$(yq e ".control-plane.nodes" ${CLUSTER_CONFIG} | yq e 'length' -)
   if [[ ${CP_COUNT} == "1" ]]
   then
-    SNO="true"
     RESET_LB="false"
   fi
   metal=$(yq e ".control-plane.metal" ${CLUSTER_CONFIG})
@@ -24,7 +23,7 @@ function deleteControlPlane() {
       then
         storage_dev=$(yq e ".control-plane.hostpath-dev" ${CLUSTER_CONFIG})
       fi
-      destroyMetal core ${host_name} ${boot_dev} na ${p_cmd}
+      destroyMetal core ${host_name} ${boot_dev} ${storage_dev} ${p_cmd}
     else
       kvm_host=$(yq e ".control-plane.nodes.[${node_index}].kvm-host" ${CLUSTER_CONFIG})
       deleteNodeVm ${host_name} ${kvm_host}.${DOMAIN}
@@ -57,7 +56,6 @@ function deleteControlPlane() {
 
 function destroy() {
   P_CMD="poweroff"
-  SNO="false"
   checkRouterModel ${DOMAIN_ROUTER}
 
   for i in "$@"
