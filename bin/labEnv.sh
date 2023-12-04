@@ -7,6 +7,11 @@ then
   export LAB_CONFIG_FILE=${OKD_LAB_PATH}/lab-config/lab.yaml
 fi
 
+if [[ -z ${LAB_CONFIG_LIST} ]]
+then
+  export LAB_CONFIG_LIST=${OKD_LAB_PATH}/lab-config/lab-list.yaml
+fi
+
 function labenv() {
 
   for i in "$@"
@@ -38,6 +43,33 @@ function labenv() {
     esac
   done
   i=""
+}
+
+function setLabConfig() {
+  
+  local config_count=0
+  local array_index=0
+
+  DONE=false
+  config_count=$(yq e ".lab-configs" ${LAB_CONFIG_LIST} | yq e 'length' -)
+  if [[ ${config_count} -eq 0 ]]
+  then
+    echo "Lab Entries Not Found In Config File."
+  else
+    let array_index=0
+    while [[ array_index -lt ${config_count} ]]
+    do
+      lab_name=$(yq e ".lab-configs.[${array_index}].name" ${LAB_CONFIG_LIST})
+      echo "$(( ${array_index} + 1 )) - ${lab_name}"
+      array_index=$(( ${array_index} + 1 ))
+    done
+    unset array_index
+    echo "Enter the index of the lab that you want to work with:"
+    read ENTRY
+    INDEX=$(( ${ENTRY} - 1 ))
+    config_file=$(yq e ".lab-configs.[${INDEX}].config" ${LAB_CONFIG_LIST})
+    ln -sf ${OKD_LAB_PATH}/lab-config/lab-config-files/${config_file} ${LAB_CONFIG_FILE}
+  fi
 }
 
 function setClusterIndex() {
@@ -130,6 +162,17 @@ function labctx() {
   local cluster=${1}
   SUB_DOMAIN=""
   CLUSTER=""
+
+  for i in "$@"
+  do
+    case $i in
+      -s)
+        setLabConfig
+        cluster=""
+      ;;
+    esac
+  done
+
   setClusterIndex ${cluster}
 
   if [[ ${LAB_CTX_ERROR} == "false" ]]

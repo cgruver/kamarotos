@@ -171,7 +171,7 @@ function destroy() {
   if [[ ${DELETE_CLUSTER} == "true" ]]
   then
     deleteControlPlane ${P_CMD}
-    if [[ ! -f  ${PULL_SECRET} ]]
+    if [[ -f  ${PULL_SECRET} ]]
     then
       rm ${PULL_SECRET}
     fi

@@ -94,7 +94,10 @@ function initRouter() {
     pause 30 "Give the Router network time to restart"
     ${SSH} root@${EDGE_ROUTER} "/etc/init.d/named stop && /etc/init.d/named start"
   fi
-  ${SSH} root@${INIT_IP} "rm /etc/hotplug.d/block/11-mount"
+  if [[ ${GL_MODEL} != "GL-MV1000"  ]]
+  then
+    ${SSH} root@${INIT_IP} "rm /etc/hotplug.d/block/11-mount"
+  fi
   echo "Generating SSH keys"
   ${SSH} root@${INIT_IP} "rm -rf /root/.ssh ; rm -rf /data/* ; mkdir -p /root/.ssh ; dropbearkey -t rsa -s 4096 -f /root/.ssh/id_dropbear"
   echo "Copying workstation SSH key to router"
@@ -210,7 +213,7 @@ function setupRouterCommon() {
       ${SCP} ${WORK_DIR}/chrony.conf root@${router_ip}:/usr/local/www/install/postinstall/chrony.conf
       ${SCP} ${WORK_DIR}/MirrorSync.sh root@${router_ip}:/root/bin/MirrorSync.sh
       ${SSH} root@${router_ip} "chmod 750 /root/bin/MirrorSync.sh"
-    cat ~/.ssh/id_rsa.pub | ${SSH} root@${router_ip} "cat >> /usr/local/www/install/postinstall/authorized_keys"
+      cat ~/.ssh/id_rsa.pub | ${SSH} root@${router_ip} "cat >> /usr/local/www/install/postinstall/authorized_keys"
     fi
   fi
   if [[ ${GL_MODEL} == "GL-AXT1800" ]]
@@ -379,9 +382,8 @@ function initMV1000Data() {
   then
     rm -rf /data/*
   fi
-  ${SSH} root@${router_ip} "mkdir -p /usr/local ; \
-    mkdir -p /usr/local/www/install/fcos ; \
-    ln -sf /usr/local /data ; \
+  ${SSH} root@${router_ip} "ln -sf /data /usr/local  ; \
+    mkdir -p /usr/local/www/install ; \
     ln -sf /usr/local/www/install /www/install ; \
     mkdir -p /root/bin"
 }
