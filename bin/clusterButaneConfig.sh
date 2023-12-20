@@ -7,7 +7,7 @@ function createButaneConfig() {
   local platform=${5}
   local config_ceph=${6}
   local boot_dev=${7}
-  local mc_version="$(${OC} version --client -o yaml | yq e ".releaseClientVersion" | cut -d"-" -f1 | cut -d"." -f "-2" ).0"
+  local mc_version="$(getMcVersion)"
 
   writeButaneHeader ${mac} ${role}
   writeButaneFiles ${ip_addr} ${host_name} ${mac} ${role}
@@ -136,7 +136,7 @@ EOF
 
 function createClusterCustomMC() {
 
-local mc_version="$(${OC} version --client -o yaml | yq e ".releaseClientVersion" | cut -d"-" -f1 | cut -d"." -f "-2" ).0"
+local mc_version="$(getMcVersion)"
 
 cat << EOF | butane > ${WORK_DIR}/98-cluster-config.yaml
 variant: openshift
@@ -163,7 +163,7 @@ cp ${WORK_DIR}/98-cluster-config.yaml ${WORK_DIR}/okd-install-dir/openshift/98-c
 
 function createClusterCephMC() {
 
-local mc_version="$(${OC} version --client -o yaml | yq e ".releaseClientVersion" | cut -d"-" -f1 | cut -d"." -f "-2" ).0"
+local mc_version="$(getMcVersion)"
 local boot_dev=$(yq e ".control-plane.boot-dev" ${CLUSTER_CONFIG})
 
 cat << EOF | butane > ${WORK_DIR}/98-cluster-config.yaml
@@ -188,7 +188,7 @@ function createHostPathMC() {
 
   local hostpath_dev=$(yq e ".control-plane.hostpath-dev" ${CLUSTER_CONFIG})
   local systemd_svc_name=$(echo ${hostpath_dev//\//-} | cut -d"-" -f2-)
-  local mc_version="$(${OC} version --client -o yaml | yq e ".releaseClientVersion" | cut -d"-" -f1 | cut -d"." -f "-2" ).0"
+  local mc_version="$(getMcVersion)"
 
 cat << EOF | butane > ${WORK_DIR}/98-hostpath-config.yaml
 variant: openshift
@@ -236,4 +236,17 @@ systemd:
     name: var-hostpath.mount
 EOF
 cp ${WORK_DIR}/98-hostpath-config.yaml ${WORK_DIR}/okd-install-dir/openshift/98-hostpath-config.yaml
+}
+
+function getMcVersion() {
+
+  local mc_version=""
+
+  if [[ $(yq ".cluster | has(\"mc-version-override\")" ${CLUSTER_CONFIG}) == "true" ]]
+  then
+    mc_version=$(yq e ".cluster.mc-version-override" ${CLUSTER_CONFIG})
+  else
+    mc_version="$(${OC} version --client -o yaml | yq e ".releaseClientVersion" | cut -d"-" -f1 | cut -d"." -f "-2" ).0"
+  fi
+  echo ${mc_version}
 }
