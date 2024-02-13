@@ -1,0 +1,32 @@
+domain: clg.lab
+network: 10.11.12.0
+router-ip: 10.11.12.1
+pi-ip: 10.11.12.10
+install-host: router
+netmask: 255.255.255.0
+centos-mirror: rsync://mirror.facebook.net/centos-stream/
+openwrt-version: 22.03.5
+gitea-version: 1.20.1
+keycloak-version: 22.0.1
+apicurio-version: 0.2.61.Final
+sub-domain-configs: []
+cluster-configs:
+- name: edge-sno-1
+  cluster-config-file: travel-lab/sno-1.yaml
+  domain: edge
+- name: edge-sno-2
+  cluster-config-file: travel-lab/sno-2.yaml
+  domain: edge
+- name: edge-sno-3
+  cluster-config-file: travel-lab/sno-3.yaml
+  domain: edge
+- name: edge-sno-rhacm
+  cluster-config-file: travel-lab/sno-cp.yaml
+  domain: edge
+- name: edge-sno-dev
+  cluster-config-file: travel-lab/sno-dev.yaml
+  domain: edge
+- name: 3-node-virt
+  cluster-config-file: travel-lab/clg-lab-3-node.yaml
+  domain: edge
+  

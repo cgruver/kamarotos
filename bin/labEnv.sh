@@ -227,7 +227,7 @@ function setClusterEnv() {
   export CLUSTER_CONFIG=${OKD_LAB_PATH}/lab-config/cluster-configs/$(yq e ".cluster-configs.[${CLUSTER_INDEX}].cluster-config-file" ${LAB_CONFIG_FILE})
   export CLUSTER=$(yq e ".cluster-configs.[${CLUSTER_INDEX}].name" ${LAB_CONFIG_FILE})
   export CLUSTER_NAME=$(yq e ".cluster.name" ${CLUSTER_CONFIG})
-  export KUBE_INIT_CONFIG=${OKD_LAB_PATH}/lab-config/${CLUSTER_NAME}.${DOMAIN}/kubeconfig
+  export KUBE_INIT_CONFIG=${OKD_LAB_PATH}/lab-config/kubeconfigs/${CLUSTER_NAME}-${DOMAIN}-kubeconfig
   export CLUSTER_CIDR=$(yq e ".cluster.cluster-cidr" ${CLUSTER_CONFIG})
   export SERVICE_CIDR=$(yq e ".cluster.service-cidr" ${CLUSTER_CONFIG})
   export BUTANE_VARIANT=$(yq e ".cluster.butane-variant" ${CLUSTER_CONFIG})
@@ -301,7 +301,7 @@ function setOpenShiftRelease() {
   if [[ ${release_set} == "true" ]]
   then
     export OPENSHIFT_RELEASE=$(yq e ".cluster.release" ${CLUSTER_CONFIG})
-    if [[ ! -d ${OKD_LAB_PATH}/okd-cmds/${OPENSHIFT_RELEASE} ]]
+    if [[ ! -f ${OKD_LAB_PATH}/okd-cmds/${OPENSHIFT_RELEASE}/oc ]]
     then
       getCliCmds 
     fi
@@ -370,23 +370,32 @@ function getCliCmds() {
   fi
 
   local release_type=$(yq e ".cluster.release-type" ${CLUSTER_CONFIG})
+  local tools_uri="$(yq e ".cluster.tools-uri" ${CLUSTER_CONFIG}):${OPENSHIFT_RELEASE}"
   local registry_config=""
 
-  case ${release_type} in
-    okd)
-      TOOLS_URI=registry.ci.openshift.org/origin/release:${OPENSHIFT_RELEASE}
-    ;;
-    okd-scos)
-      TOOLS_URI=quay.io/okd/scos-release:${OPENSHIFT_RELEASE}
-    ;;
-    ocp)
-      TOOLS_URI=quay.io/openshift-release-dev/ocp-release:${OPENSHIFT_RELEASE}
-      registry_config="--registry-config=${OKD_LAB_PATH}/ocp-pull-secret"
-    ;;
-  esac
+  # case ${release_type} in
+  #   okd)
+  #     tools_uri=registry.ci.openshift.org/origin/release:${OPENSHIFT_RELEASE}
+  #   ;;
+  #   okd-scos)
+  #     tools_uri=quay.io/okd/scos-release:${OPENSHIFT_RELEASE}
+  #   ;;
+  #   ocp)
+  #     tools_uri=quay.io/openshift-release-dev/ocp-release:${OPENSHIFT_RELEASE}
+  #     registry_config="--registry-config=${OKD_LAB_PATH}/ocp-pull-secret"
+  #   ;;
+  #   ocp-nightly)
+  #     tools_uri=quay.io/openshift-release-dev/ocp-release:${OPENSHIFT_RELEASE}
+  #     registry_config="--registry-config=${OKD_LAB_PATH}/ocp-pull-secret"
+  #   ;;
+  # esac
+  if [[ ${release_type} == "ocp" ]]
+  then
+    registry_config="--registry-config=${OKD_LAB_PATH}/ocp-pull-secret"
+  fi
   mkdir -p ${OKD_LAB_PATH}/okd-cmds/${OPENSHIFT_RELEASE}
   WORK_DIR=$(mktemp -d)
-  ${OC_INIT} adm release extract ${registry_config} --to="${WORK_DIR}" --tools ${TOOLS_URI}
+  ${OC_INIT} adm release extract ${registry_config} --to="${WORK_DIR}" --tools ${tools_uri}
   for i in $(ls ${WORK_DIR}/*.tar.gz)
   do
     tar -xzf ${i} -C ${OKD_LAB_PATH}/okd-cmds/${OPENSHIFT_RELEASE}

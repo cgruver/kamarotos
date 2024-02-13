@@ -226,8 +226,8 @@ function deployCluster() {
   createClusterConfig
   openshift-install --dir=${WORK_DIR}/okd-install-dir agent create pxe-files 
   configControlPlane
-  cp ${WORK_DIR}/okd-install-dir/auth/kubeconfig ${OKD_LAB_PATH}/lab-config/${CLUSTER_NAME}.${DOMAIN}/
-  chmod 400 ${OKD_LAB_PATH}/lab-config/${CLUSTER_NAME}.${DOMAIN}/kubeconfig
+  cp ${WORK_DIR}/okd-install-dir/auth/kubeconfig ${KUBE_INIT_CONFIG}
+  chmod 400 ${KUBE_INIT_CONFIG}
   prepNodeFiles
 }
 
@@ -286,6 +286,28 @@ function deployWorkers() {
     node_index=$(( ${node_index} + 1 ))
   done
   prepNodeFiles
+}
+
+deployHcpControlPlane() {
+
+  createLbConfig
+  ingress_ip=$(yq e ".cluster.ingress-ip-addr" ${CLUSTER_CONFIG})
+  echo "*.apps.${CLUSTER_NAME}.${DOMAIN}.     IN      A      ${ingress_ip} ; ${CLUSTER_NAME}-${DOMAIN}-cp" >> ${WORK_DIR}/dns-work-dir/forward.zone
+  echo "api.${CLUSTER_NAME}.${DOMAIN}.        IN      A      ${ingress_ip} ; ${CLUSTER_NAME}-${DOMAIN}-cp" >> ${WORK_DIR}/dns-work-dir/forward.zone
+  echo "api-int.${CLUSTER_NAME}.${DOMAIN}.    IN      A      ${ingress_ip} ; ${CLUSTER_NAME}-${DOMAIN}-cp" >> ${WORK_DIR}/dns-work-dir/forward.zone
+
+  let node_count=$(yq e ".control-plane.nodes" ${CLUSTER_CONFIG} | yq e 'length' -)
+  let node_index=0
+  while [[ node_index -lt ${node_count} ]]
+  do
+    ip_addr=$(yq e ".control-plane.nodes.[${node_index}].ip-addr" ${CLUSTER_CONFIG})
+    host_name=${CLUSTER_NAME}-cp-${node_index}
+    yq e ".control-plane.nodes.[${node_index}].name = \"${host_name}\"" -i ${CLUSTER_CONFIG}
+    echo "${host_name}.${DOMAIN}.   IN      A      ${ip_addr} ; ${CLUSTER_NAME}-${DOMAIN}-cp" >> ${WORK_DIR}/dns-work-dir/forward.zone
+    o4=$(echo ${ip_addr} | cut -d"." -f4)
+    echo "${o4}    IN      PTR     ${host_name}.${DOMAIN}.  ; ${CLUSTER_NAME}-${DOMAIN}-cp" >> ${WORK_DIR}/dns-work-dir/reverse.zone
+    node_index=$(( ${node_index} + 1 ))
+  done 
 }
 
 function deploy() {

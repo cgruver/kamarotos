@@ -179,4 +179,5 @@ function destroy() {
 
   ${SSH} root@${DOMAIN_ROUTER} "/etc/init.d/named stop && sleep 2 && /etc/init.d/named start && sleep 2"
   ${SSH} root@${EDGE_ROUTER} "/etc/init.d/named stop && sleep 2 && /etc/init.d/named start"
+  rm -f ${KUBE_INIT_CONFIG}
 }

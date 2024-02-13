@@ -831,11 +831,11 @@ local CERT_MGR_VER=$(basename $(curl -Ls -o /dev/null -w %{url_effective} https:
 local HPP_VER=$(basename $(curl -Ls -o /dev/null -w %{url_effective} https://github.com/kubevirt/hostpath-provisioner-operator/releases/latest))
 
 ${OC} create -f https://github.com/cert-manager/cert-manager/releases/download/${CERT_MGR_VER}/cert-manager.yaml
-${OC} wait --for=condition=Available -n cert-manager --timeout=120s --all deployments
+${OC} wait --for=condition=Available -n cert-manager --timeout=300s --all deployments
 ${OC} create -f https://github.com/kubevirt/hostpath-provisioner-operator/releases/download/${HPP_VER}/namespace.yaml
 ${OC} create -f https://github.com/kubevirt/hostpath-provisioner-operator/releases/download/${HPP_VER}/webhook.yaml -n hostpath-provisioner
 ${OC} create -f https://github.com/kubevirt/hostpath-provisioner-operator/releases/download/${HPP_VER}/operator.yaml -n hostpath-provisioner
-${OC} wait --for=condition=Available -n hostpath-provisioner --timeout=120s --all deployments
+${OC} wait --for=condition=Available -n hostpath-provisioner --timeout=300s --all deployments
 
 cat << EOF | ${OC} apply -f -
 apiVersion: hostpathprovisioner.kubevirt.io/v1beta1

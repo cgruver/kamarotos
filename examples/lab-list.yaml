@@ -1,0 +1,9 @@
+lab-configs:
+- name: "Travel Lab SNO"
+  config: travel-lab-sno.yaml
+- name: "Travel Lab HA"
+  config: travel-lab-ha.yaml
+- name: "Travel Lab Multi-Region"
+  config: travel-lab-mr.yaml
+- name: "Home Lab Multi-Region"
+  config: home-lab-mr.yaml

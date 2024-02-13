@@ -1,0 +1,44 @@
+domain: clg.lab
+network: 10.11.12.0
+router-ip: 10.11.12.1
+pi-ip: 10.11.12.10
+install-host: router
+netmask: 255.255.255.0
+centos-mirror: rsync://mirror.facebook.net/centos-stream/
+openwrt-version: 22.03.5
+gitea-version: 1.20.1
+keycloak-version: 22.0.1
+apicurio-version: 0.2.61.Final
+git-url: https://gitea.clg.lab:3000
+cluster-configs:
+- name: rhacm
+  cluster-config-file: ocp/rhacm-cluster.yaml
+  domain: edge
+- name: region-01
+  cluster-config-file: ocp/region-01-cluster.yaml
+  domain: region-01
+- name: region-02
+  cluster-config-file: ocp/region-02-cluster.yaml
+  domain: region-02
+- name: region-03
+  cluster-config-file: ocp/region-03-cluster.yaml
+  domain: region-03
+- name: travel-lab
+  cluster-config-file: ocp/rhacm-cluster.yaml
+  domain: edge
+sub-domain-configs:
+- name: region-01
+  router-edge-ip: 10.11.12.5
+  router-ip: 10.11.11.1
+  network: 10.11.11.0
+  netmask: 255.255.255.0
+- name: region-02
+  router-edge-ip: 10.11.12.6
+  router-ip: 10.12.12.1
+  network: 10.12.12.0
+  netmask: 255.255.255.0
+- name: region-03
+  router-edge-ip: 10.11.12.7
+  router-ip: 10.13.13.1
+  network: 10.13.13.0
+  netmask: 255.255.255.0
