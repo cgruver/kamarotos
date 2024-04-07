@@ -3,6 +3,7 @@ function configRouter() {
   WLAN="false"
   WWAN="false"
   FORMAT_SD="false"
+  NANO_PI="false"
   GL_MODEL=""
   INIT_IP=192.168.8.1
   wifi_channel=3
@@ -34,6 +35,9 @@ function configRouter() {
       -aw|--add-wireless)
         ADD_WIRELESS="true"
       ;;
+      -n|--nano)
+        NANO_PI="true"
+      ;;
       *)
         # catch all
       ;;
@@ -44,18 +48,29 @@ function configRouter() {
   then
     getBootFile
   fi
+
   if [[ ${INIT} == "true" ]]
   then
-    checkRouterModel ${INIT_IP}
-    if [[ ${GL_MODEL} == "GL-AXT1800" ]]
+    if [[ ${NANO_PI} == "true" ]]
     then
-      initAxtRouter
+      initNanoPi
     else
-      initRouter
+      checkRouterModel ${INIT_IP}
+      if [[ ${GL_MODEL} == "GL-AXT1800" ]]
+      then
+        initAxtRouter
+      else
+        initRouter
+      fi
     fi
   elif [[ ${SETUP} == "true" ]]
   then
-    setupRouter
+    if [[ ${NANO_PI} == "true" ]]
+    then
+      setupNanoPi
+    else
+      setupRouter
+    fi
   elif [[ ${ADD_WIRELESS} == "true" ]]
   then
     addWireless
@@ -68,7 +83,7 @@ function checkRouterModel() {
   echo "Detected Router Model: ${GL_MODEL}"
   if [[ ${GL_MODEL} != "GL-AR750S"  ]] && [[ ${GL_MODEL} != "GL-MV1000"  ]] && [[ ${GL_MODEL} != "GL-AXT1800"  ]]
   then
-    echo "Unsupported Router Model Detected.  These scripts only support configuration of GL-iNet AR-750S or MV1000 routers."
+    echo "Unsupported Router Model Detected.  These scripts only support configuration of GL-iNet AR-750S, GL-AXT1800, or MV1000 routers."
     exit 1
   fi
 }

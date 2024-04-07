@@ -158,7 +158,7 @@ storage:
           rtcsync
           logdir /var/log/chrony
 EOF
-cp ${WORK_DIR}/98-cluster-config.yaml ${WORK_DIR}/okd-install-dir/openshift/98-cluster-config.yaml
+cp ${WORK_DIR}/98-cluster-config.yaml ${WORK_DIR}/openshift-install-dir/openshift/98-cluster-config.yaml
 }
 
 function createClusterCephMC() {
@@ -181,7 +181,7 @@ storage:
       start_mib: 102400 
       size_mib: 0
 EOF
-cp ${WORK_DIR}/98-cluster-ceph-config.yaml ${WORK_DIR}/okd-install-dir/openshift/98-cluster-ceph-config.yaml
+cp ${WORK_DIR}/98-cluster-ceph-config.yaml ${WORK_DIR}/openshift-install-dir/openshift/98-cluster-ceph-config.yaml
 }
 
 function createHostPathMC() {
@@ -235,7 +235,7 @@ systemd:
     enabled: true
     name: var-hostpath.mount
 EOF
-cp ${WORK_DIR}/98-hostpath-config.yaml ${WORK_DIR}/okd-install-dir/openshift/98-hostpath-config.yaml
+cp ${WORK_DIR}/98-hostpath-config.yaml ${WORK_DIR}/openshift-install-dir/openshift/98-hostpath-config.yaml
 }
 
 function getMcVersion() {

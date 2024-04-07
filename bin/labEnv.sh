@@ -1,6 +1,6 @@
-export OKD_LAB_PATH=${HOME}/okd-lab
+export OKD_LAB_PATH=${HOME}/openshift-lab
 export PATH=${OKD_LAB_PATH}/bin:$PATH
-export OC_INIT=${OKD_LAB_PATH}/okd-cmds/init/oc
+export OC_INIT=${OKD_LAB_PATH}/openshift-cmds/init/oc
 
 if [[ -z ${LAB_CONFIG_FILE} ]]
 then
@@ -290,8 +290,8 @@ function fixMacArmCodeSign() {
   if [[ $(uname) == "Darwin" ]] && [[ $(uname -m) == "arm64" ]]
   then
     echo "Applying workaround for corrupt signiture on OpenShift CLI binaries"
-    codesign --force -s - ${OKD_LAB_PATH}/okd-cmds/${OPENSHIFT_RELEASE}/oc
-    codesign --force -s - ${OKD_LAB_PATH}/okd-cmds/${OPENSHIFT_RELEASE}/openshift-install
+    codesign --force -s - ${OKD_LAB_PATH}/openshift-cmds/${OPENSHIFT_RELEASE}/oc
+    codesign --force -s - ${OKD_LAB_PATH}/openshift-cmds/${OPENSHIFT_RELEASE}/openshift-install
   fi
 }
 
@@ -301,14 +301,14 @@ function setOpenShiftRelease() {
   if [[ ${release_set} == "true" ]]
   then
     export OPENSHIFT_RELEASE=$(yq e ".cluster.release" ${CLUSTER_CONFIG})
-    if [[ ! -f ${OKD_LAB_PATH}/okd-cmds/${OPENSHIFT_RELEASE}/oc ]]
+    if [[ ! -f ${OKD_LAB_PATH}/openshift-cmds/${OPENSHIFT_RELEASE}/oc ]]
     then
       getCliCmds 
     fi
-    for i in $(ls ${OKD_LAB_PATH}/okd-cmds/${OPENSHIFT_RELEASE})
+    for i in $(ls ${OKD_LAB_PATH}/openshift-cmds/${OPENSHIFT_RELEASE})
     do
       rm -f ${OKD_LAB_PATH}/bin/${i}
-      ln -sf ${OKD_LAB_PATH}/okd-cmds/${OPENSHIFT_RELEASE}/${i} ${OKD_LAB_PATH}/bin/${i}
+      ln -sf ${OKD_LAB_PATH}/openshift-cmds/${OPENSHIFT_RELEASE}/${i} ${OKD_LAB_PATH}/bin/${i}
     done
     i=""
   fi
@@ -353,10 +353,10 @@ function getInitCli() {
   if [[ ${CONTINUE} == "true" ]]
   then
     WORK_DIR=$(mktemp -d)
-    mkdir -p ${OKD_LAB_PATH}/okd-cmds/init
+    mkdir -p ${OKD_LAB_PATH}/openshift-cmds/init
     wget -O ${WORK_DIR}/oc.tar.gz https://github.com/okd-project/okd/releases/download/${OKD_RELEASE}/openshift-client-${OS_VER}-${OKD_RELEASE}.tar.gz
-    tar -xzf ${WORK_DIR}/oc.tar.gz -C ${OKD_LAB_PATH}/okd-cmds/init
-    chmod 700 ${OKD_LAB_PATH}/okd-cmds/init/*
+    tar -xzf ${WORK_DIR}/oc.tar.gz -C ${OKD_LAB_PATH}/openshift-cmds/init
+    chmod 700 ${OKD_LAB_PATH}/openshift-cmds/init/*
     rm -rf ${WORK_DIR}
     # fixMacArmCodeSign
   fi
@@ -364,7 +364,7 @@ function getInitCli() {
 
 function getCliCmds() {
 
-  if [[ ! -d ${OKD_LAB_PATH}/okd-cmds/init ]]
+  if [[ ! -d ${OKD_LAB_PATH}/openshift-cmds/init ]]
   then
     getInitCli
   fi
@@ -393,12 +393,12 @@ function getCliCmds() {
   then
     registry_config="--registry-config=${OKD_LAB_PATH}/ocp-pull-secret"
   fi
-  mkdir -p ${OKD_LAB_PATH}/okd-cmds/${OPENSHIFT_RELEASE}
+  mkdir -p ${OKD_LAB_PATH}/openshift-cmds/${OPENSHIFT_RELEASE}
   WORK_DIR=$(mktemp -d)
   ${OC_INIT} adm release extract ${registry_config} --to="${WORK_DIR}" --tools ${tools_uri}
   for i in $(ls ${WORK_DIR}/*.tar.gz)
   do
-    tar -xzf ${i} -C ${OKD_LAB_PATH}/okd-cmds/${OPENSHIFT_RELEASE}
+    tar -xzf ${i} -C ${OKD_LAB_PATH}/openshift-cmds/${OPENSHIFT_RELEASE}
   done
   rm -rf ${WORK_DIR}
   # fixMacArmCodeSign
@@ -432,7 +432,7 @@ function getButane() {
 function clearLabEnv() {
   if [[ ! -z ${OPENSHIFT_RELEASE} ]]
   then
-    for i in $(ls ${OKD_LAB_PATH}/okd-cmds/${OPENSHIFT_RELEASE})
+    for i in $(ls ${OKD_LAB_PATH}/openshift-cmds/${OPENSHIFT_RELEASE})
     do
       rm -f ${OKD_LAB_PATH}/bin/${i}
     done

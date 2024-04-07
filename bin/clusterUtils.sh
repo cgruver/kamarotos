@@ -163,7 +163,7 @@ function addUser() {
   then
     touch ${PASSWD_FILE}
   else
-    ${OC} get secret okd-htpasswd-secret -n openshift-config -o jsonpath='{.data.htpasswd}' | base64 -d > ${PASSWD_FILE}
+    ${OC} get secret openshift-htpasswd-secret -n openshift-config -o jsonpath='{.data.htpasswd}' | base64 -d > ${PASSWD_FILE}
   fi
   if [[ -z ${USER} ]]
   then
@@ -171,14 +171,14 @@ function addUser() {
     exit 1
   fi
   htpasswd -B ${PASSWD_FILE} ${USER}
-  ${OC} create -n openshift-config secret generic okd-htpasswd-secret --from-file=htpasswd=${PASSWD_FILE} -o yaml --dry-run='client' | ${OC} apply -f -
+  ${OC} create -n openshift-config secret generic openshift-htpasswd-secret --from-file=htpasswd=${PASSWD_FILE} -o yaml --dry-run='client' | ${OC} apply -f -
   if [[ ${ADMIN_USER} == "true" ]]
   then
     ${OC} adm policy add-cluster-role-to-user cluster-admin ${USER}
   fi
   if [[ ${OAUTH_INIT} == "true" ]]
   then
-    ${OC} patch oauth cluster --type merge --patch '{"spec":{"identityProviders":[{"name":"okd_htpasswd_idp","mappingMethod":"claim","type":"HTPasswd","htpasswd":{"fileData":{"name":"okd-htpasswd-secret"}}}]}}'
+    ${OC} patch oauth cluster --type merge --patch '{"spec":{"identityProviders":[{"name":"openshift_htpasswd_idp","mappingMethod":"claim","type":"HTPasswd","htpasswd":{"fileData":{"name":"openshift-htpasswd-secret"}}}]}}'
     ${OC} delete secrets kubeadmin -n kube-system
   fi
   rm -rf ${PWD_WORK_DIR}
@@ -228,8 +228,17 @@ function createPullSecret() {
       echo "Passwords do not match. Try Again."
     fi
   done
-  NEXUS_SECRET=$(echo -n "${NEXUS_USER}:${NEXUS_PWD}" | base64) 
-  echo -n "{\"auths\": {\"fake\": {\"auth\": \"Zm9vOmJhcgo=\"},\"nexus.${LAB_DOMAIN}:5001\": {\"auth\": \"${NEXUS_SECRET}\"}}}" > ${PULL_SECRET}
+  NEXUS_SECRET=$(echo -n "${NEXUS_USER}:${NEXUS_PWD}" | base64)
+  release_type=$(yq e ".cluster.release-type" ${CLUSTER_CONFIG})
+  if [[ ${release_type} == "ocp" ]]
+  then
+    cat ${OKD_LAB_PATH}/ocp-pull-secret | jq -c .auths | yq -p=json > ${PULL_SECRET}.yaml
+  else
+    echo "{\"fake\": {\"auth\": \"Zm9vOmJhcgo=\"}" | yq -p=json > ${PULL_SECRET}.yaml
+  fi
+  echo -n "{\"nexus.${LAB_DOMAIN}:5000\": {\"auth\": \"${NEXUS_SECRET}\"}}" | yq -p=json >> ${PULL_SECRET}.yaml
+  echo -n "{\"auths\": $(cat ${PULL_SECRET}.yaml | yq -o=json)}" > ${PULL_SECRET}
+  # cat ${PULL_SECRET}.yaml | yq -o=json > ${PULL_SECRET}
   NEXUS_PWD=""
   NEXUS_PWD_CHK=""
 }
@@ -353,7 +362,7 @@ function configInfraNodes() {
   
   for node_index in 0 1 2
   do
-    ${OC} label nodes ${CLUSTER_NAME}-cp-${node_index}.${DOMAIN} node-role.kubernetes.io/infra=""
+    ${OC} label nodes ${CLUSTER_NAME}-cp-${node_index} node-role.kubernetes.io/infra=""
   done
   ${OC} patch scheduler cluster --patch '{"spec":{"mastersSchedulable":false}}' --type=merge
   ${OC} patch -n openshift-ingress-operator ingresscontroller default --patch '{"spec":{"nodePlacement":{"nodeSelector":{"matchLabels":{"node-role.kubernetes.io/infra":""}},"tolerations":[{"key":"node.kubernetes.io/unschedulable","effect":"NoSchedule"},{"key":"node-role.kubernetes.io/master","effect":"NoSchedule"}]}}}' --type=merge
@@ -451,7 +460,7 @@ function mirrorOkdRelease() {
   rm -rf ${OKD_LAB_PATH}/lab-config/work-dir
   mkdir -p ${OKD_LAB_PATH}/lab-config/work-dir
   mkdir -p ${OKD_LAB_PATH}/lab-config/release-sigs
-  oc adm -a ${PULL_SECRET} release mirror --from=${OPENSHIFT_REGISTRY}:${OPENSHIFT_RELEASE} --to=${LOCAL_REGISTRY}/okd --to-release-image=${LOCAL_REGISTRY}/okd:${OPENSHIFT_RELEASE} --release-image-signature-to-dir=${OKD_LAB_PATH}/lab-config/work-dir
+  oc adm -a ${PULL_SECRET} release mirror --from=${OPENSHIFT_REGISTRY}:${OPENSHIFT_RELEASE} --to=${LOCAL_REGISTRY}/openshift --to-release-image=${LOCAL_REGISTRY}/openshift:${OPENSHIFT_RELEASE} --release-image-signature-to-dir=${OKD_LAB_PATH}/lab-config/work-dir
 
   SIG_FILE=$(ls ${OKD_LAB_PATH}/lab-config/work-dir)
   mv ${OKD_LAB_PATH}/lab-config/work-dir/${SIG_FILE} ${OKD_LAB_PATH}/lab-config/release-sigs/${OPENSHIFT_RELEASE}-sig.yaml
@@ -584,10 +593,10 @@ function monitor() {
   do
     case $i in
       -b)
-        openshift-install agent wait-for bootstrap-complete --dir=${OKD_LAB_PATH}/${CLUSTER_NAME}.${DOMAIN}/okd-install-dir --log-level debug
+        openshift-install agent wait-for bootstrap-complete --dir=${OKD_LAB_PATH}/${CLUSTER_NAME}.${DOMAIN}/openshift-install-dir --log-level debug
       ;;
       -i)
-        openshift-install agent wait-for install-complete --dir=${OKD_LAB_PATH}/${CLUSTER_NAME}.${DOMAIN}/okd-install-dir --log-level debug
+        openshift-install agent wait-for install-complete --dir=${OKD_LAB_PATH}/${CLUSTER_NAME}.${DOMAIN}/openshift-install-dir --log-level debug
       ;;
       -m=*)
         CP_INDEX="${i#*=}"

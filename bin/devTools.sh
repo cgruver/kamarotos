@@ -79,7 +79,7 @@ EOF
   ${SCP} ${PI_WORK_DIR}/nexus root@${PI_IP}:/etc/init.d/nexus
   ${SSH} root@${PI_IP} "chmod 755 /etc/init.d/nexus"
 
-  ${SSH} root@${PI_IP} "/usr/local/java-1.8-openjdk/bin/keytool -genkeypair -keystore /usr/local/nexus/nexus-3/etc/ssl/keystore.jks -deststoretype pkcs12 -storepass password -keypass password -alias jetty -keyalg RSA -keysize 4096 -validity 5000 -dname \"CN=nexus.${LAB_DOMAIN}, OU=okd4-lab, O=okd4-lab, L=City, ST=State, C=US\" -ext \"SAN=DNS:nexus.${LAB_DOMAIN},IP:${PI_IP}\" -ext \"BC=ca:true\" ; \
+  ${SSH} root@${PI_IP} "/usr/local/java-1.8-openjdk/bin/keytool -genkeypair -keystore /usr/local/nexus/nexus-3/etc/ssl/keystore.jks -deststoretype pkcs12 -storepass password -keypass password -alias jetty -keyalg RSA -keysize 4096 -validity 5000 -dname \"CN=nexus.${LAB_DOMAIN}, OU=openshift4-lab, O=openshift4-lab, L=City, ST=State, C=US\" -ext \"SAN=DNS:nexus.${LAB_DOMAIN},IP:${PI_IP}\" -ext \"BC=ca:true\" ; \
     /usr/local/java-1.8-openjdk/bin/keytool -importkeystore -srckeystore /usr/local/nexus/nexus-3/etc/ssl/keystore.jks -destkeystore /usr/local/nexus/nexus-3/etc/ssl/keystore.jks -deststoretype pkcs12 -srcstorepass password  ; \
     rm -f /usr/local/nexus/nexus-3/etc/ssl/keystore.jks.old  ; \
     chown nexus:nexus /usr/local/nexus/nexus-3/etc/ssl/keystore.jks  ; \
@@ -240,7 +240,7 @@ EOF
     wget -O keycloak-${KEYCLOAK_VER}.zip https://github.com/keycloak/keycloak/releases/download/${KEYCLOAK_VER}/keycloak-${KEYCLOAK_VER}.zip ; \
     unzip keycloak-${KEYCLOAK_VER}.zip ; \
     ln -s keycloak-${KEYCLOAK_VER} keycloak-server ; \
-    /usr/local/java-11-openjdk/bin/keytool -genkeypair -keystore /usr/local/keycloak/keystore.jks -deststoretype pkcs12 -storepass password -keypass password -alias jetty -keyalg RSA -keysize 4096 -validity 5000 -dname \"CN=keycloak.${LAB_DOMAIN}, OU=okd4-lab, O=okd4-lab, L=City, ST=State, C=US\" -ext \"SAN=DNS:keycloak.${LAB_DOMAIN},IP:${PI_IP}\" -ext \"BC=ca:true\" ; \
+    /usr/local/java-11-openjdk/bin/keytool -genkeypair -keystore /usr/local/keycloak/keystore.jks -deststoretype pkcs12 -storepass password -keypass password -alias jetty -keyalg RSA -keysize 4096 -validity 5000 -dname \"CN=keycloak.${LAB_DOMAIN}, OU=openshift4-lab, O=openshift4-lab, L=City, ST=State, C=US\" -ext \"SAN=DNS:keycloak.${LAB_DOMAIN},IP:${PI_IP}\" -ext \"BC=ca:true\" ; \
     mv /usr/local/keycloak/keycloak-server/conf/keycloak.conf /usr/local/keycloak/keycloak-server/conf/keycloak.conf.orig ; \
     mkdir -p /usr/local/keycloak/home ; \
     groupadd keycloak ; \
@@ -292,7 +292,7 @@ EOF
     mv /usr/local/apicurio/apicurio-studio/standalone/configuration/standalone-apicurio.xml /usr/local/apicurio/apicurio-studio/standalone/configuration/standalone-apicurio.xml.orig ; \
     mv /tmp/standalone-apicurio.xml /usr/local/apicurio/apicurio-studio/standalone/configuration/standalone-apicurio.xml ; \
     sed -i \"s|generate-self-signed-certificate-host=\\\"localhost\\\"||g\" /usr/local/apicurio/apicurio-studio/standalone/configuration/standalone-apicurio.xml ; \
-    /usr/local/java-11-openjdk/bin/keytool -genkeypair -keystore /usr/local/apicurio/apicurio-studio/standalone/configuration/application.keystore -deststoretype pkcs12 -storepass password -keypass password -alias server -keyalg RSA -keysize 4096 -validity 5000 -dname \"CN=apicurio.${LAB_DOMAIN}, OU=okd4-lab, O=okd4-lab, L=City, ST=State, C=US\" -ext \"SAN=DNS:apicurio.${LAB_DOMAIN},IP:${PI_IP}\" -ext \"BC=ca:true\" ; \
+    /usr/local/java-11-openjdk/bin/keytool -genkeypair -keystore /usr/local/apicurio/apicurio-studio/standalone/configuration/application.keystore -deststoretype pkcs12 -storepass password -keypass password -alias server -keyalg RSA -keysize 4096 -validity 5000 -dname \"CN=apicurio.${LAB_DOMAIN}, OU=openshift4-lab, O=openshift4-lab, L=City, ST=State, C=US\" -ext \"SAN=DNS:apicurio.${LAB_DOMAIN},IP:${PI_IP}\" -ext \"BC=ca:true\" ; \
     groupadd apicurio ; \
     useradd -g apicurio -d /usr/local/apicurio/home apicurio ; \
     chown -R apicurio:apicurio /usr/local/apicurio ; \

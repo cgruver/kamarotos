@@ -286,8 +286,8 @@ function configHaProxy() {
   if [[ ${AGENT} == "false" ]]
   then
     bs=$(yq e ".bootstrap.ip-addr" ${CLUSTER_CONFIG})
-    bs_api="server okd4-bootstrap ${bs}:6443 check weight 1"
-    bs_mc="server okd4-bootstrap ${bs}:22623 check weight 1"
+    bs_api="server openshift4-bootstrap ${bs}:6443 check weight 1"
+    bs_mc="server openshift4-bootstrap ${bs}:22623 check weight 1"
   fi
 
 cat << EOF > ${WORK_DIR}/haproxy-${CLUSTER_NAME}.init
@@ -351,49 +351,49 @@ defaults
     timeout check           10s
     maxconn                 50000
 
-listen okd4-api 
+listen openshift4-api 
     bind ${lb_ip}:6443
     balance roundrobin
     option                  tcplog
     mode tcp
     option tcpka
     option tcp-check
-    server okd4-master-0 ${cp_0}:6443 check weight 1
-    server okd4-master-1 ${cp_1}:6443 check weight 1
-    server okd4-master-2 ${cp_2}:6443 check weight 1
+    server openshift4-master-0 ${cp_0}:6443 check weight 1
+    server openshift4-master-1 ${cp_1}:6443 check weight 1
+    server openshift4-master-2 ${cp_2}:6443 check weight 1
     ${bs_api}
 
-listen okd4-mc 
+listen openshift4-mc 
     bind ${lb_ip}:22623
     balance roundrobin
     option                  tcplog
     mode tcp
     option tcpka
-    server okd4-master-0 ${cp_0}:22623 check weight 1
-    server okd4-master-1 ${cp_1}:22623 check weight 1
-    server okd4-master-2 ${cp_2}:22623 check weight 1
+    server openshift4-master-0 ${cp_0}:22623 check weight 1
+    server openshift4-master-1 ${cp_1}:22623 check weight 1
+    server openshift4-master-2 ${cp_2}:22623 check weight 1
     ${bs_mc}
 
-listen okd4-apps 
+listen openshift4-apps 
     bind ${lb_ip}:80
     balance source
     option                  tcplog
     mode tcp
     option tcpka
-    server okd4-master-0 ${cp_0}:80 check weight 1
-    server okd4-master-1 ${cp_1}:80 check weight 1
-    server okd4-master-2 ${cp_2}:80 check weight 1
+    server openshift4-master-0 ${cp_0}:80 check weight 1
+    server openshift4-master-1 ${cp_1}:80 check weight 1
+    server openshift4-master-2 ${cp_2}:80 check weight 1
 
-listen okd4-apps-ssl 
+listen openshift4-apps-ssl 
     bind ${lb_ip}:443
     balance source
     option                  tcplog
     mode tcp
     option tcpka
     option tcp-check
-    server okd4-master-0 ${cp_0}:443 check weight 1
-    server okd4-master-1 ${cp_1}:443 check weight 1
-    server okd4-master-2 ${cp_2}:443 check weight 1
+    server openshift4-master-0 ${cp_0}:443 check weight 1
+    server openshift4-master-1 ${cp_1}:443 check weight 1
+    server openshift4-master-2 ${cp_2}:443 check weight 1
 EOF
 
 }
@@ -417,43 +417,43 @@ function configNginx() {
 
 cat << EOF > ${WORK_DIR}/nginx-${CLUSTER_NAME}.conf
 stream {
-    upstream okd4-api {
+    upstream openshift4-api {
         server ${cp_0}:6443 max_fails=3 fail_timeout=1s;
         server ${cp_1}:6443 max_fails=3 fail_timeout=1s;
         server ${cp_2}:6443 max_fails=3 fail_timeout=1s;
         ${bs_api}
     }
-    upstream okd4-mc {
+    upstream openshift4-mc {
         server ${cp_0}:22623 max_fails=3 fail_timeout=1s;
         server ${cp_1}:22623 max_fails=3 fail_timeout=1s;
         server ${cp_2}:22623 max_fails=3 fail_timeout=1s;
         ${bs_mc}
     }
-    upstream okd4-https {
+    upstream openshift4-https {
         server ${cp_0}:443 max_fails=3 fail_timeout=1s;
         server ${cp_1}:443 max_fails=3 fail_timeout=1s;
         server ${cp_2}:443 max_fails=3 fail_timeout=1s;
     }
-    upstream okd4-http {
+    upstream openshift4-http {
         server ${cp_0}:80 max_fails=3 fail_timeout=1s;
         server ${cp_1}:80 max_fails=3 fail_timeout=1s;
         server ${cp_2}:80 max_fails=3 fail_timeout=1s;
     }
     server {
         listen ${lb_ip}:6443;
-        proxy_pass okd4-api;
+        proxy_pass openshift4-api;
     }
     server {
         listen ${lb_ip}:22623;
-        proxy_pass okd4-mc;
+        proxy_pass openshift4-mc;
     }
     server {
         listen ${lb_ip}:443;
-        proxy_pass okd4-https;
+        proxy_pass openshift4-https;
     }
     server {
         listen ${lb_ip}:80;
-        proxy_pass okd4-http;
+        proxy_pass openshift4-http;
     }
 }
 EOF

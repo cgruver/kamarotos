@@ -38,7 +38,7 @@ EOF
 
 function createClusterConfig() {
 
-  mkdir ${WORK_DIR}/okd-install-dir/openshift
+  mkdir ${WORK_DIR}/openshift-install-dir/openshift
   createClusterCustomMC
   if [[ $(yq ".control-plane | has(\"ceph\")" ${CLUSTER_CONFIG}) == "true" ]]
   then
@@ -85,23 +85,33 @@ function createClusterConfig() {
     yq e ".hosts.[${node_index}].networkConfig.routes.config.[0].table-id = 254" -i ${WORK_DIR}/agent-config.yaml
     node_index=$(( ${node_index} + 1 ))
   done
-  cp ${WORK_DIR}/agent-config.yaml ${WORK_DIR}/okd-install-dir/agent-config.yaml
+  cp ${WORK_DIR}/agent-config.yaml ${WORK_DIR}/openshift-install-dir/agent-config.yaml
 }
 
 function appendDisconnectedInstallConfig() {
 
-NEXUS_CERT=$( openssl s_client -showcerts -connect ${PROXY_REGISTRY} </dev/null 2>/dev/null|openssl x509 -outform PEM | while read line ; do echo "  ${line}" ; done )
+  release_type=$(yq e ".cluster.release-type" ${CLUSTER_CONFIG})
+    if [[ ${release_type} == "ocp" ]]
+    then
+      source_1="quay.io/openshift-release-dev/ocp-release"
+      source_2="quay.io/openshift-release-dev/ocp-v4.0-art-dev"
+    else
+      source_1="quay.io/openshift/okd"
+      source_2="quay.io/openshift/okd-content"
+    fi
+
+  NEXUS_CERT=$( openssl s_client -showcerts -connect ${PROXY_REGISTRY} </dev/null 2>/dev/null|openssl x509 -outform PEM | while read line ; do echo "  ${line}" ; done )
 
 cat << EOF >> ${WORK_DIR}/install-config-upi.yaml
 additionalTrustBundle: |
 ${NEXUS_CERT}
-imageContentSources:
+imageDigestSources:
 - mirrors:
-  - ${PROXY_REGISTRY}/okd
-  source: quay.io/openshift/okd
+  - ${PROXY_REGISTRY}/openshift
+  source: ${source_1}
 - mirrors:
-  - ${PROXY_REGISTRY}/okd
-  source: quay.io/openshift/okd-content
+  - ${PROXY_REGISTRY}/openshift
+  source: ${source_2}
 EOF
 }
 
@@ -199,7 +209,7 @@ function deployCluster() {
   rm -rf ${WORK_DIR}
   mkdir -p ${WORK_DIR}/ipxe-work-dir/ignition
   mkdir ${WORK_DIR}/dns-work-dir
-  mkdir ${WORK_DIR}/okd-install-dir
+  mkdir ${WORK_DIR}/openshift-install-dir
   if [[ -d ${OKD_LAB_PATH}/lab-config/${CLUSTER_NAME}.${DOMAIN} ]]
   then
     rm -rf ${OKD_LAB_PATH}/lab-config/${CLUSTER_NAME}.${DOMAIN}
@@ -222,11 +232,11 @@ function deployCluster() {
   then
     appendDisconnectedInstallConfig
   fi
-  cp ${WORK_DIR}/install-config-upi.yaml ${WORK_DIR}/okd-install-dir/install-config.yaml
+  cp ${WORK_DIR}/install-config-upi.yaml ${WORK_DIR}/openshift-install-dir/install-config.yaml
   createClusterConfig
-  openshift-install --dir=${WORK_DIR}/okd-install-dir agent create pxe-files 
+  openshift-install --dir=${WORK_DIR}/openshift-install-dir agent create pxe-files 
   configControlPlane
-  cp ${WORK_DIR}/okd-install-dir/auth/kubeconfig ${KUBE_INIT_CONFIG}
+  cp ${WORK_DIR}/openshift-install-dir/auth/kubeconfig ${KUBE_INIT_CONFIG}
   chmod 400 ${KUBE_INIT_CONFIG}
   prepNodeFiles
 }
@@ -277,7 +287,7 @@ function deployWorkers() {
         config_ceph=true
       fi
     fi
-    createButaneConfig ${ip_addr} ${host_name}.${DOMAIN} ${mac_addr} worker ${platform} ${config_ceph} ${boot_dev}
+    createButaneConfig ${ip_addr} ${host_name} ${mac_addr} worker ${platform} ${config_ceph} ${boot_dev}
     createPxeFile ${mac_addr} ${platform} ${boot_dev} ${host_name} ${ip_addr}
     # Create DNS entries
     echo "${host_name}.${DOMAIN}.   IN      A      ${ip_addr} ; ${host_name}-${DOMAIN}-wk" >> ${WORK_DIR}/dns-work-dir/forward.zone
