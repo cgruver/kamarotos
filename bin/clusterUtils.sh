@@ -61,7 +61,7 @@ function stopWorkers() {
   while [[ node_index -lt ${node_count} ]]
   do
     host_name=$(yq e ".compute-nodes.[${node_index}].name" ${CLUSTER_CONFIG})
-    ${OC} adm drain ${host_name}.${DOMAIN} --ignore-daemonsets --force --grace-period=20 --delete-emptydir-data
+    ${OC} adm drain ${host_name} --ignore-daemonsets --force --grace-period=20 --delete-emptydir-data
     ${SSH} -o ConnectTimeout=5 core@${host_name}.${DOMAIN} "sudo systemctl poweroff"
     node_index=$(( ${node_index} + 1 ))
   done
@@ -93,7 +93,7 @@ function cordonNode() {
   while [[ node_index -lt ${node_count} ]]
   do
     host_name=$(yq e ".compute-nodes.[${node_index}].name" ${CLUSTER_CONFIG})
-    ${OC} adm cordon ${host_name}.${DOMAIN}
+    ${OC} adm cordon ${host_name}
     node_index=$(( ${node_index} + 1 ))
   done
 }
@@ -105,7 +105,7 @@ function unCordonNode() {
   while [[ node_index -lt ${node_count} ]]
   do
     host_name=$(yq e ".compute-nodes.[${node_index}].name" ${CLUSTER_CONFIG})
-    ${OC} adm uncordon ${host_name}.${DOMAIN}
+    ${OC} adm uncordon ${host_name}
     node_index=$(( ${node_index} + 1 ))
   done
   CEPH_PDB="false"
@@ -645,22 +645,22 @@ function mirrorCeph() {
   podman login ${LOCAL_REGISTRY}
 
   echo "Pulling Rook/Ceph Images..."
-  podman pull  quay.io/cephcsi/cephcsi:${CEPH_CSI_VER}
-  podman pull  k8s.gcr.io/sig-storage/csi-node-driver-registrar:${CSI_NODE_DRIVER_REG_VER}
-  podman pull  k8s.gcr.io/sig-storage/csi-resizer:${CSI_RESIZER_VER}
-  podman pull  k8s.gcr.io/sig-storage/csi-provisioner:${CSI_PROVISIONER_VER}
-  podman pull  k8s.gcr.io/sig-storage/csi-snapshotter:${CSI_SNAPSHOTTER_VER}
-  podman pull  k8s.gcr.io/sig-storage/csi-attacher:${CSI_ATTACHER_VER}
-  podman pull  docker.io/rook/ceph:${ROOK_CEPH_VER}
-  podman pull  quay.io/ceph/ceph:${CEPH_VER}
+  podman pull --arch=amd64 quay.io/cephcsi/cephcsi:${CEPH_CSI_VER}
+  podman pull --arch=amd64 registry.k8s.io/sig-storage/csi-node-driver-registrar:${CSI_NODE_DRIVER_REG_VER}
+  podman pull --arch=amd64 registry.k8s.io/sig-storage/csi-resizer:${CSI_RESIZER_VER}
+  podman pull --arch=amd64 registry.k8s.io/sig-storage/csi-provisioner:${CSI_PROVISIONER_VER}
+  podman pull --arch=amd64 registry.k8s.io/sig-storage/csi-snapshotter:${CSI_SNAPSHOTTER_VER}
+  podman pull --arch=amd64 registry.k8s.io/sig-storage/csi-attacher:${CSI_ATTACHER_VER}
+  podman pull --arch=amd64 docker.io/rook/ceph:${ROOK_CEPH_VER}
+  podman pull --arch=amd64 quay.io/ceph/ceph:${CEPH_VER}
 
   echo "Tagging Rook/Ceph Images..."
   podman tag quay.io/cephcsi/cephcsi:${CEPH_CSI_VER} ${LOCAL_REGISTRY}/cephcsi/cephcsi:${CEPH_CSI_VER}
-  podman tag k8s.gcr.io/sig-storage/csi-node-driver-registrar:${CSI_NODE_DRIVER_REG_VER} ${LOCAL_REGISTRY}/sig-storage/csi-node-driver-registrar:${CSI_NODE_DRIVER_REG_VER}
-  podman tag k8s.gcr.io/sig-storage/csi-resizer:${CSI_RESIZER_VER} ${LOCAL_REGISTRY}/sig-storage/csi-resizer:${CSI_RESIZER_VER}
-  podman tag k8s.gcr.io/sig-storage/csi-provisioner:${CSI_PROVISIONER_VER} ${LOCAL_REGISTRY}/sig-storage/csi-provisioner:${CSI_PROVISIONER_VER}
-  podman tag k8s.gcr.io/sig-storage/csi-snapshotter:${CSI_SNAPSHOTTER_VER} ${LOCAL_REGISTRY}/sig-storage/csi-snapshotter:${CSI_SNAPSHOTTER_VER}
-  podman tag k8s.gcr.io/sig-storage/csi-attacher:${CSI_ATTACHER_VER} ${LOCAL_REGISTRY}/sig-storage/csi-attacher:${CSI_ATTACHER_VER}
+  podman tag registry.k8s.io/sig-storage/csi-node-driver-registrar:${CSI_NODE_DRIVER_REG_VER} ${LOCAL_REGISTRY}/sig-storage/csi-node-driver-registrar:${CSI_NODE_DRIVER_REG_VER}
+  podman tag registry.k8s.io/sig-storage/csi-resizer:${CSI_RESIZER_VER} ${LOCAL_REGISTRY}/sig-storage/csi-resizer:${CSI_RESIZER_VER}
+  podman tag registry.k8s.io/sig-storage/csi-provisioner:${CSI_PROVISIONER_VER} ${LOCAL_REGISTRY}/sig-storage/csi-provisioner:${CSI_PROVISIONER_VER}
+  podman tag registry.k8s.io/sig-storage/csi-snapshotter:${CSI_SNAPSHOTTER_VER} ${LOCAL_REGISTRY}/sig-storage/csi-snapshotter:${CSI_SNAPSHOTTER_VER}
+  podman tag registry.k8s.io/sig-storage/csi-attacher:${CSI_ATTACHER_VER} ${LOCAL_REGISTRY}/sig-storage/csi-attacher:${CSI_ATTACHER_VER}
   podman tag docker.io/rook/ceph:${ROOK_CEPH_VER} ${LOCAL_REGISTRY}/rook/ceph:${ROOK_CEPH_VER}
   podman tag quay.io/ceph/ceph:${CEPH_VER} ${LOCAL_REGISTRY}/ceph/ceph:${CEPH_VER}
 
@@ -707,7 +707,7 @@ function createControlPlaneCephCluster() {
     yq e ".spec.storage.nodes.[${node_index}].name = \"${node_name}\"" -i ${CEPH_CLUSTER_FILE}
     yq e ".spec.storage.nodes.[${node_index}].devices.[0].name = \"${ceph_dev}\"" -i ${CEPH_CLUSTER_FILE}
     yq e ".spec.storage.nodes.[${node_index}].devices.[0].config.osdsPerDevice = \"1\"" -i ${CEPH_CLUSTER_FILE}
-    ${SSH} -o ConnectTimeout=5 core@${node_name} "sudo wipefs -a -f ${ceph_dev} && sudo dd if=/dev/zero of=${ceph_dev} bs=4096 count=100"
+    ${SSH} -o ConnectTimeout=5 core@${node_name}.${DOMAIN} "sudo wipefs -a -f ${ceph_dev} && sudo dd if=/dev/zero of=${ceph_dev} bs=4096 count=100"
     ${OC} label nodes ${node_name} role=storage-node
   done
 }
@@ -717,7 +717,7 @@ function createWorkerCephCluster() {
   let node_index=0
   while [[ node_index -lt ${NODE_COUNT} ]]
   do
-    node_name=$(yq e ".compute-nodes.[${node_index}].name" ${CLUSTER_CONFIG}).${DOMAIN}
+    node_name=$(yq e ".compute-nodes.[${node_index}].name" ${CLUSTER_CONFIG})
     ceph_node=$(yq ".compute-nodes.[${node_index}] | has(\"ceph\")" ${CLUSTER_CONFIG})
     if [[ ${ceph_node} == "true" ]]
     then
@@ -725,7 +725,7 @@ function createWorkerCephCluster() {
       yq e ".spec.storage.nodes.[${node_index}].name = \"${node_name}\"" -i ${CEPH_CLUSTER_FILE}
       yq e ".spec.storage.nodes.[${node_index}].devices.[0].name = \"${ceph_dev}\"" -i ${CEPH_CLUSTER_FILE}
       yq e ".spec.storage.nodes.[${node_index}].devices.[0].config.osdsPerDevice = \"1\"" -i ${CEPH_CLUSTER_FILE}
-      ${SSH} -o ConnectTimeout=5 core@${node_name} "sudo wipefs -a -f ${ceph_dev} && sudo dd if=/dev/zero of=${ceph_dev} bs=4096 count=100"
+      ${SSH} -o ConnectTimeout=5 core@${node_name}.${DOMAIN} "sudo wipefs -a -f ${ceph_dev} && sudo dd if=/dev/zero of=${ceph_dev} bs=4096 count=100"
     fi
     node_index=$(( ${node_index} + 1 ))
     ${OC} label nodes ${node_name} role=storage-node
