@@ -86,7 +86,7 @@ function destroy() {
     esac
   done
 
-  WORK_DIR=${OKD_LAB_PATH}/${CLUSTER_NAME}.${DOMAIN}
+  WORK_DIR=${OPENSHIFT_LAB_PATH}/${CLUSTER_NAME}.${DOMAIN}
 
   if [[ ${DELETE_WORKER} == "true" ]]
   then

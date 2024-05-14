@@ -22,7 +22,7 @@ function initNanoPi() {
   echo "Generating SSH keys"
   ${SSH} root@${INIT_IP} "rm -rf /root/.ssh ; rm -rf /data/* ; mkdir -p /root/.ssh ; dropbearkey -t rsa -s 4096 -f /root/.ssh/id_dropbear"
   echo "Copying workstation SSH key to router"
-  cat ${OKD_LAB_PATH}/ssh_key.pub | ${SSH} root@${INIT_IP} "cat >> /etc/dropbear/authorized_keys"
+  cat ${OPENSHIFT_LAB_PATH}/ssh_key.pub | ${SSH} root@${INIT_IP} "cat >> /etc/dropbear/authorized_keys"
   echo "Applying UCI config"
   ${SCP} ${WORK_DIR}/uci.batch root@${INIT_IP}:/tmp/uci.batch
   ${SSH} root@${INIT_IP} "cat /tmp/uci.batch | uci batch ; \

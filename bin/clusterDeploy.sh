@@ -205,17 +205,17 @@ function configControlPlane() {
 
 function deployCluster() {
 
-  WORK_DIR=${OKD_LAB_PATH}/${CLUSTER_NAME}.${DOMAIN}
+  WORK_DIR=${OPENSHIFT_LAB_PATH}/${CLUSTER_NAME}.${DOMAIN}
   rm -rf ${WORK_DIR}
   mkdir -p ${WORK_DIR}/ipxe-work-dir/ignition
   mkdir ${WORK_DIR}/dns-work-dir
   mkdir ${WORK_DIR}/openshift-install-dir
-  if [[ -d ${OKD_LAB_PATH}/lab-config/${CLUSTER_NAME}.${DOMAIN} ]]
+  if [[ -d ${OPENSHIFT_LAB_PATH}/lab-config/${CLUSTER_NAME}.${DOMAIN} ]]
   then
-    rm -rf ${OKD_LAB_PATH}/lab-config/${CLUSTER_NAME}.${DOMAIN}
+    rm -rf ${OPENSHIFT_LAB_PATH}/lab-config/${CLUSTER_NAME}.${DOMAIN}
   fi
-  mkdir -p ${OKD_LAB_PATH}/lab-config/${CLUSTER_NAME}.${DOMAIN}
-  SSH_KEY=$(cat ${OKD_LAB_PATH}/ssh_key.pub)
+  mkdir -p ${OPENSHIFT_LAB_PATH}/lab-config/${CLUSTER_NAME}.${DOMAIN}
+  SSH_KEY=$(cat ${OPENSHIFT_LAB_PATH}/ssh_key.pub)
   SNO="false"
   AGENT="true"
   CP_REPLICAS=$(yq e ".control-plane.nodes" ${CLUSTER_CONFIG} | yq e 'length' -)
@@ -242,7 +242,7 @@ function deployCluster() {
 }
 
 function deployWorkers() {
-  WORK_DIR=${OKD_LAB_PATH}/${CLUSTER_NAME}.${DOMAIN}
+  WORK_DIR=${OPENSHIFT_LAB_PATH}/${CLUSTER_NAME}.${DOMAIN}
   rm -rf ${WORK_DIR}
   mkdir -p ${WORK_DIR}/ipxe-work-dir/ignition
   mkdir -p ${WORK_DIR}/dns-work-dir

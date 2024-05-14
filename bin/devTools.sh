@@ -1,7 +1,7 @@
 function devTools() {
   
   LATEST=false
-  PI_WORK_DIR=${OKD_LAB_PATH}/work-dir-pi
+  PI_WORK_DIR=${OPENSHIFT_LAB_PATH}/work-dir-pi
   rm -rf ${PI_WORK_DIR}
   mkdir -p ${PI_WORK_DIR}
   for i in "$@"

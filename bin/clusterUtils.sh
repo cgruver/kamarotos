@@ -194,9 +194,9 @@ function approveCsr() {
 
 function pullSecret() {
 
-  if [[ ! -d ${OKD_LAB_PATH}/pull-secrets ]]
+  if [[ ! -d ${OPENSHIFT_LAB_PATH}/pull-secrets ]]
   then
-    mkdir -p ${OKD_LAB_PATH}/pull-secrets
+    mkdir -p ${OPENSHIFT_LAB_PATH}/pull-secrets
   fi
   if [[ ${DISCONNECTED_CLUSTER} == "true" ]]
   then
@@ -205,7 +205,7 @@ function pullSecret() {
     release_type=$(yq e ".cluster.release-type" ${CLUSTER_CONFIG})
     if [[ ${release_type} == "ocp" ]]
     then
-      cp ${OKD_LAB_PATH}/ocp-pull-secret ${PULL_SECRET}
+      cp ${OPENSHIFT_LAB_PATH}/lab-config/ocp-pull-secret ${PULL_SECRET}
     else
       echo -n "{\"auths\": {\"fake\": {\"auth\": \"Zm9vOmJhcgo=\"}}}" > ${PULL_SECRET}
     fi
@@ -232,7 +232,7 @@ function createPullSecret() {
   release_type=$(yq e ".cluster.release-type" ${CLUSTER_CONFIG})
   if [[ ${release_type} == "ocp" ]]
   then
-    cat ${OKD_LAB_PATH}/ocp-pull-secret | jq -c .auths | yq -p=json > ${PULL_SECRET}.yaml
+    cat ${OPENSHIFT_LAB_PATH}/lab-config/ocp-pull-secret | jq -c .auths | yq -p=json > ${PULL_SECRET}.yaml
   else
     echo "{\"fake\": {\"auth\": \"Zm9vOmJhcgo=\"}" | yq -p=json > ${PULL_SECRET}.yaml
   fi
@@ -457,14 +457,14 @@ EOF
 }
 
 function mirrorOkdRelease() {
-  rm -rf ${OKD_LAB_PATH}/lab-config/work-dir
-  mkdir -p ${OKD_LAB_PATH}/lab-config/work-dir
-  mkdir -p ${OKD_LAB_PATH}/lab-config/release-sigs
-  oc adm -a ${PULL_SECRET} release mirror --from=${OPENSHIFT_REGISTRY}:${OPENSHIFT_RELEASE} --to=${LOCAL_REGISTRY}/openshift --to-release-image=${LOCAL_REGISTRY}/openshift:${OPENSHIFT_RELEASE} --release-image-signature-to-dir=${OKD_LAB_PATH}/lab-config/work-dir
+  rm -rf ${OPENSHIFT_LAB_PATH}/lab-config/work-dir
+  mkdir -p ${OPENSHIFT_LAB_PATH}/lab-config/work-dir
+  mkdir -p ${OPENSHIFT_LAB_PATH}/lab-config/release-sigs
+  oc adm -a ${PULL_SECRET} release mirror --from=${OPENSHIFT_REGISTRY}:${OPENSHIFT_RELEASE} --to=${LOCAL_REGISTRY}/openshift --to-release-image=${LOCAL_REGISTRY}/openshift:${OPENSHIFT_RELEASE} --release-image-signature-to-dir=${OPENSHIFT_LAB_PATH}/lab-config/work-dir
 
-  SIG_FILE=$(ls ${OKD_LAB_PATH}/lab-config/work-dir)
-  mv ${OKD_LAB_PATH}/lab-config/work-dir/${SIG_FILE} ${OKD_LAB_PATH}/lab-config/release-sigs/${OPENSHIFT_RELEASE}-sig.yaml
-  rm -rf ${OKD_LAB_PATH}/lab-config/work-dir
+  SIG_FILE=$(ls ${OPENSHIFT_LAB_PATH}/lab-config/work-dir)
+  mv ${OPENSHIFT_LAB_PATH}/lab-config/work-dir/${SIG_FILE} ${OPENSHIFT_LAB_PATH}/lab-config/release-sigs/${OPENSHIFT_RELEASE}-sig.yaml
+  rm -rf ${OPENSHIFT_LAB_PATH}/lab-config/work-dir
 }
 
 function startNode() {
@@ -487,7 +487,7 @@ function startBootstrap() {
     cpu=$(yq e ".bootstrap.node-spec.cpu" ${CLUSTER_CONFIG})
     root_vol=$(yq e ".bootstrap.node-spec.root-vol" ${CLUSTER_CONFIG})
     bridge_dev=$(yq e ".bootstrap.bridge-dev" ${CLUSTER_CONFIG})
-    WORK_DIR=${OKD_LAB_PATH}/${CLUSTER_NAME}.${DOMAIN}
+    WORK_DIR=${OPENSHIFT_LAB_PATH}/${CLUSTER_NAME}.${DOMAIN}
     mkdir -p ${WORK_DIR}/bootstrap
     qemu-img create -f qcow2 ${WORK_DIR}/bootstrap/bootstrap-node.qcow2 ${root_vol}G
     qemu-system-x86_64 -accel accel=hvf -m ${memory}M -smp ${cpu} -display none -nographic -drive file=${WORK_DIR}/bootstrap/bootstrap-node.qcow2,if=none,id=disk1  -device ide-hd,bus=ide.0,drive=disk1,id=sata0-0-0,bootindex=1 -boot n -netdev vde,id=nic0,sock=/var/run/vde.bridged.${bridge_dev}.ctl -device virtio-net-pci,netdev=nic0,mac=52:54:00:a1:b2:c3
@@ -593,10 +593,10 @@ function monitor() {
   do
     case $i in
       -b)
-        openshift-install agent wait-for bootstrap-complete --dir=${OKD_LAB_PATH}/${CLUSTER_NAME}.${DOMAIN}/openshift-install-dir --log-level debug
+        openshift-install agent wait-for bootstrap-complete --dir=${OPENSHIFT_LAB_PATH}/${CLUSTER_NAME}.${DOMAIN}/openshift-install-dir --log-level debug
       ;;
       -i)
-        openshift-install agent wait-for install-complete --dir=${OKD_LAB_PATH}/${CLUSTER_NAME}.${DOMAIN}/openshift-install-dir --log-level debug
+        openshift-install agent wait-for install-complete --dir=${OPENSHIFT_LAB_PATH}/${CLUSTER_NAME}.${DOMAIN}/openshift-install-dir --log-level debug
       ;;
       -m=*)
         CP_INDEX="${i#*=}"
@@ -738,7 +738,7 @@ function regPvc() {
 }
 
 function initCephVars() {
-  export CEPH_WORK_DIR=${OKD_LAB_PATH}/${CLUSTER_NAME}.${DOMAIN}/ceph-work-dir
+  export CEPH_WORK_DIR=${OPENSHIFT_LAB_PATH}/${CLUSTER_NAME}.${DOMAIN}/ceph-work-dir
   rm -rf ${CEPH_WORK_DIR}
   git clone https://github.com/cgruver/lab-ceph.git ${CEPH_WORK_DIR}
 

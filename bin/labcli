@@ -1,18 +1,18 @@
 #!/usr/bin/env bash
 
-. ${OKD_LAB_PATH}/bin/labEnv.sh
-. ${OKD_LAB_PATH}/bin/labUtils.sh
-. ${OKD_LAB_PATH}/bin/piUtils.sh
-. ${OKD_LAB_PATH}/bin/routerUtils.sh
-. ${OKD_LAB_PATH}/bin/routerWireless.sh
-. ${OKD_LAB_PATH}/bin/routerConfig.sh
-. ${OKD_LAB_PATH}/bin/clusterUtils.sh
-. ${OKD_LAB_PATH}/bin/clusterDeploy.sh
-. ${OKD_LAB_PATH}/bin/clusterDestroy.sh
-. ${OKD_LAB_PATH}/bin/clusterButaneConfig.sh
-. ${OKD_LAB_PATH}/bin/hostUtils.sh
-. ${OKD_LAB_PATH}/bin/devTools.sh
-. ${OKD_LAB_PATH}/bin/labCliHelp.sh
+. ${OPENSHIFT_LAB_PATH}/bin/labEnv.sh
+. ${OPENSHIFT_LAB_PATH}/bin/labUtils.sh
+. ${OPENSHIFT_LAB_PATH}/bin/piUtils.sh
+. ${OPENSHIFT_LAB_PATH}/bin/routerUtils.sh
+. ${OPENSHIFT_LAB_PATH}/bin/routerWireless.sh
+. ${OPENSHIFT_LAB_PATH}/bin/routerConfig.sh
+. ${OPENSHIFT_LAB_PATH}/bin/clusterUtils.sh
+. ${OPENSHIFT_LAB_PATH}/bin/clusterDeploy.sh
+. ${OPENSHIFT_LAB_PATH}/bin/clusterDestroy.sh
+. ${OPENSHIFT_LAB_PATH}/bin/clusterButaneConfig.sh
+. ${OPENSHIFT_LAB_PATH}/bin/hostUtils.sh
+. ${OPENSHIFT_LAB_PATH}/bin/devTools.sh
+. ${OPENSHIFT_LAB_PATH}/bin/labCliHelp.sh
 
 SSH="ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -oHostKeyAlgorithms=+ssh-rsa -oPubkeyAcceptedAlgorithms=+ssh-rsa"
 SCP="scp -O -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -oHostKeyAlgorithms=+ssh-rsa -oPubkeyAcceptedAlgorithms=+ssh-rsa"

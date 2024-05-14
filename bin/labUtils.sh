@@ -143,7 +143,7 @@ function createHostPwd() {
       echo "Passwords do not match. Try Again."
     fi
   done
-  openssl passwd -1 "${ROOT_PWD}" > ${OKD_LAB_PATH}/lab_host_pw
+  openssl passwd -1 "${ROOT_PWD}" > ${OPENSHIFT_LAB_PATH}/lab_host_pw
   ROOT_PWD=""
   ROOT_PWD_CHK=""
 }

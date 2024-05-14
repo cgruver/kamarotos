@@ -294,8 +294,8 @@ function deployKvmHosts() {
     esac
   done
 
-  LAB_PWD=$(cat ${OKD_LAB_PATH}/lab_host_pw)
-  WORK_DIR=${OKD_LAB_PATH}/boot-work-dir
+  LAB_PWD=$(cat ${OPENSHIFT_LAB_PATH}/lab_host_pw)
+  WORK_DIR=${OPENSHIFT_LAB_PATH}/boot-work-dir
   rm -rf ${WORK_DIR}
   mkdir -p ${WORK_DIR}
 

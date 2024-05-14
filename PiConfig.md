@@ -29,7 +29,7 @@ sudo rm -rf ${TEMP_DIR}
 ## Set Up Network
 
 ```bash
-cat ${OKD_LAB_PATH}/ssh_key.pub | ssh root@192.168.1.1 "cat >> /etc/dropbear/authorized_keys"
+cat ${OPENSHIFT_LAB_PATH}/ssh_key.pub | ssh root@192.168.1.1 "cat >> /etc/dropbear/authorized_keys"
 ssh root@192.168.1.1 "uci set dropbear.@dropbear[0].PasswordAuth=off ; \
   uci set dropbear.@dropbear[0].RootPasswordAuth=off ; \
   uci set network.lan.ipaddr="${PI_IP}" ; \
@@ -131,7 +131,7 @@ exit
 ### Set Up Network
 
 ```bash
-cat ${OKD_LAB_PATH}/ssh_key.pub | ssh root@192.168.1.1 "cat >> /etc/dropbear/authorized_keys"
+cat ${OPENSHIFT_LAB_PATH}/ssh_key.pub | ssh root@192.168.1.1 "cat >> /etc/dropbear/authorized_keys"
 ssh root@192.168.1.1 "uci set dropbear.@dropbear[0].PasswordAuth=off ; \
   uci set dropbear.@dropbear[0].RootPasswordAuth=off ; \
   uci set network.lan.ipaddr="${PI_IP}" ; \

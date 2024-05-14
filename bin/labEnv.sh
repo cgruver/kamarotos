@@ -1,15 +1,15 @@
-export OKD_LAB_PATH=${HOME}/openshift-lab
-export PATH=${OKD_LAB_PATH}/bin:$PATH
-export OC_INIT=${OKD_LAB_PATH}/openshift-cmds/init/oc
+export OPENSHIFT_LAB_PATH=${HOME}/openshift-lab
+export PATH=${OPENSHIFT_LAB_PATH}/bin:$PATH
+export OC_INIT=${OPENSHIFT_LAB_PATH}/openshift-cmds/init/oc
 
 if [[ -z ${LAB_CONFIG_FILE} ]]
 then
-  export LAB_CONFIG_FILE=${OKD_LAB_PATH}/lab-config/lab.yaml
+  export LAB_CONFIG_FILE=${OPENSHIFT_LAB_PATH}/lab-config/lab.yaml
 fi
 
 if [[ -z ${LAB_CONFIG_LIST} ]]
 then
-  export LAB_CONFIG_LIST=${OKD_LAB_PATH}/lab-config/lab-list.yaml
+  export LAB_CONFIG_LIST=${OPENSHIFT_LAB_PATH}/lab-config/lab-list.yaml
 fi
 
 function labenv() {
@@ -68,7 +68,7 @@ function setLabConfig() {
     read ENTRY
     INDEX=$(( ${ENTRY} - 1 ))
     config_file=$(yq e ".lab-configs.[${INDEX}].config" ${LAB_CONFIG_LIST})
-    ln -sf ${OKD_LAB_PATH}/lab-config/lab-config-files/${config_file} ${LAB_CONFIG_FILE}
+    ln -sf ${OPENSHIFT_LAB_PATH}/lab-config/lab-config-files/${config_file} ${LAB_CONFIG_FILE}
   fi
 }
 
@@ -224,16 +224,16 @@ function setClusterEnv() {
     setDomainIndex $(yq e ".cluster-configs.[${CLUSTER_INDEX}].domain" ${LAB_CONFIG_FILE})
     setDomainEnv
   fi
-  export CLUSTER_CONFIG=${OKD_LAB_PATH}/lab-config/cluster-configs/$(yq e ".cluster-configs.[${CLUSTER_INDEX}].cluster-config-file" ${LAB_CONFIG_FILE})
+  export CLUSTER_CONFIG=${OPENSHIFT_LAB_PATH}/lab-config/cluster-configs/$(yq e ".cluster-configs.[${CLUSTER_INDEX}].cluster-config-file" ${LAB_CONFIG_FILE})
   export CLUSTER=$(yq e ".cluster-configs.[${CLUSTER_INDEX}].name" ${LAB_CONFIG_FILE})
   export CLUSTER_NAME=$(yq e ".cluster.name" ${CLUSTER_CONFIG})
-  export KUBE_INIT_CONFIG=${OKD_LAB_PATH}/lab-config/kubeconfigs/${CLUSTER_NAME}-${DOMAIN}-kubeconfig
+  export KUBE_INIT_CONFIG=${OPENSHIFT_LAB_PATH}/lab-config/kubeconfigs/${CLUSTER_NAME}-${DOMAIN}-kubeconfig
   export CLUSTER_CIDR=$(yq e ".cluster.cluster-cidr" ${CLUSTER_CONFIG})
   export SERVICE_CIDR=$(yq e ".cluster.service-cidr" ${CLUSTER_CONFIG})
   export BUTANE_VARIANT=$(yq e ".cluster.butane-variant" ${CLUSTER_CONFIG})
   export BUTANE_SPEC_VERSION=$(yq e ".cluster.butane-spec-version" ${CLUSTER_CONFIG})
   export OPENSHIFT_REGISTRY=$(yq e ".cluster.remote-registry" ${CLUSTER_CONFIG})
-  export PULL_SECRET=${OKD_LAB_PATH}/pull-secrets/${CLUSTER_NAME}-pull-secret.json
+  export PULL_SECRET=${OPENSHIFT_LAB_PATH}/pull-secrets/${CLUSTER_NAME}-pull-secret.json
   export DISCONNECTED_CLUSTER=$(yq e ".cluster.disconnected" ${CLUSTER_CONFIG})
   export INSTALL_METHOD=$(yq e ".cluster.install-method" ${CLUSTER_CONFIG})
   setOpenShiftRelease
@@ -290,8 +290,8 @@ function fixMacArmCodeSign() {
   if [[ $(uname) == "Darwin" ]] && [[ $(uname -m) == "arm64" ]]
   then
     echo "Applying workaround for corrupt signiture on OpenShift CLI binaries"
-    codesign --force -s - ${OKD_LAB_PATH}/openshift-cmds/${OPENSHIFT_RELEASE}/oc
-    codesign --force -s - ${OKD_LAB_PATH}/openshift-cmds/${OPENSHIFT_RELEASE}/openshift-install
+    codesign --force -s - ${OPENSHIFT_LAB_PATH}/openshift-cmds/${OPENSHIFT_RELEASE}/oc
+    codesign --force -s - ${OPENSHIFT_LAB_PATH}/openshift-cmds/${OPENSHIFT_RELEASE}/openshift-install
   fi
 }
 
@@ -301,14 +301,14 @@ function setOpenShiftRelease() {
   if [[ ${release_set} == "true" ]]
   then
     export OPENSHIFT_RELEASE=$(yq e ".cluster.release" ${CLUSTER_CONFIG})
-    if [[ ! -f ${OKD_LAB_PATH}/openshift-cmds/${OPENSHIFT_RELEASE}/oc ]]
+    if [[ ! -f ${OPENSHIFT_LAB_PATH}/openshift-cmds/${OPENSHIFT_RELEASE}/oc ]]
     then
       getCliCmds 
     fi
-    for i in $(ls ${OKD_LAB_PATH}/openshift-cmds/${OPENSHIFT_RELEASE})
+    for i in $(ls ${OPENSHIFT_LAB_PATH}/openshift-cmds/${OPENSHIFT_RELEASE})
     do
-      rm -f ${OKD_LAB_PATH}/bin/${i}
-      ln -sf ${OKD_LAB_PATH}/openshift-cmds/${OPENSHIFT_RELEASE}/${i} ${OKD_LAB_PATH}/bin/${i}
+      rm -f ${OPENSHIFT_LAB_PATH}/bin/${i}
+      ln -sf ${OPENSHIFT_LAB_PATH}/openshift-cmds/${OPENSHIFT_RELEASE}/${i} ${OPENSHIFT_LAB_PATH}/bin/${i}
     done
     i=""
   fi
@@ -320,12 +320,12 @@ function setButaneRelease() {
   if [[ ${release_set} == "true" ]]
   then
     export BUTANE_VERSION=$(yq e ".cluster.butane-version" ${CLUSTER_CONFIG})
-    if [[ ! -d ${OKD_LAB_PATH}/butane/${BUTANE_VERSION} ]]
+    if [[ ! -d ${OPENSHIFT_LAB_PATH}/butane/${BUTANE_VERSION} ]]
     then
       getButane
     fi
-    rm ${OKD_LAB_PATH}/bin/butane
-    ln -sf ${OKD_LAB_PATH}/butane/${BUTANE_VERSION}/butane ${OKD_LAB_PATH}/bin/butane
+    rm ${OPENSHIFT_LAB_PATH}/bin/butane
+    ln -sf ${OPENSHIFT_LAB_PATH}/butane/${BUTANE_VERSION}/butane ${OPENSHIFT_LAB_PATH}/bin/butane
   fi
 }
 
@@ -353,10 +353,10 @@ function getInitCli() {
   if [[ ${CONTINUE} == "true" ]]
   then
     WORK_DIR=$(mktemp -d)
-    mkdir -p ${OKD_LAB_PATH}/openshift-cmds/init
+    mkdir -p ${OPENSHIFT_LAB_PATH}/openshift-cmds/init
     wget -O ${WORK_DIR}/oc.tar.gz https://github.com/okd-project/okd/releases/download/${OKD_RELEASE}/openshift-client-${OS_VER}-${OKD_RELEASE}.tar.gz
-    tar -xzf ${WORK_DIR}/oc.tar.gz -C ${OKD_LAB_PATH}/openshift-cmds/init
-    chmod 700 ${OKD_LAB_PATH}/openshift-cmds/init/*
+    tar -xzf ${WORK_DIR}/oc.tar.gz -C ${OPENSHIFT_LAB_PATH}/openshift-cmds/init
+    chmod 700 ${OPENSHIFT_LAB_PATH}/openshift-cmds/init/*
     rm -rf ${WORK_DIR}
     # fixMacArmCodeSign
   fi
@@ -364,7 +364,7 @@ function getInitCli() {
 
 function getCliCmds() {
 
-  if [[ ! -d ${OKD_LAB_PATH}/openshift-cmds/init ]]
+  if [[ ! -d ${OPENSHIFT_LAB_PATH}/openshift-cmds/init ]]
   then
     getInitCli
   fi
@@ -382,23 +382,23 @@ function getCliCmds() {
   #   ;;
   #   ocp)
   #     tools_uri=quay.io/openshift-release-dev/ocp-release:${OPENSHIFT_RELEASE}
-  #     registry_config="--registry-config=${OKD_LAB_PATH}/ocp-pull-secret"
+  #     registry_config="--registry-config=${OPENSHIFT_LAB_PATH}/ocp-pull-secret"
   #   ;;
   #   ocp-nightly)
   #     tools_uri=quay.io/openshift-release-dev/ocp-release:${OPENSHIFT_RELEASE}
-  #     registry_config="--registry-config=${OKD_LAB_PATH}/ocp-pull-secret"
+  #     registry_config="--registry-config=${OPENSHIFT_LAB_PATH}/ocp-pull-secret"
   #   ;;
   # esac
   if [[ ${release_type} == "ocp" ]]
   then
-    registry_config="--registry-config=${OKD_LAB_PATH}/ocp-pull-secret"
+    registry_config="--registry-config=${OPENSHIFT_LAB_PATH}/lab-config/ocp-pull-secret"
   fi
-  mkdir -p ${OKD_LAB_PATH}/openshift-cmds/${OPENSHIFT_RELEASE}
+  mkdir -p ${OPENSHIFT_LAB_PATH}/openshift-cmds/${OPENSHIFT_RELEASE}
   WORK_DIR=$(mktemp -d)
   ${OC_INIT} adm release extract ${registry_config} --to="${WORK_DIR}" --tools ${tools_uri}
   for i in $(ls ${WORK_DIR}/*.tar.gz)
   do
-    tar -xzf ${i} -C ${OKD_LAB_PATH}/openshift-cmds/${OPENSHIFT_RELEASE}
+    tar -xzf ${i} -C ${OPENSHIFT_LAB_PATH}/openshift-cmds/${OPENSHIFT_RELEASE}
   done
   rm -rf ${WORK_DIR}
   # fixMacArmCodeSign
@@ -424,17 +424,17 @@ function getButane() {
   fi
   if [[ ${CONTINUE} == "true" ]]
   then
-    mkdir -p ${OKD_LAB_PATH}/butane/${BUTANE_VERSION}
-    wget -O ${OKD_LAB_PATH}/butane/${BUTANE_VERSION}/butane https://github.com/coreos/butane/releases/download/${BUTANE_VERSION}/butane-${PROC_ARCH}-${BUTANE_DLD}
+    mkdir -p ${OPENSHIFT_LAB_PATH}/butane/${BUTANE_VERSION}
+    wget -O ${OPENSHIFT_LAB_PATH}/butane/${BUTANE_VERSION}/butane https://github.com/coreos/butane/releases/download/${BUTANE_VERSION}/butane-${PROC_ARCH}-${BUTANE_DLD}
   fi
 }
 
 function clearLabEnv() {
   if [[ ! -z ${OPENSHIFT_RELEASE} ]]
   then
-    for i in $(ls ${OKD_LAB_PATH}/openshift-cmds/${OPENSHIFT_RELEASE})
+    for i in $(ls ${OPENSHIFT_LAB_PATH}/openshift-cmds/${OPENSHIFT_RELEASE})
     do
-      rm -f ${OKD_LAB_PATH}/bin/${i}
+      rm -f ${OPENSHIFT_LAB_PATH}/bin/${i}
     done
   fi
   unset CLUSTER_CONFIG

@@ -1,5 +1,5 @@
 function configPi() {
-  PI_WORK_DIR=${OKD_LAB_PATH}/work-dir-pi
+  PI_WORK_DIR=${OPENSHIFT_LAB_PATH}/work-dir-pi
   rm -rf ${PI_WORK_DIR}
   mkdir -p ${PI_WORK_DIR}/config
   for i in "$@"
@@ -20,7 +20,7 @@ function configPi() {
 
 function initPiNetwork() {
 
-  cat ${OKD_LAB_PATH}/ssh_key.pub | ssh root@192.168.1.1 "cat >> /etc/dropbear/authorized_keys"
+  cat ${OPENSHIFT_LAB_PATH}/ssh_key.pub | ssh root@192.168.1.1 "cat >> /etc/dropbear/authorized_keys"
   ssh root@192.168.1.1 "uci set dropbear.@dropbear[0].PasswordAuth=off ; \
     uci set dropbear.@dropbear[0].RootPasswordAuth=off ; \
     uci set network.lan.ipaddr=${PI_IP} ; \
@@ -292,7 +292,7 @@ EOF
   ${SSH} root@${PI_IP} "chmod 750 /root/bin/MirrorSync.sh"
   echo "Apply UCI config, disable root password, and reboot"
   ${SCP} ${PI_WORK_DIR}/uci.batch root@${PI_IP}:/tmp/uci.batch
-  cat ${OKD_LAB_PATH}/ssh_key.pub | ${SSH} root@${PI_IP} "cat >> /usr/local/www/install/postinstall/authorized_keys"
+  cat ${OPENSHIFT_LAB_PATH}/ssh_key.pub | ${SSH} root@${PI_IP} "cat >> /usr/local/www/install/postinstall/authorized_keys"
   ${SSH} root@${PI_IP} "cat /tmp/uci.batch | uci batch ; passwd -l root ; reboot"
   echo "Setup complete."
   echo "After the Pi reboots, run ${SSH} root@${PI_IP} \"nohup /root/bin/MirrorSync.sh &\""

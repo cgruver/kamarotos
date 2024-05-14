@@ -7,7 +7,7 @@ function configRouter() {
   GL_MODEL=""
   INIT_IP=192.168.8.1
   wifi_channel=3
-  WORK_DIR=${OKD_LAB_PATH}/work-dir-router
+  WORK_DIR=${OPENSHIFT_LAB_PATH}/work-dir-router
   rm -rf ${WORK_DIR}
   mkdir -p ${WORK_DIR}/dns
   
@@ -44,7 +44,7 @@ function configRouter() {
     esac
   done
 
-  if [[ ! -d ${OKD_LAB_PATH}/boot-files ]]
+  if [[ ! -d ${OPENSHIFT_LAB_PATH}/boot-files ]]
   then
     getBootFile
   fi
@@ -116,7 +116,7 @@ function initRouter() {
   echo "Generating SSH keys"
   ${SSH} root@${INIT_IP} "rm -rf /root/.ssh ; rm -rf /data/* ; mkdir -p /root/.ssh ; dropbearkey -t rsa -s 4096 -f /root/.ssh/id_dropbear"
   echo "Copying workstation SSH key to router"
-  cat ${OKD_LAB_PATH}/ssh_key.pub | ${SSH} root@${INIT_IP} "cat >> /etc/dropbear/authorized_keys"
+  cat ${OPENSHIFT_LAB_PATH}/ssh_key.pub | ${SSH} root@${INIT_IP} "cat >> /etc/dropbear/authorized_keys"
   echo "Applying UCI config"
   ${SCP} ${WORK_DIR}/uci.batch root@${INIT_IP}:/tmp/uci.batch
   ${SSH} root@${INIT_IP} "cat /tmp/uci.batch | uci batch ; \
@@ -241,7 +241,7 @@ function setupRouterCommon() {
     cp -r /etc/bind /data/bind ; \
     mkdir -p /data/tftpboot/ipxe ; \
     mkdir /data/tftpboot/networkboot"
-  ${SCP} ${OKD_LAB_PATH}/boot-files/ipxe.efi root@${router_ip}:/data/tftpboot/ipxe.efi
+  ${SCP} ${OPENSHIFT_LAB_PATH}/boot-files/ipxe.efi root@${router_ip}:/data/tftpboot/ipxe.efi
   ${SCP} ${WORK_DIR}/boot.ipxe root@${router_ip}:/data/tftpboot/boot.ipxe
   ${SCP} -r ${WORK_DIR}/dns/* root@${router_ip}:/data/bind/
   ${SSH} root@${router_ip} "mkdir -p /data/var/named/dynamic ; \
@@ -388,8 +388,8 @@ echo "commit" >> ${WORK_DIR}/uci.batch
 }
 
 function getBootFile() {
-  mkdir -p ${OKD_LAB_PATH}/boot-files
-  wget http://boot.ipxe.org/ipxe.efi -O ${OKD_LAB_PATH}/boot-files/ipxe.efi
+  mkdir -p ${OPENSHIFT_LAB_PATH}/boot-files
+  wget http://boot.ipxe.org/ipxe.efi -O ${OPENSHIFT_LAB_PATH}/boot-files/ipxe.efi
 }
 
 function initMV1000Data() {

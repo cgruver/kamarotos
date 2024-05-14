@@ -111,7 +111,7 @@ sub-domain-configs:
   network: 10.11.13.0
   # domain netmask
   netmask: 255.255.255.0
-  # Name of the OpenShift cluster config file.  These files are in ${OKD_LAB_PATH}/lab-config/domain-configs
+  # Name of the OpenShift cluster config file.  These files are in ${OPENSHIFT_LAB_PATH}/lab-config/domain-configs
 - name: qa
   router-edge-ip: 10.11.12.3
   router-ip: 10.11.14.1
