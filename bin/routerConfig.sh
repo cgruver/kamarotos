@@ -137,6 +137,7 @@ cat << EOF > ${WORK_DIR}/dns/conf/db.${arpa}
 EOF
 
 cat << EOF > ${WORK_DIR}/dns/named-init
+#!/bin/sh /etc/rc.common
 USE_PROCD=1
 START=99
 

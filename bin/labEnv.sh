@@ -237,7 +237,7 @@ function setClusterEnv() {
   export DISCONNECTED_CLUSTER=$(yq e ".cluster.disconnected" ${CLUSTER_CONFIG})
   export INSTALL_METHOD=$(yq e ".cluster.install-method" ${CLUSTER_CONFIG})
   setOpenShiftRelease
-  setButaneRelease
+  setToolsRelease
   if [[ $(yq e ".bootstrap.metal" ${CLUSTER_CONFIG}) != "true" ]]
   then
     if [[ $(yq ".bootstrap | has(\"kvm-domain\")" ${CLUSTER_CONFIG}) == "true" ]]
@@ -314,18 +314,27 @@ function setOpenShiftRelease() {
   fi
 }
 
-function setButaneRelease() {
+function setToolsRelease() {
 
-  local release_set=$(yq ".cluster | has(\"butane-version\")" ${CLUSTER_CONFIG})
-  if [[ ${release_set} == "true" ]]
+  local butane_set=$(yq ".cluster | has(\"butane-version\")" ${CLUSTER_CONFIG})
+  local nmstatectl_set=$(yq ".cluster | has(\"nmstatectl-version\")" ${CLUSTER_CONFIG})
+  if [[ ${butane_set} == "true" ]]
   then
     export BUTANE_VERSION=$(yq e ".cluster.butane-version" ${CLUSTER_CONFIG})
     if [[ ! -d ${OPENSHIFT_LAB_PATH}/butane/${BUTANE_VERSION} ]]
     then
       getButane
     fi
-    rm ${OPENSHIFT_LAB_PATH}/bin/butane
     ln -sf ${OPENSHIFT_LAB_PATH}/butane/${BUTANE_VERSION}/butane ${OPENSHIFT_LAB_PATH}/bin/butane
+  fi
+  if [[ ${nmstatectl_set} == "true" ]]
+  then
+    export NMSTATECTL_VERSION=$(yq e ".cluster.nmstatectl-version" ${CLUSTER_CONFIG})
+    if [[ ! -d ${OPENSHIFT_LAB_PATH}/nmstatectl/${NMSTATECTL_VERSION} ]]
+    then
+      getNmStateCtl
+    fi
+    ln -sf ${OPENSHIFT_LAB_PATH}/nmstatectl/${NMSTATECTL_VERSION}/nmstatectl ${OPENSHIFT_LAB_PATH}/bin/nmstatectl
   fi
 }
 
@@ -404,6 +413,33 @@ function getCliCmds() {
   # fixMacArmCodeSign
 }
 
+function getNmStateCtl() {
+
+  local CONTINUE="true"
+  local SYS_ARCH=$(uname)
+  local PROC_ARCH=x64
+  local OS_TYPE=macos
+  if [[ ${SYS_ARCH} == "Darwin" ]] && [[ $(uname -m) == "arm64" ]]
+  then
+      PROC_ARCH=aarch64
+  elif [[ ${SYS_ARCH} == "Linux" ]]
+  then
+    OS_TYPE=linux
+  else
+    echo "Unsupported OS: Cannot pull openshift commands"
+    CONTINUE="false"
+  fi
+  if [[ ${CONTINUE} == "true" ]]
+  then
+    mkdir -p ${OPENSHIFT_LAB_PATH}/nmstatectl/${NMSTATECTL_VERSION}
+    wget -O ${OPENSHIFT_LAB_PATH}/nmstatectl/${NMSTATECTL_VERSION}/nmstatectl.zip https://github.com/nmstate/nmstate/releases/download/${NMSTATECTL_VERSION}/nmstatectl-${OS_TYPE}-${PROC_ARCH}.zip
+    unzip -d ${OPENSHIFT_LAB_PATH}/nmstatectl/${NMSTATECTL_VERSION} ${OPENSHIFT_LAB_PATH}/nmstatectl/${NMSTATECTL_VERSION}/nmstatectl.zip
+    rm ${OPENSHIFT_LAB_PATH}/nmstatectl/${NMSTATECTL_VERSION}/nmstatectl.zip
+    chmod 700 ${OPENSHIFT_LAB_PATH}/nmstatectl/${NMSTATECTL_VERSION}/nmstatectl
+  fi
+
+}
+
 function getButane() {
   local CONTINUE="true"
   local SYS_ARCH=$(uname)
@@ -426,6 +462,7 @@ function getButane() {
   then
     mkdir -p ${OPENSHIFT_LAB_PATH}/butane/${BUTANE_VERSION}
     wget -O ${OPENSHIFT_LAB_PATH}/butane/${BUTANE_VERSION}/butane https://github.com/coreos/butane/releases/download/${BUTANE_VERSION}/butane-${PROC_ARCH}-${BUTANE_DLD}
+    chmod 700 ${OPENSHIFT_LAB_PATH}/butane/${BUTANE_VERSION}/butane
   fi
 }
 
