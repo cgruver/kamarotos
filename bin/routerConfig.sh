@@ -22,7 +22,7 @@ EOF
 
 forwarders="forwarders { ${EDGE_ROUTER}; };"
 
-cat << EOF > ${WORK_DIR}/dns/named.conf
+cat << EOF > ${WORK_DIR}/dns/conf/named.conf
 acl "trusted" {
  ${DOMAIN_NETWORK}/${DOMAIN_CIDR};
  ${EDGE_NETWORK}/${EDGE_CIDR};
@@ -32,7 +32,7 @@ EOF
 
 else
 
-cat << EOF > ${WORK_DIR}/dns/named.conf
+cat << EOF > ${WORK_DIR}/dns/conf/named.conf
 acl "trusted" {
  ${EDGE_NETWORK}/${EDGE_CIDR};
  127.0.0.1;
@@ -41,7 +41,7 @@ EOF
 
 fi
 
-cat << EOF >> ${WORK_DIR}/dns/named.conf
+cat << EOF >> ${WORK_DIR}/dns/conf/named.conf
 options {
  listen-on port 53 { 127.0.0.1; ${router_ip}; };
  
@@ -106,7 +106,7 @@ zone "255.in-addr.arpa" {
 
 EOF
 
-cat << EOF > ${WORK_DIR}/dns/db.${net_domain}
+cat << EOF > ${WORK_DIR}/dns/conf/db.${net_domain}
 @       IN      SOA     router.${net_domain}. admin.${net_domain}. (
              3          ; Serial
              604800     ; Refresh
@@ -121,7 +121,7 @@ cat << EOF > ${WORK_DIR}/dns/db.${net_domain}
 router.${net_domain}.         IN      A      ${router_ip}
 EOF
 
-cat << EOF > ${WORK_DIR}/dns/db.${arpa}
+cat << EOF > ${WORK_DIR}/dns/conf/db.${arpa}
 @       IN      SOA     router.${net_domain}. admin.${net_domain}. (
                             3         ; Serial
                         604800         ; Refresh
@@ -134,6 +134,62 @@ cat << EOF > ${WORK_DIR}/dns/db.${arpa}
 
 ; PTR Records
 1    IN      PTR     router.${net_domain}.
+EOF
+
+cat << EOF > ${WORK_DIR}/dns/named-init
+USE_PROCD=1
+START=99
+
+config_file=/data/bind/named.conf
+config_dir=\$(dirname \$config_file)
+named_options_file=/etc/bind/named-rndc.conf
+rndc_conf_file=/etc/bind/rndc.conf
+pid_file=/var/run/named/named.pid
+rndc_temp=\$(mktemp /tmp/rndc-confgen.XXXXXX)
+
+logdir=/var/log/named/
+cachedir=/var/cache/bind
+libdir=/var/lib/bind
+dyndir=/tmp/bind
+
+conf_local_file=\$dyndir/named.conf.local
+
+
+fix_perms() {
+    for dir in \$libdir \$logdir \$cachedir \$dyndir; do
+	test -e "\$dir" || {
+            mkdir -p "\$dir"
+            chgrp bind "\$dir"
+            chmod g+w "\$dir"
+	}
+    done
+}
+
+reload_service() {
+    rndc -q reload
+}
+
+start_service() {
+    user_exists bind 57 || user_add bind 57
+    group_exists bind 57 || group_add bind 57
+    fix_perms
+
+    rndc-confgen > \$rndc_temp
+
+    sed -r -n -e '/^# options \{$/,/^\};$/{ s/^/# / }' -e p -e '/^# End of rndc\.conf$/q' < \$rndc_temp > \$rndc_conf_file
+
+    sed -r -n -e '1,/^# End of rndc\.conf$/ { b done }' -e '/^# Use with the following in named.conf/ { p ; b done }' -e '/^# End of named\.conf$/ { p ; b done }' -e '/^# key /,$ { s/^# // ; p }' -e ': done' < \$rndc_temp > \$named_options_file
+
+    rm -f \$rndc_temp
+
+    touch \$conf_local_file
+
+    procd_open_instance
+    procd_set_param command /usr/sbin/named -u bind -f -4 -c \$config_file
+    procd_set_param file \$config_file \$config_dir/bind.keys \$named_options_file \$conf_local_file \$config_dir/db.*
+    procd_set_param respawn
+    procd_close_instance
+}
 EOF
 }
 

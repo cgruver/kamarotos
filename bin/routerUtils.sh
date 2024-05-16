@@ -9,7 +9,7 @@ function configRouter() {
   wifi_channel=3
   WORK_DIR=${OPENSHIFT_LAB_PATH}/work-dir-router
   rm -rf ${WORK_DIR}
-  mkdir -p ${WORK_DIR}/dns
+  mkdir -p ${WORK_DIR}/dns/conf
   
   for i in "$@"
   do
@@ -134,6 +134,7 @@ set dropbear.@dropbear[0].RootPasswordAuth="off"
 set network.lan.ipaddr="${EDGE_ROUTER}"
 set network.lan.netmask=${EDGE_NETMASK}
 set network.lan.hostname=router.${LAB_DOMAIN}
+set gl-dns.@dns[0].mode='manual'
 commit
 EOF
 
@@ -243,13 +244,12 @@ function setupRouterCommon() {
     mkdir /data/tftpboot/networkboot"
   ${SCP} ${OPENSHIFT_LAB_PATH}/boot-files/ipxe.efi root@${router_ip}:/data/tftpboot/ipxe.efi
   ${SCP} ${WORK_DIR}/boot.ipxe root@${router_ip}:/data/tftpboot/boot.ipxe
-  ${SCP} -r ${WORK_DIR}/dns/* root@${router_ip}:/data/bind/
-  ${SSH} root@${router_ip} "mkdir -p /data/var/named/dynamic ; \
+  ${SCP} -r ${WORK_DIR}/dns/conf/* root@${router_ip}:/data/bind/
+  ${SCP} ${WORK_DIR}/dns/named-init root@${router_ip}:/etc/init.d/named
+  ${SSH} root@${router_ip} "chmod 755 /etc/init.d/named ; \
+    mkdir -p /data/var/named/dynamic ; \
     chown -R bind:bind /data/var/named ; \
     chown -R bind:bind /data/bind ; \
-    /etc/init.d/named disable ; \
-    sed -i \"s|START=50|START=99|g\" /etc/init.d/named ; \
-    sed -i \"s|config_file=/etc/bind/named.conf|config_file=/data/bind/named.conf|g\" /etc/init.d/named ; \
     /etc/init.d/named enable ; \
     uci set network.wan.dns=${router_ip} ; \
     uci set network.wan.peerdns=0 ; \
