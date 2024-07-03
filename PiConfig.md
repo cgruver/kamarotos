@@ -16,7 +16,6 @@ export SD_DEV=/dev/disk4
 ```
 
 ```bash
-sudo bash
 TEMP_DIR=$(sudo mktemp -d)
 sudo wget https://downloads.openwrt.org/releases/${OPENWRT_PATH} -O ${TEMP_DIR}/openwrt.img.gz
 sudo gunzip ${TEMP_DIR}/openwrt.img.gz

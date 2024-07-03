@@ -889,3 +889,33 @@ EOF
 ${OC} patch configs.imageregistry.operator.openshift.io cluster --type merge --patch '{"spec":{"rolloutStrategy":"Recreate","managementState":"Managed","storage":{"pvc":{"claim":"registry-pvc"}}}}'
 
 }
+
+# function deployGitOps() {
+#   ${OC} create ns openshift-gitops-operator
+#   ${OC} label namespace openshift-gitops-operator openshift.io/cluster-monitoring=true
+
+# cat << EOF | ${OC} apply -f -
+# apiVersion: operators.coreos.com/v1
+# kind: OperatorGroup
+# metadata:
+#   name: openshift-gitops-operator
+#   namespace: openshift-gitops-operator
+# spec:
+#   upgradeStrategy: Default
+# EOF
+
+# cat << EOF | ${OC} apply -f -
+# apiVersion: operators.coreos.com/v1alpha1
+# kind: Subscription
+# metadata:
+#   name: openshift-gitops-operator
+#   namespace: openshift-gitops-operator
+# spec:
+#   channel: latest 
+#   installPlanApproval: Manual
+#   name: openshift-gitops-operator 
+#   source: redhat-operators 
+#   sourceNamespace: openshift-marketplace 
+# EOF
+
+# }

@@ -207,7 +207,7 @@ function setupNginx() {
     sed -i \"s|listen 443|listen ${router_ip}:443|g\" /etc/nginx/conf.d/gl.conf ; \
     sed -i \"/listen \[::\]:80/d\" /etc/nginx/conf.d/gl.conf ; \
     sed -i \"/listen \[::\]:443/d\" /etc/nginx/conf.d/gl.conf ; \
-    echo \"include /usr/local/nginx/*.conf;\" >> /etc/nginx/nginx.conf ; \
+    echo \"stream { include /usr/local/nginx/*.conf; }\" >> /etc/nginx/nginx.conf ; \
     mkdir -p /usr/local/nginx ; \
     /etc/init.d/nginx start"
 }
