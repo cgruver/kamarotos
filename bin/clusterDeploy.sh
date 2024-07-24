@@ -205,6 +205,18 @@ function configControlPlane() {
 
 function deployCluster() {
 
+  for i in "$@"
+  do
+    case $i in
+      -i|--iso)
+        CREATE_ISO="true"
+      ;;
+      *)
+        # catch all
+      ;;
+    esac
+  done
+
   WORK_DIR=${OPENSHIFT_LAB_PATH}/${CLUSTER_NAME}.${DOMAIN}
   rm -rf ${WORK_DIR}
   mkdir -p ${WORK_DIR}/ipxe-work-dir/ignition
@@ -234,11 +246,20 @@ function deployCluster() {
   fi
   cp ${WORK_DIR}/install-config-upi.yaml ${WORK_DIR}/openshift-install-dir/install-config.yaml
   createClusterConfig
-  openshift-install --dir=${WORK_DIR}/openshift-install-dir agent create pxe-files 
+  if [[ ${CREATE_ISO} == "true" ]]
+    then
+      openshift-install --dir=${WORK_DIR}/openshift-install-dir agent create image
+    else
+      openshift-install --dir=${WORK_DIR}/openshift-install-dir agent create pxe-files 
+  fi
   configControlPlane
   cp ${WORK_DIR}/openshift-install-dir/auth/kubeconfig ${KUBE_INIT_CONFIG}
   chmod 400 ${KUBE_INIT_CONFIG}
-  prepNodeFiles
+  if [[ ${CREATE_ISO} != "true" ]]
+  then
+      prepNodeFiles
+  fi
+  prepDnsFiles
 }
 
 function deployWorkers() {
@@ -296,6 +317,7 @@ function deployWorkers() {
     node_index=$(( ${node_index} + 1 ))
   done
   prepNodeFiles
+  prepDnsFiles
 }
 
 deployHcpControlPlane() {
@@ -325,7 +347,7 @@ function deploy() {
   do
     case $i in
       -c|--cluster)
-        deployCluster
+        deployCluster "$@"
       ;;
       -w|--worker)
         deployWorkers

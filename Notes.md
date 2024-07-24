@@ -78,3 +78,93 @@ scp -O -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -oHostKeyAlgo
 scp -O -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -oHostKeyAlgorithms=+ssh-rsa -oPubkeyAcceptedAlgorithms=+ssh-rsa ${WORK_DIR}/uci.batch root@${EDGE_ROUTER}:/tmp/uci.batch
 ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -oHostKeyAlgorithms=+ssh-rsa -oPubkeyAcceptedAlgorithms=+ssh-rsa root@${EDGE_ROUTER} "cat /tmp/uci.batch | uci batch ; reboot"
 ```
+
+```bash
+cat << EOF | oc apply -f -
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: cluster-monitoring-config
+  namespace: openshift-monitoring
+data:
+  config.yaml: |
+    telemeterClient:
+      enabled: false
+EOF
+```
+
+```bash
+git clone https://github.com/qnap-dev/QNAP-CSI-PlugIn.git 
+
+cd QNAP-CSI-PlugIn
+oc apply -f Deploy/Trident/namespace.yaml 
+oc apply -f Deploy/crds/tridentorchestrator_crd.yaml 
+oc apply -f Deploy/Trident/bundle.yaml 
+oc apply -f Deploy/Trident/tridentorchestrator.yaml 
+```
+
+```bash
+cat << EOF | oc apply -f -
+apiVersion: v1
+kind: Secret
+metadata:
+  name: nas-01-iscsi-secret
+  namespace: trident
+type: Opaque
+stringData:
+  username: ${ISCSI_USER}
+  password: ${ISCSI_PWD}
+  storageAddress: ${ISCSI_IP}
+---
+apiVersion: trident.qnap.io/v1
+kind: TridentBackendConfig
+metadata:
+  name: nas-01-iscsi
+  namespace: trident
+spec:
+  version: 1
+  storageDriverName: qnap-iscsi
+  backendName: nas-01-iscsi
+  networkInterfaces: []
+  credentials:
+    name: nas-01-iscsi-secret
+  debugTraceFlags:
+    method: false
+  storage:
+    - labels:
+        storage: nas-01-iscsi
+        serviceLevel: Any
+EOF
+```
+
+```bash
+cat << EOF | oc apply -f -
+apiVersion: storage.k8s.io/v1 
+kind: StorageClass 
+metadata: 
+  name: nas-01-iscsi 
+provisioner: csi.trident.qnap.io
+parameters: 
+  selector: "storage=nas-01-iscsi" 
+allowVolumeExpansion: true
+EOF
+```
+
+```bash
+cat << EOF | oc apply -f -
+kind: PersistentVolumeClaim  
+apiVersion: v1  
+metadata:  
+  name: pvc-nas-test
+  namespace: trident
+  annotations:  
+    trident.qnap.io/ThinAllocate: "true"  
+spec:  
+  accessModes:  
+    - ReadWriteOnce  
+  resources:  
+    requests:  
+      storage: 5Gi  
+  storageClassName: nas-01-iscsi 
+EOF
+```

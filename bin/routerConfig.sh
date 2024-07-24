@@ -192,6 +192,21 @@ start_service() {
     procd_close_instance
 }
 EOF
+
+if [[ $(yq ". | has(\"infra-net-config\")" ${LAB_CONFIG_FILE}) == "true" ]]
+then
+  let host_count=$(yq e ".infra-net-config" ${LAB_CONFIG_FILE} | yq e 'length' -)
+  let host_index=0
+  while [[ host_index -lt ${host_count} ]]
+  do
+    host_name=$(yq e ".infra-net-config.[${host_index}].name" ${LAB_CONFIG_FILE})
+    host_ip=$(yq e ".infra-net-config.[${host_index}].ip-addr" ${LAB_CONFIG_FILE})
+    echo "${host_name}.${net_domain}.         IN      A      ${host_ip}" >> ${WORK_DIR}/dns/conf/db.${net_domain}
+    o4=$(echo ${host_ip} | cut -d"." -f4)
+    echo "${o4}    IN      PTR     ${host_name}.${net_domain}." >> ${WORK_DIR}/dns/conf/db.${arpa}
+    host_index=$(( ${host_index} + 1 ))
+  done
+fi
 }
 
 function createDhcpConfig() {

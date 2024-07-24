@@ -135,6 +135,12 @@ do
     --hostpath)
       deploySnoHostPath
     ;;
+    --devspaces)
+      devSpaces "$@"
+    ;;
+    --qnap)
+      qnap "$@"
+    ;;
     *)
       #  echo "unknown option ${i}"
       #  usage "header"

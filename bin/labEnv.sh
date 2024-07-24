@@ -285,16 +285,6 @@ function setEdgeEnv() {
   fi
 }
 
-function fixMacArmCodeSign() {
-
-  if [[ $(uname) == "Darwin" ]] && [[ $(uname -m) == "arm64" ]]
-  then
-    echo "Applying workaround for corrupt signiture on OpenShift CLI binaries"
-    codesign --force -s - ${OPENSHIFT_LAB_PATH}/openshift-cmds/${OPENSHIFT_RELEASE}/oc
-    codesign --force -s - ${OPENSHIFT_LAB_PATH}/openshift-cmds/${OPENSHIFT_RELEASE}/openshift-install
-  fi
-}
-
 function setOpenShiftRelease() {
   
   local release_set=$(yq ".cluster | has(\"release\")" ${CLUSTER_CONFIG})
@@ -361,13 +351,13 @@ function getInitCli() {
   fi
   if [[ ${CONTINUE} == "true" ]]
   then
+    echo "Installing an ititial OpenShift CLI"
     WORK_DIR=$(mktemp -d)
     mkdir -p ${OPENSHIFT_LAB_PATH}/openshift-cmds/init
     wget -O ${WORK_DIR}/oc.tar.gz https://github.com/okd-project/okd/releases/download/${OKD_RELEASE}/openshift-client-${OS_VER}-${OKD_RELEASE}.tar.gz
     tar -xzf ${WORK_DIR}/oc.tar.gz -C ${OPENSHIFT_LAB_PATH}/openshift-cmds/init
     chmod 700 ${OPENSHIFT_LAB_PATH}/openshift-cmds/init/*
     rm -rf ${WORK_DIR}
-    # fixMacArmCodeSign
   fi
 }
 
@@ -382,26 +372,11 @@ function getCliCmds() {
   local tools_uri="$(yq e ".cluster.tools-uri" ${CLUSTER_CONFIG}):${OPENSHIFT_RELEASE}"
   local registry_config=""
 
-  # case ${release_type} in
-  #   okd)
-  #     tools_uri=registry.ci.openshift.org/origin/release:${OPENSHIFT_RELEASE}
-  #   ;;
-  #   okd-scos)
-  #     tools_uri=quay.io/okd/scos-release:${OPENSHIFT_RELEASE}
-  #   ;;
-  #   ocp)
-  #     tools_uri=quay.io/openshift-release-dev/ocp-release:${OPENSHIFT_RELEASE}
-  #     registry_config="--registry-config=${OPENSHIFT_LAB_PATH}/ocp-pull-secret"
-  #   ;;
-  #   ocp-nightly)
-  #     tools_uri=quay.io/openshift-release-dev/ocp-release:${OPENSHIFT_RELEASE}
-  #     registry_config="--registry-config=${OPENSHIFT_LAB_PATH}/ocp-pull-secret"
-  #   ;;
-  # esac
   if [[ ${release_type} == "ocp" ]]
   then
     registry_config="--registry-config=${OPENSHIFT_LAB_PATH}/lab-config/ocp-pull-secret"
   fi
+  echo "Installing OpenShift CLI commands: ${OPENSHIFT_RELEASE}"
   mkdir -p ${OPENSHIFT_LAB_PATH}/openshift-cmds/${OPENSHIFT_RELEASE}
   WORK_DIR=$(mktemp -d)
   ${OC_INIT} adm release extract ${registry_config} --to="${WORK_DIR}" --tools ${tools_uri}
@@ -410,7 +385,6 @@ function getCliCmds() {
     tar -xzf ${i} -C ${OPENSHIFT_LAB_PATH}/openshift-cmds/${OPENSHIFT_RELEASE}
   done
   rm -rf ${WORK_DIR}
-  # fixMacArmCodeSign
 }
 
 function getNmStateCtl() {
@@ -431,6 +405,7 @@ function getNmStateCtl() {
   fi
   if [[ ${CONTINUE} == "true" ]]
   then
+    echo "Installing Nmstatectl: ${NMSTATECTL_VERSION}"
     mkdir -p ${OPENSHIFT_LAB_PATH}/nmstatectl/${NMSTATECTL_VERSION}
     wget -O ${OPENSHIFT_LAB_PATH}/nmstatectl/${NMSTATECTL_VERSION}/nmstatectl.zip https://github.com/nmstate/nmstate/releases/download/${NMSTATECTL_VERSION}/nmstatectl-${OS_TYPE}-${PROC_ARCH}.zip
     unzip -d ${OPENSHIFT_LAB_PATH}/nmstatectl/${NMSTATECTL_VERSION} ${OPENSHIFT_LAB_PATH}/nmstatectl/${NMSTATECTL_VERSION}/nmstatectl.zip
@@ -460,6 +435,7 @@ function getButane() {
   fi
   if [[ ${CONTINUE} == "true" ]]
   then
+    echo "Installing Butane: ${BUTANE_VERSION}"
     mkdir -p ${OPENSHIFT_LAB_PATH}/butane/${BUTANE_VERSION}
     wget -O ${OPENSHIFT_LAB_PATH}/butane/${BUTANE_VERSION}/butane https://github.com/coreos/butane/releases/download/${BUTANE_VERSION}/butane-${PROC_ARCH}-${BUTANE_DLD}
     chmod 700 ${OPENSHIFT_LAB_PATH}/butane/${BUTANE_VERSION}/butane
