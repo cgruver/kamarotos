@@ -37,7 +37,7 @@ function stopWorkers() {
   let node_count=$(yq e ".compute-nodes" ${CLUSTER_CONFIG} | yq e 'length' -)
 
   # Cordon Compute Nodes
-  cordonNode
+  ${OC} adm cordon -l node-role.kubernetes.io/worker=""
 
   CEPH_PDB="false"
   let node_index=0
@@ -86,28 +86,11 @@ function deleteWorker() {
   deletePxeConfig ${mac_addr}
 }
 
-function cordonNode() {
-  
-  let node_count=$(yq e ".compute-nodes" ${CLUSTER_CONFIG} | yq e 'length' -)
-  let node_index=0
-  while [[ node_index -lt ${node_count} ]]
-  do
-    host_name=$(yq e ".compute-nodes.[${node_index}].name" ${CLUSTER_CONFIG})
-    ${OC} adm cordon ${host_name}
-    node_index=$(( ${node_index} + 1 ))
-  done
-}
-
 function unCordonNode() {
+
+  ${OC} adm uncordon -l node-role.kubernetes.io/master=""
+  ${OC} adm uncordon -l node-role.kubernetes.io/worker=""
   
-  let node_count=$(yq e ".compute-nodes" ${CLUSTER_CONFIG} | yq e 'length' -)
-  let node_index=0
-  while [[ node_index -lt ${node_count} ]]
-  do
-    host_name=$(yq e ".compute-nodes.[${node_index}].name" ${CLUSTER_CONFIG})
-    ${OC} adm uncordon ${host_name}
-    node_index=$(( ${node_index} + 1 ))
-  done
   CEPH_PDB="false"
   let node_index=0
   while [[ node_index -lt ${node_count} ]]
@@ -353,6 +336,14 @@ function ocConsole() {
       open -a Safari https://console-openshift-console.apps.${CLUSTER_NAME}.${DOMAIN}
       DOMAIN_INDEX=$(( ${DOMAIN_INDEX} + 1 ))
     done
+    EDGE_CLUSTER_COUNT=$(yq e ".cluster-configs" ${LAB_CONFIG_FILE} | yq e 'length' -)
+    let EDGE_CLUSTER_INDEX=0
+    while [[ ${EDGE_CLUSTER_INDEX} -lt ${EDGE_CLUSTER_COUNT} ]]
+    do
+      labctx $(yq e ".cluster-configs.[${EDGE_CLUSTER_INDEX}].name" ${LAB_CONFIG_FILE})
+      open -a Safari https://console-openshift-console.apps.${CLUSTER_NAME}.${DOMAIN}
+      EDGE_CLUSTER_INDEX=$(( ${EDGE_CLUSTER_INDEX} + 1 ))
+    done
   else
     open -a Safari https://console-openshift-console.apps.${CLUSTER_NAME}.${DOMAIN}
   fi
@@ -547,6 +538,8 @@ function startControlPlane() {
 }
 
 function stopControlPlane() {
+
+  ${OC} adm cordon -l node-role.kubernetes.io/master=""
   let node_count=$(yq e ".control-plane.nodes" ${CLUSTER_CONFIG} | yq e 'length' -)
   let node_index=0
   while [[ ${node_index} -lt ${node_count} ]]
@@ -834,12 +827,47 @@ function getNodes() {
 
 }
 
+function deployCertManagerOperator() {
+
+cat << EOF | ${OC} apply -f -
+apiVersion: v1                      
+kind: Namespace                 
+metadata:
+  name: cert-manager-operator
+---
+apiVersion: operators.coreos.com/v1
+kind: OperatorGroup
+metadata:
+  name: openshift-cert-manager-operator
+  namespace: cert-manager-operator
+spec:
+  targetNamespaces:
+  - cert-manager-operator
+---
+apiVersion: operators.coreos.com/v1alpha1
+kind: Subscription
+metadata:
+  name: openshift-cert-manager-operator
+  namespace: cert-manager-operator
+spec:
+  channel: stable-v1
+  name: openshift-cert-manager-operator
+  source: redhat-operators
+  sourceNamespace: openshift-marketplace
+  installPlanApproval: Automatic
+EOF
+
+}
+
 function deploySnoHostPath() {
 
-local CERT_MGR_VER=$(basename $(curl -Ls -o /dev/null -w %{url_effective} https://github.com/cert-manager/cert-manager/releases/latest))
+# deployCertManagerOperator
+
+# pause 5 "Wait for Cert Manager"
+
 local HPP_VER=$(basename $(curl -Ls -o /dev/null -w %{url_effective} https://github.com/kubevirt/hostpath-provisioner-operator/releases/latest))
 
-${OC} create -f https://github.com/cert-manager/cert-manager/releases/download/${CERT_MGR_VER}/cert-manager.yaml
+${OC} wait --for=condition=Available -n cert-manager-operator --timeout=300s --all deployments
 ${OC} wait --for=condition=Available -n cert-manager --timeout=300s --all deployments
 ${OC} create -f https://github.com/kubevirt/hostpath-provisioner-operator/releases/download/${HPP_VER}/namespace.yaml
 ${OC} create -f https://github.com/kubevirt/hostpath-provisioner-operator/releases/download/${HPP_VER}/webhook.yaml -n hostpath-provisioner

@@ -168,3 +168,100 @@ spec:
   storageClassName: nas-01-iscsi 
 EOF
 ```
+
+## Install Nexus on Dev Tools Host
+
+```bash
+dnf install -y java-17-openjdk.x86_64
+mkdir -p /usr/local/nexus/home
+cd /usr/local/nexus
+wget https://download.sonatype.com/nexus/3/latest-unix.tar.gz -O latest-unix.tar.gz
+groupadd nexus
+useradd -g nexus -d /usr/local/nexus/home nexus
+chown -R nexus:nexus /usr/local/nexus
+keytool -genkeypair -keystore /usr/local/nexus/nexus-3/etc/ssl/keystore.jks -deststoretype pkcs12 -storepass password -keypass password -alias jetty -keyalg RSA -keysize 4096 -validity 5000 -dname "CN=nexus.clg.lab, OU=clg-lab, O=clg-lab, L=City, ST=State, C=US" -ext "SAN=DNS:nexus.clg.lab,IP:10.11.12.20" -ext "BC=ca:true"
+
+cat /usr/local/nexus/sonatype-work/nexus3/admin.password
+```
+
+## Trust Nexus in OCP
+
+```bash
+NEXUS_CERT=$(openssl s_client -showcerts -connect nexus.${LAB_DOMAIN}:8443 </dev/null 2>/dev/null|openssl x509 -outform PEM | while read line; do echo "    $line"; done)
+```
+
+```bash
+cat << EOF | oc apply -n openshift-config -f -
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: lab-ca
+data:
+  ca-bundle.crt: |
+    # Nexus Cert
+${NEXUS_CERT}
+
+EOF
+```
+
+```bash
+oc patch proxy cluster --type=merge --patch '{"spec":{"trustedCA":{"name":"lab-ca"}}}'
+```
+
+```bash
+NEXUS_CERT=$(openssl s_client -showcerts -connect nexus.${LAB_DOMAIN}:8443 </dev/null 2>/dev/null|openssl x509 -outform PEM | base64)
+```
+
+```bash
+cat << EOF | oc apply -f -
+apiVersion: machineconfiguration.openshift.io/v1
+kind: MachineConfig
+metadata:
+  labels:
+    machineconfiguration.openshift.io/role: worker
+  name: 50-developer-ca-certs-worker
+spec:
+  config:
+    ignition:
+      version: 3.2.0
+    storage:
+      files:
+      - contents:
+          source: data:text/plain;charset=utf-8;base64,${GITEA_CERT}
+        filesystem: root
+        mode: 0644
+        path: /etc/pki/ca-trust/source/anchors/gitea-ca.crt
+      - contents:
+          source: data:text/plain;charset=utf-8;base64,${NEXUS_CERT}
+        filesystem: root
+        mode: 0644
+        path: /etc/pki/ca-trust/source/anchors/nexus-ca.crt
+EOF
+```
+
+```bash
+cat << EOF | oc apply -f -
+apiVersion: machineconfiguration.openshift.io/v1
+kind: MachineConfig
+metadata:
+  labels:
+    machineconfiguration.openshift.io/role: master
+  name: 50-developer-ca-certs-master
+spec:
+  config:
+    ignition:
+      version: 3.2.0
+    storage:
+      files:
+      - contents:
+          source: data:text/plain;charset=utf-8;base64,${GITEA_CERT}
+        filesystem: root
+        mode: 0644
+        path: /etc/pki/ca-trust/source/anchors/gitea-ca.crt
+      - contents:
+          source: data:text/plain;charset=utf-8;base64,${NEXUS_CERT}
+        filesystem: root
+        mode: 0644
+        path: /etc/pki/ca-trust/source/anchors/nexus-ca.crt
+EOF
+```

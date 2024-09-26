@@ -132,6 +132,9 @@ do
     --kvm-pwd)
       createHostPwd
     ;;
+    --certmgr)
+      deployCertManagerOperator
+    ;;
     --hostpath)
       deploySnoHostPath
     ;;

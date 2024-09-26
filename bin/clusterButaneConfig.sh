@@ -166,7 +166,7 @@ function createClusterCephMC() {
 local mc_version="$(getMcVersion)"
 local boot_dev=$(yq e ".control-plane.boot-dev" ${CLUSTER_CONFIG})
 
-cat << EOF | butane > ${WORK_DIR}/98-cluster-config.yaml
+cat << EOF | butane > ${WORK_DIR}/98-cluster-ceph-config.yaml
 variant: openshift
 version: ${mc_version}
 metadata:
@@ -177,9 +177,9 @@ storage:
   disks:
   - device: ${boot_dev} 
     partitions:
-    - label: ceph
-      start_mib: 102400 
+    - start_mib: 102400 
       size_mib: 0
+      number: 5
 EOF
 cp ${WORK_DIR}/98-cluster-ceph-config.yaml ${WORK_DIR}/openshift-install-dir/openshift/98-cluster-ceph-config.yaml
 }
@@ -187,7 +187,6 @@ cp ${WORK_DIR}/98-cluster-ceph-config.yaml ${WORK_DIR}/openshift-install-dir/ope
 function createHostPathMC() {
 
   local hostpath_dev=$(yq e ".control-plane.hostpath-dev" ${CLUSTER_CONFIG})
-  local systemd_svc_name=$(echo ${hostpath_dev//\//-} | cut -d"-" -f2-)
   local mc_version="$(getMcVersion)"
 
 cat << EOF | butane > ${WORK_DIR}/98-hostpath-config.yaml
@@ -196,45 +195,19 @@ version: ${mc_version}
 metadata:
   labels:
     machineconfiguration.openshift.io/role: master
-  name: 98-hostpath-config
-systemd:
-  units:
-  - contents: |
-      [Unit]
-      Description=Make File System on ${hostpath_dev}
-      DefaultDependencies=no
-      BindsTo=${systemd_svc_name}.device
-      After=${systemd_svc_name}.device var.mount
-      Before=systemd-fsck@${systemd_svc_name}.service
-
-      [Service]
-      Type=oneshot
-      RemainAfterExit=yes
-      ExecStart=/usr/lib/systemd/systemd-makefs ext4 ${hostpath_dev}
-      TimeoutSec=0
-
-      [Install]
-      WantedBy=hostpath.mount
-    enabled: true
-    name: systemd-mkfs@${systemd_svc_name}.service
-  - contents: |
-      [Unit]
-      Description=Mount ${hostpath_dev} to /var/hostpath
-      Before=local-fs.target
-      Requires=systemd-mkfs@${systemd_svc_name}.service
-      After=systemd-mkfs@${systemd_svc_name}.service
-
-      [Mount]
-      What=${hostpath_dev}
-      Where=/var/hostpath
-      Type=ext4
-      Options=defaults
-
-      [Install]
-      WantedBy=local-fs.target
-    enabled: true
-    name: var-hostpath.mount
+  name: 98-cluster-ceph-config
+storage:
+  disks:
+  - device: ${hostpath_dev}
+    wipe_table: true
+  filesystems:
+  - device: ${hostpath_dev}
+    path: /var/hostpath
+    format: ext4
+    wipe_filesystem: true
+    with_mount_unit: true
 EOF
+
 cp ${WORK_DIR}/98-hostpath-config.yaml ${WORK_DIR}/openshift-install-dir/openshift/98-hostpath-config.yaml
 }
 
