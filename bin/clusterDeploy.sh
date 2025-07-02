@@ -129,21 +129,9 @@ function createLbConfig() {
     /etc/init.d/network reload ; \
     sleep 10"
 
-  checkRouterModel ${lb_ip}
-  if [[ ${GL_MODEL} == "GL-AXT1800" ]]
-  then
-    configNginx ${lb_ip}
-    ${SCP} ${WORK_DIR}/nginx-${CLUSTER_NAME}.conf root@${DOMAIN_ROUTER}:/usr/local/nginx/nginx-${CLUSTER_NAME}.conf
-    ${SSH} root@${DOMAIN_ROUTER} "/etc/init.d/nginx restart"
-  else
-    configHaProxy ${lb_ip}
-    ${SCP} ${WORK_DIR}/haproxy-${CLUSTER_NAME}.cfg root@${DOMAIN_ROUTER}:/etc/haproxy-${CLUSTER_NAME}.cfg
-    ${SCP} ${WORK_DIR}/haproxy-${CLUSTER_NAME}.init root@${DOMAIN_ROUTER}:/etc/init.d/haproxy-${CLUSTER_NAME}
-    ${SSH} root@${DOMAIN_ROUTER} "chmod 644 /etc/haproxy-${CLUSTER_NAME}.cfg ; \
-      chmod 750 /etc/init.d/haproxy-${CLUSTER_NAME} ; \
-      /etc/init.d/haproxy-${CLUSTER_NAME} enable ; \
-      /etc/init.d/haproxy-${CLUSTER_NAME} start"
-  fi
+  configNginx ${lb_ip}
+  ${SCP} ${WORK_DIR}/nginx-${CLUSTER_NAME}.conf root@${DOMAIN_ROUTER}:/usr/local/nginx/nginx-${CLUSTER_NAME}.conf
+  ${SSH} root@${DOMAIN_ROUTER} "/etc/init.d/nginx restart"
 }
 
 function configControlPlane() {

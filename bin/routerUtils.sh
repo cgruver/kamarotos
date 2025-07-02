@@ -37,6 +37,7 @@ function configRouter() {
       ;;
       -n|--nano)
         NANO_PI="true"
+        INIT_IP=192.168.1.1
       ;;
       *)
         # catch all
@@ -77,17 +78,6 @@ function configRouter() {
   fi
 }
 
-function checkRouterModel() {
-  local router_ip=${1}
-  GL_MODEL=$(${SSH} root@${router_ip} "uci get system.@system[0].hostname" )
-  echo "Detected Router Model: ${GL_MODEL}"
-  if [[ ${GL_MODEL} != "GL-AR750S"  ]] && [[ ${GL_MODEL} != "GL-MV1000"  ]] && [[ ${GL_MODEL} != "GL-AXT1800"  ]]
-  then
-    echo "Unsupported Router Model Detected.  These scripts only support configuration of GL-iNet AR-750S, GL-AXT1800, or MV1000 routers."
-    exit 1
-  fi
-}
-
 function initRouter() {
   if [[ ${EDGE} == "true" ]]
   then
@@ -98,7 +88,7 @@ function initRouter() {
       uci set firewall.\${FW}.src=wan ; \
       uci set firewall.\${FW}.dest=lan ; \
       uci commit firewall"
-    ${SSH} root@${EDGE_ROUTER} "unset ROUTE ; \
+    ${SSH} root@${EDGE_ROUTER_LAN} "unset ROUTE ; \
       ROUTE=\$(uci add network route) ; \
       uci set network.\${ROUTE}.interface=lan ; \
       uci set network.\${ROUTE}.target=${DOMAIN_NETWORK} ; \
@@ -107,14 +97,14 @@ function initRouter() {
       uci commit network ; \
       /etc/init.d/network restart"
     pause 30 "Give the Router network time to restart"
-    ${SSH} root@${EDGE_ROUTER} "/etc/init.d/named stop && /etc/init.d/named start"
+    ${SSH} root@${EDGE_ROUTER_LAN} "/etc/init.d/named stop && /etc/init.d/named start"
   fi
   if [[ ${GL_MODEL} != "GL-MV1000"  ]]
   then
     ${SSH} root@${INIT_IP} "rm /etc/hotplug.d/block/11-mount"
   fi
   echo "Generating SSH keys"
-  ${SSH} root@${INIT_IP} "rm -rf /root/.ssh ; rm -rf /data/* ; mkdir -p /root/.ssh ; dropbearkey -t rsa -s 4096 -f /root/.ssh/id_dropbear"
+  ${SSH} root@${INIT_IP} "rm -rf /root/.ssh ; rm -rf /usr/local/* ; mkdir -p /root/.ssh ; dropbearkey -t rsa -s 4096 -f /root/.ssh/id_dropbear"
   echo "Copying workstation SSH key to router"
   cat ${OPENSHIFT_LAB_PATH}/ssh_key.pub | ${SSH} root@${INIT_IP} "cat >> /etc/dropbear/authorized_keys"
   echo "Applying UCI config"
@@ -131,7 +121,7 @@ function initAxtRouter() {
 cat << EOF > ${WORK_DIR}/uci.batch
 set dropbear.@dropbear[0].PasswordAuth="off"
 set dropbear.@dropbear[0].RootPasswordAuth="off"
-set network.lan.ipaddr="${EDGE_ROUTER}"
+set network.lan.ipaddr="${EDGE_ROUTER_LAN}"
 set network.lan.netmask=${EDGE_NETMASK}
 set network.lan.hostname=router.${LAB_DOMAIN}
 set gl-dns.@dns[0].mode='manual'
@@ -159,18 +149,16 @@ function setupRouter() {
 
   if [[ ${EDGE} == "true" ]]
   then
-    checkRouterModel ${EDGE_ROUTER}
-    createDhcpConfig ${EDGE_ROUTER} ${LAB_DOMAIN}
-    createIpxeHostConfig ${EDGE_ROUTER}
-    createRouterDnsConfig  ${EDGE_ROUTER} ${LAB_DOMAIN} ${EDGE_ARPA} "edge"
-    setupRouterCommon ${EDGE_ROUTER}
+    createDhcpConfig ${EDGE_ROUTER_LAN} ${LAB_DOMAIN}
+    createIpxeHostConfig ${EDGE_ROUTER_LAN}
+    createRouterDnsConfig  ${EDGE_ROUTER_LAN} ${LAB_DOMAIN} ${EDGE_ARPA} "edge"
+    setupRouterCommon ${EDGE_ROUTER_LAN}
   else
-    checkRouterModel ${DOMAIN_ROUTER}
     createDhcpConfig ${DOMAIN_ROUTER} ${DOMAIN}
     createIpxeHostConfig ${DOMAIN_ROUTER}
     createRouterDnsConfig  ${DOMAIN_ROUTER} ${DOMAIN} ${DOMAIN_ARPA} "domain"
-    ${SSH} root@${EDGE_ROUTER} "/etc/init.d/named stop && /etc/init.d/named start"
-    cat ${WORK_DIR}/edge-zone | ${SSH} root@${EDGE_ROUTER} "cat >> /data/bind/named.conf"
+    ${SSH} root@${EDGE_ROUTER_LAN} "/etc/init.d/named stop && /etc/init.d/named start"
+    cat ${WORK_DIR}/edge-zone | ${SSH} root@${EDGE_ROUTER_LAN} "cat >> /usr/local/bind/named.conf"
     setupRouterCommon ${DOMAIN_ROUTER}
   fi
 }
@@ -190,9 +178,9 @@ function setupHaProxy() {
   fi
   ${SSH} root@${router_ip} "mv /etc/haproxy.cfg /etc/haproxy.cfg.orig ; \
     groupadd haproxy ; \
-    useradd -g haproxy -d /data/haproxy -G haproxy haproxy -M -s /bin/false ; \
-    mkdir -p /data/haproxy ; \
-    chown -R haproxy:haproxy /data/haproxy ; \
+    useradd -g haproxy -d /usr/local/haproxy -G haproxy haproxy -M -s /bin/false ; \
+    mkdir -p /usr/local/haproxy ; \
+    chown -R haproxy:haproxy /usr/local/haproxy ; \
     rm -f /etc/init.d/haproxy"
 }
 
@@ -238,18 +226,18 @@ function setupRouterCommon() {
   else
     setupHaProxy ${router_ip}
   fi
-  ${SSH} root@${router_ip} "mkdir -p /data/var/named/data ; \
-    cp -r /etc/bind /data/bind ; \
-    mkdir -p /data/tftpboot/ipxe ; \
-    mkdir /data/tftpboot/networkboot"
-  ${SCP} ${OPENSHIFT_LAB_PATH}/boot-files/ipxe.efi root@${router_ip}:/data/tftpboot/ipxe.efi
-  ${SCP} ${WORK_DIR}/boot.ipxe root@${router_ip}:/data/tftpboot/boot.ipxe
-  ${SCP} -r ${WORK_DIR}/dns/conf/* root@${router_ip}:/data/bind/
+  ${SSH} root@${router_ip} "mkdir -p /usr/local/var/named/data ; \
+    cp -r /etc/bind /usr/local/bind ; \
+    mkdir -p /usr/local/tftpboot/ipxe ; \
+    mkdir /usr/local/tftpboot/networkboot"
+  ${SCP} ${OPENSHIFT_LAB_PATH}/boot-files/ipxe.efi root@${router_ip}:/usr/local/tftpboot/ipxe.efi
+  ${SCP} ${WORK_DIR}/boot.ipxe root@${router_ip}:/usr/local/tftpboot/boot.ipxe
+  ${SCP} -r ${WORK_DIR}/dns/conf/* root@${router_ip}:/usr/local/bind/
   ${SCP} ${WORK_DIR}/dns/named-init root@${router_ip}:/etc/init.d/named
   ${SSH} root@${router_ip} "chmod 755 /etc/init.d/named ; \
-    mkdir -p /data/var/named/dynamic ; \
-    chown -R bind:bind /data/var/named ; \
-    chown -R bind:bind /data/bind ; \
+    mkdir -p /usr/local/var/named/dynamic ; \
+    chown -R bind:bind /usr/local/var/named ; \
+    chown -R bind:bind /usr/local/bind ; \
     /etc/init.d/named enable ; \
     uci set network.wan.dns=${router_ip} ; \
     uci set network.wan.peerdns=0 ; \
@@ -264,7 +252,7 @@ function setupRouterCommon() {
   ${SSH} root@${router_ip} "cat /tmp/uci.batch | uci batch ; reboot"
   if [[ ${EDGE} == "false" ]]
   then
-    ${SSH} root@${EDGE_ROUTER} "/etc/init.d/named stop && /etc/init.d/named start"
+    ${SSH} root@${EDGE_ROUTER_LAN} "/etc/init.d/named stop && /etc/init.d/named start"
   fi
 }
 
@@ -273,7 +261,7 @@ function initEdge() {
 cat << EOF > ${WORK_DIR}/uci.batch
 set dropbear.@dropbear[0].PasswordAuth="off"
 set dropbear.@dropbear[0].RootPasswordAuth="off"
-set network.lan.ipaddr="${EDGE_ROUTER}"
+set network.lan.ipaddr="${EDGE_ROUTER_LAN}"
 set network.lan.netmask=${EDGE_NETMASK}
 set network.lan.hostname=router.${LAB_DOMAIN}
 delete network.wan6
@@ -348,9 +336,9 @@ set dropbear.@dropbear[0].RootPasswordAuth='off'
 set network.wan.proto=static
 set network.wan.ipaddr=${DOMAIN_ROUTER_EDGE}
 set network.wan.netmask=${EDGE_NETMASK}
-set network.wan.gateway=${EDGE_ROUTER}
+set network.wan.gateway=${EDGE_ROUTER_LAN}
 set network.wan.hostname=router.${DOMAIN}
-set network.wan.dns=${EDGE_ROUTER}
+set network.wan.dns=${EDGE_ROUTER_LAN}
 set network.lan.ipaddr=${DOMAIN_ROUTER}
 set network.lan.netmask=${DOMAIN_NETMASK}
 set network.lan.hostname=router.${DOMAIN}
@@ -390,17 +378,6 @@ echo "commit" >> ${WORK_DIR}/uci.batch
 function getBootFile() {
   mkdir -p ${OPENSHIFT_LAB_PATH}/boot-files
   wget http://boot.ipxe.org/ipxe.efi -O ${OPENSHIFT_LAB_PATH}/boot-files/ipxe.efi
-}
-
-function initMV1000Data() {
-  if [[ ${format} == "true" ]]
-  then
-    rm -rf /data/*
-  fi
-  ${SSH} root@${router_ip} "ln -sf /data /usr/local  ; \
-    mkdir -p /usr/local/www/install ; \
-    ln -sf /usr/local/www/install /www/install ; \
-    mkdir -p /root/bin"
 }
 
 function initMicroSD() {
@@ -457,4 +434,74 @@ function initMicroSD() {
     ln -s /usr/local /data ; \
     ln -s /usr/local/www/install /www/install ; \
     mkdir -p /root/bin"
+}
+
+function backupRouter() {
+  ${SSH} root@${${DOMAIN_ROUTER}} "tar -cvf /usr/local/router_backup.tar /usr/local/bind /usr/local/nginx ; gzip /usr/local/reouter_backup.tar"
+  ${SCP} root@${${DOMAIN_ROUTER}}:/usr/local/router_backup.tar ${OPENSHIFT_LAB_PATH}/router_backup.tar
+  ${SSH} root@${${DOMAIN_ROUTER}} "rm /usr/local/router_backup.tar"
+}
+
+function restoreRouter() {
+  ${SCP} ${OPENSHIFT_LAB_PATH}/router_backup.tar root@${${DOMAIN_ROUTER}}:/usr/local/router_backup.tar
+  ${SSH} root@${${DOMAIN_ROUTER}} "tar -xvf /usr/local/router_backup.tar ; rm /usr/local/router_backup.tar"
+}
+
+function configNginx() {
+
+  local lb_ip=${1}
+  local cp_0=$(yq e ".control-plane.nodes.[0].ip-addr" ${CLUSTER_CONFIG})
+  local cp_1=$(yq e ".control-plane.nodes.[1].ip-addr" ${CLUSTER_CONFIG})
+  local cp_2=$(yq e ".control-plane.nodes.[2].ip-addr" ${CLUSTER_CONFIG})
+  local bs_api=""
+  local bs_mc=""
+  local bs=""
+
+  if [[ ${AGENT} == "false" ]]
+  then
+    bs=$(yq e ".bootstrap.ip-addr" ${CLUSTER_CONFIG})
+    bs_api="server ${bs}:6443 max_fails=3 fail_timeout=1s;  # bootstrap"
+    bs_mc="server ${bs}:22623 max_fails=3 fail_timeout=1s; # bootstrap"
+  fi
+
+cat << EOF > ${WORK_DIR}/nginx-${CLUSTER_NAME}.conf
+upstream openshift4-api-${CLUSTER_NAME} {
+    server ${cp_0}:6443 max_fails=3 fail_timeout=1s;
+    server ${cp_1}:6443 max_fails=3 fail_timeout=1s;
+    server ${cp_2}:6443 max_fails=3 fail_timeout=1s;
+    ${bs_api}
+}
+upstream openshift4-mc-${CLUSTER_NAME} {
+    server ${cp_0}:22623 max_fails=3 fail_timeout=1s;
+    server ${cp_1}:22623 max_fails=3 fail_timeout=1s;
+    server ${cp_2}:22623 max_fails=3 fail_timeout=1s;
+    ${bs_mc}
+}
+upstream openshift4-https-${CLUSTER_NAME} {
+    server ${cp_0}:443 max_fails=3 fail_timeout=1s;
+    server ${cp_1}:443 max_fails=3 fail_timeout=1s;
+    server ${cp_2}:443 max_fails=3 fail_timeout=1s;
+}
+upstream openshift4-http-${CLUSTER_NAME} {
+    server ${cp_0}:80 max_fails=3 fail_timeout=1s;
+    server ${cp_1}:80 max_fails=3 fail_timeout=1s;
+    server ${cp_2}:80 max_fails=3 fail_timeout=1s;
+}
+server {
+    listen ${lb_ip}:6443;
+    proxy_pass openshift4-api-${CLUSTER_NAME};
+}
+server {
+    listen ${lb_ip}:22623;
+    proxy_pass openshift4-mc-${CLUSTER_NAME};
+}
+server {
+    listen ${lb_ip}:443;
+    proxy_pass openshift4-https-${CLUSTER_NAME};
+}
+server {
+    listen ${lb_ip}:80;
+    proxy_pass openshift4-http-${CLUSTER_NAME};
+}
+EOF
 }

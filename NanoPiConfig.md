@@ -1,12 +1,28 @@
-
+```bash
+cat ${OPENSHIFT_LAB_PATH}/ssh_key.pub | ssh root@192.168.1.1 "cat >> /etc/dropbear/authorized_keys"
+```
 
 ## Format Disk
 
 ```bash
+
+### Copy OS from microSD onto emmc
+
+ssh root@192.168.1.1
+
+dd if=/dev/mmcblk0p1 of=/dev/mmcblk1p1 bs=512
+dd if=/dev/mmcblk0p2 of=/dev/mmcblk1p2 bs=512
+poweroff
+
+## Install Packages
+
 ssh root@192.168.1.1
 
 opkg update
-opkg install lsblk sfdisk losetup resize2fs
+opkg install ip-full procps-ng-ps bind-server bind-tools bash wget rsync block-mount wipefs coreutils-nohup etherwake nginx-full sfdisk losetup resize2fs
+
+### Resize emmc to full capacity
+
 SD_DEV=mmcblk1
 SD_PART=mmcblk1p
 
@@ -18,41 +34,35 @@ echo "/dev/${SD_PART}2 : start= ${P2_START}, type=83" >> /tmp/part.info
 sfdisk --no-reread -f /dev/${SD_DEV} < /tmp/part.info
 rm /tmp/part.info
 reboot
+
 ssh root@192.168.1.1
+
 LOOP="$(losetup -f)"
 losetup ${LOOP} /dev/mmcblk1p2
 e2fsck -y -f ${LOOP}
 resize2fs ${LOOP}
 reboot
 
-ssh root@192.168.1.1
-opkg update
-opkg install ip-full uhttpd shadow bash wget git-http ca-bundle procps-ng-ps rsync curl libstdcpp6 libjpeg libnss lftp block-mount unzip wipefs
-opkg list | grep "^coreutils-" | while read i
-do 
-opkg install $(echo ${i} | cut -d" " -f1)
-done
+## Create /usr/local on NVMe
 
-echo "Creating SSH keys"
-rm -rf /root/.ssh
-mkdir -p /root/.ssh
-dropbearkey -t ed25519 -f /root/.ssh/id_dropbear
+wipefs -af /dev/nvme0n1 
+mkfs.ext4 /dev/nvme0n1
 
-echo "creating /usr/local filesystem"
-wipefs -af /dev/mmcblk1p3 
-mkfs.ext4 /dev/mmcblk1p3
-let RC=0
-while [[ ${RC} -eq 0 ]]
-do uci delete fstab.@mount[-1]
-let RC=$?
-done
-PART_UUID=$(block info /dev/mmcblk1p3 | cut -d\" -f2)
+PART_UUID=$(block info /dev/nvme0n1 | cut -d\" -f2)
 MOUNT=$(uci add fstab mount)
 uci set fstab.${MOUNT}.target=/usr/local
 uci set fstab.${MOUNT}.uuid=${PART_UUID}
 uci set fstab.${MOUNT}.enabled=1
 uci commit fstab
 block mount
+
+
+## Create SSH Key
+
+rm -rf /root/.ssh
+mkdir -p /root/.ssh
+dropbearkey -t ed25519 -f /root/.ssh/id_dropbear
+
 mkdir -p /usr/local/www/install/kickstart
 mkdir /usr/local/www/install/postinstall
 mkdir /usr/local/www/install/fcos

@@ -173,14 +173,14 @@ function destroyMetal() {
 function deletePxeConfig() {
   local mac_addr=${1}
   
-  ${SSH} root@${DOMAIN_ROUTER} "rm -f /data/tftpboot/ipxe/${mac_addr//:/-}.ipxe"
+  ${SSH} root@${DOMAIN_ROUTER} "rm -f /usr/local/tftpboot/ipxe/${mac_addr//:/-}.ipxe"
   ${SSH} root@${INSTALL_HOST_IP} "rm -f /usr/local/www/install/fcos/ignition/${CLUSTER_NAME}/${mac_addr//:/-}.ign"
 }
 
 function deleteDns() {
   local key=${1}
-  ${SSH} root@${DOMAIN_ROUTER} "cat /data/bind/db.${DOMAIN} | grep -v ${key} > /data/bind/db.${DOMAIN}.tmp && mv /data/bind/db.${DOMAIN}.tmp /data/bind/db.${DOMAIN}"
-  ${SSH} root@${DOMAIN_ROUTER} "cat /data/bind/db.${DOMAIN_ARPA} | grep -v ${key} > /data/bind/db.${DOMAIN_ARPA}.tmp &&  mv /data/bind/db.${DOMAIN_ARPA}.tmp /data/bind/db.${DOMAIN_ARPA}"
+  ${SSH} root@${DOMAIN_ROUTER} "cat /usr/local/bind/db.${DOMAIN} | grep -v ${key} > /usr/local/bind/db.${DOMAIN}.tmp && mv /usr/local/bind/db.${DOMAIN}.tmp /usr/local/bind/db.${DOMAIN}"
+  ${SSH} root@${DOMAIN_ROUTER} "cat /usr/local/bind/db.${DOMAIN_ARPA} | grep -v ${key} > /usr/local/bind/db.${DOMAIN_ARPA}.tmp &&  mv /usr/local/bind/db.${DOMAIN_ARPA}.tmp /usr/local/bind/db.${DOMAIN_ARPA}"
 }
 
 function createPxeFile() {
@@ -250,16 +250,16 @@ function createOkdVmNode() {
 }
 
 function prepNodeFiles() {
-  KERNEL_URL=$(openshift-install coreos print-stream-json | jq -r '.architectures.x86_64.artifacts.metal.formats.pxe.kernel.location')
-  INITRD_URL=$(openshift-install coreos print-stream-json | jq -r '.architectures.x86_64.artifacts.metal.formats.pxe.initramfs.location')
-  ROOTFS_URL=$(openshift-install coreos print-stream-json | jq -r '.architectures.x86_64.artifacts.metal.formats.pxe.rootfs.location')
+  # KERNEL_URL=$(openshift-install coreos print-stream-json | jq -r '.architectures.x86_64.artifacts.metal.formats.pxe.kernel.location')
+  # INITRD_URL=$(openshift-install coreos print-stream-json | jq -r '.architectures.x86_64.artifacts.metal.formats.pxe.initramfs.location')
+  # ROOTFS_URL=$(openshift-install coreos print-stream-json | jq -r '.architectures.x86_64.artifacts.metal.formats.pxe.rootfs.location')
 
-  ${SSH} root@${INSTALL_HOST_IP} "if [[ ! -d /usr/local/www/install/fcos/${OPENSHIFT_RELEASE} ]] ; \
-    then mkdir -p /usr/local/www/install/fcos/${OPENSHIFT_RELEASE} ; \
-    curl -o /usr/local/www/install/fcos/${OPENSHIFT_RELEASE}/vmlinuz ${KERNEL_URL} ; \
-    curl -o /usr/local/www/install/fcos/${OPENSHIFT_RELEASE}/initrd ${INITRD_URL} ; \
-    curl -o /usr/local/www/install/fcos/${OPENSHIFT_RELEASE}/rootfs.img ${ROOTFS_URL} ; \
-    fi"
+  # ${SSH} root@${INSTALL_HOST_IP} "if [[ ! -d /usr/local/www/install/fcos/${OPENSHIFT_RELEASE} ]] ; \
+  #   then mkdir -p /usr/local/www/install/fcos/${OPENSHIFT_RELEASE} ; \
+  #   curl -o /usr/local/www/install/fcos/${OPENSHIFT_RELEASE}/vmlinuz ${KERNEL_URL} ; \
+  #   curl -o /usr/local/www/install/fcos/${OPENSHIFT_RELEASE}/initrd ${INITRD_URL} ; \
+  #   curl -o /usr/local/www/install/fcos/${OPENSHIFT_RELEASE}/rootfs.img ${ROOTFS_URL} ; \
+  #   fi"
   ${SSH} root@${INSTALL_HOST_IP} "mkdir -p /usr/local/www/install/fcos/ignition/${CLUSTER_NAME}.${DOMAIN}"
   if [[ ${AGENT} == "true" ]]
   then
@@ -270,14 +270,14 @@ function prepNodeFiles() {
     ${SCP} -r ${WORK_DIR}/ipxe-work-dir/ignition/*.ign root@${INSTALL_HOST_IP}:/usr/local/www/install/fcos/ignition/${CLUSTER_NAME}.${DOMAIN}/
   fi
   ${SSH} root@${INSTALL_HOST_IP} "chmod 644 /usr/local/www/install/fcos/ignition/${CLUSTER_NAME}.${DOMAIN}/*"
-  ${SCP} -r ${WORK_DIR}/ipxe-work-dir/*.ipxe root@${DOMAIN_ROUTER}:/data/tftpboot/ipxe/
+  ${SCP} -r ${WORK_DIR}/ipxe-work-dir/*.ipxe root@${DOMAIN_ROUTER}:/usr/local/tftpboot/ipxe/
 }
 
 function prepDnsFiles() {
-  cat ${WORK_DIR}/dns-work-dir/forward.zone | ${SSH} root@${DOMAIN_ROUTER} "cat >> /data/bind/db.${DOMAIN}"
-  cat ${WORK_DIR}/dns-work-dir/reverse.zone | ${SSH} root@${DOMAIN_ROUTER} "cat >> /data/bind/db.${DOMAIN_ARPA}"
+  cat ${WORK_DIR}/dns-work-dir/forward.zone | ${SSH} root@${DOMAIN_ROUTER} "cat >> /usr/local/bind/db.${DOMAIN}"
+  cat ${WORK_DIR}/dns-work-dir/reverse.zone | ${SSH} root@${DOMAIN_ROUTER} "cat >> /usr/local/bind/db.${DOMAIN_ARPA}"
   ${SSH} root@${DOMAIN_ROUTER} "/etc/init.d/named stop && sleep 2 && /etc/init.d/named start && sleep 2"
-  ${SSH} root@${EDGE_ROUTER} "/etc/init.d/named stop && sleep 2 && /etc/init.d/named start && sleep 2"
+  ${SSH} root@${EDGE_ROUTER_LAN} "/etc/init.d/named stop && sleep 2 && /etc/init.d/named start && sleep 2"
 }
 
 function deployKvmHosts() {
@@ -333,10 +333,10 @@ function deployKvmHosts() {
   fi
 
   ${SCP} -r ${WORK_DIR}/*.ks root@${INSTALL_HOST_IP}:/usr/local/www/install/kickstart
-  ${SCP} -r ${WORK_DIR}/*.ipxe root@${DOMAIN_ROUTER}:/data/tftpboot/ipxe
+  ${SCP} -r ${WORK_DIR}/*.ipxe root@${DOMAIN_ROUTER}:/usr/local/tftpboot/ipxe
 
-  cat ${WORK_DIR}/forward.zone | ${SSH} root@${DOMAIN_ROUTER} "cat >> /data/bind/db.${DOMAIN}"
-  cat ${WORK_DIR}/reverse.zone | ${SSH} root@${DOMAIN_ROUTER} "cat >> /data/bind/db.${DOMAIN_ARPA}"
+  cat ${WORK_DIR}/forward.zone | ${SSH} root@${DOMAIN_ROUTER} "cat >> /usr/local/bind/db.${DOMAIN}"
+  cat ${WORK_DIR}/reverse.zone | ${SSH} root@${DOMAIN_ROUTER} "cat >> /usr/local/bind/db.${DOMAIN_ARPA}"
   ${SSH} root@${DOMAIN_ROUTER} "/etc/init.d/named stop && /etc/init.d/named start && sleep 2"
 }
 

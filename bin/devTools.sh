@@ -86,8 +86,8 @@ EOF
     mkdir -p /usr/local/nexus/sonatype-work/nexus3/etc"
   cat ${PI_WORK_DIR}/nexus.properties | ${SSH} root@${PI_IP} "cat >> /usr/local/nexus/sonatype-work/nexus3/etc/nexus.properties"
   ${SSH} root@${PI_IP} "chown -R nexus:nexus /usr/local/nexus/sonatype-work/nexus3/etc ; /etc/init.d/nexus enable"
-  echo "nexus.${LAB_DOMAIN}.           IN      A      ${PI_IP}" | ${SSH} root@${EDGE_ROUTER} "cat >> /data/bind/db.${LAB_DOMAIN}"
-  ${SSH} root@${EDGE_ROUTER} "/etc/init.d/named stop && /etc/init.d/named start"
+  echo "nexus.${LAB_DOMAIN}.           IN      A      ${PI_IP}" | ${SSH} root@${EDGE_ROUTER_LAN} "cat >> /usr/local/bind/db.${LAB_DOMAIN}"
+  ${SSH} root@${EDGE_ROUTER_LAN} "/etc/init.d/named stop && /etc/init.d/named start"
 }
 
 function installGitea() {
@@ -194,8 +194,8 @@ EOF
   ${SCP} ${PI_WORK_DIR}/gitea root@${PI_IP}:/etc/init.d/gitea
   ${SCP} ${PI_WORK_DIR}/giteaInit.sh root@${PI_IP}:/tmp/giteaInit.sh
   ${SSH} root@${PI_IP} "chown -R gitea:gitea /usr/local/gitea ; chmod 755 /etc/init.d/gitea ; chmod 755 /tmp/giteaInit.sh ; /tmp/giteaInit.sh ; /etc/init.d/gitea enable"
-  echo "gitea.${LAB_DOMAIN}.           IN      A      ${PI_IP}" | ${SSH} root@${EDGE_ROUTER} "cat >> /data/bind/db.${LAB_DOMAIN}"
-  ${SSH} root@${EDGE_ROUTER} "/etc/init.d/named stop && /etc/init.d/named start"
+  echo "gitea.${LAB_DOMAIN}.           IN      A      ${PI_IP}" | ${SSH} root@${EDGE_ROUTER_LAN} "cat >> /usr/local/bind/db.${LAB_DOMAIN}"
+  ${SSH} root@${EDGE_ROUTER_LAN} "/etc/init.d/named stop && /etc/init.d/named start"
 }
 
 function installKeyCloak() {
@@ -245,8 +245,8 @@ EOF
     mkdir -p /usr/local/keycloak/home ; \
     groupadd keycloak ; \
     useradd -g keycloak -d /usr/local/keycloak/home keycloak"
-  echo "keycloak.${LAB_DOMAIN}.           IN      A      ${PI_IP}" | ${SSH} root@${EDGE_ROUTER} "cat >> /data/bind/db.${LAB_DOMAIN}"
-  ${SSH} root@${EDGE_ROUTER} "/etc/init.d/named stop && /etc/init.d/named start"
+  echo "keycloak.${LAB_DOMAIN}.           IN      A      ${PI_IP}" | ${SSH} root@${EDGE_ROUTER_LAN} "cat >> /usr/local/bind/db.${LAB_DOMAIN}"
+  ${SSH} root@${EDGE_ROUTER_LAN} "/etc/init.d/named stop && /etc/init.d/named start"
   ${SCP} ${PI_WORK_DIR}/keycloak.conf root@${PI_IP}:/usr/local/keycloak/keycloak-server/conf/keycloak.conf
   ${SCP} ${PI_WORK_DIR}/keycloak root@${PI_IP}:/etc/init.d/keycloak
   ${SSH} root@${PI_IP} "chown -R keycloak:keycloak /usr/local/keycloak ; chmod 750 /etc/init.d/keycloak ; /etc/init.d/keycloak enable"
@@ -298,6 +298,6 @@ EOF
     chown -R apicurio:apicurio /usr/local/apicurio ; \
     chmod 750 /etc/init.d/apicurio ; \
     /etc/init.d/apicurio enable"
-  echo "apicurio.${LAB_DOMAIN}.           IN      A      ${PI_IP}" | ${SSH} root@${EDGE_ROUTER} "cat >> /data/bind/db.${LAB_DOMAIN}"
-  ${SSH} root@${EDGE_ROUTER} "/etc/init.d/named stop && /etc/init.d/named start"
+  echo "apicurio.${LAB_DOMAIN}.           IN      A      ${PI_IP}" | ${SSH} root@${EDGE_ROUTER_LAN} "cat >> /usr/local/bind/db.${LAB_DOMAIN}"
+  ${SSH} root@${EDGE_ROUTER_LAN} "/etc/init.d/named stop && /etc/init.d/named start"
 }

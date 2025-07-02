@@ -255,7 +255,6 @@ data:
   ca-bundle.crt: |
     # Nexus Cert
 ${NEXUS_CERT}
-
 EOF
 ```
 
@@ -315,4 +314,24 @@ EOF
 
 ```bash
 oc patch etcd/cluster --type=merge -p '{"spec": {"controlPlaneHardwareSpeed": "Slower"}}'
+```
+
+## Create Pull Secret for OCP CI Builds
+
+[https://docs.ci.openshift.org/docs/how-tos/use-registries-in-build-farm/#how-do-i-gain-access-to-qci](https://docs.ci.openshift.org/docs/how-tos/use-registries-in-build-farm/#how-do-i-gain-access-to-qci)
+
+1. Log into [https://console-openshift-console.apps.ci.l2s4.p1.openshiftapps.com/](https://console-openshift-console.apps.ci.l2s4.p1.openshiftapps.com/) with Red Hat SSO credentials
+
+1. Get token to login with oc cli
+
+1. Log into https://registry.ci.openshift.org/
+
+   ```bash
+   podman login -u=$(oc whoami) -p=$(oc whoami -t) registry.ci.openshift.org
+   ```
+
+1. Extract auth for pull secret from: ~/.config/containers/auth.json
+
+```bash
+oc patch olmconfig cluster --type=merge -p '{"spec": {"features": {"disableCopiedCSVs": true}}}'
 ```

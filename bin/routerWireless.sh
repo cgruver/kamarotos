@@ -139,7 +139,7 @@ EOF
 function addWireless() {
   if [[ ${EDGE} == "true" ]]
   then
-    ROUTER=${EDGE_ROUTER}
+    ROUTER=${EDGE_ROUTER_LAN}
   else
     ROUTER=${DOMAIN_ROUTER}
   fi

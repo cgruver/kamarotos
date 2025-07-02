@@ -26,8 +26,8 @@ function initPiNetwork() {
     uci set network.lan.ipaddr=${PI_IP} ; \
     uci set network.lan.netmask=${EDGE_NETMASK} ; \
     uci set network.lan.hostname=raspberry-pi.${LAB_DOMAIN} ; \
-    uci set network.lan.gateway=${EDGE_ROUTER} ; \
-    uci set network.lan.dns=${EDGE_ROUTER} ; \
+    uci set network.lan.gateway=${EDGE_ROUTER_LAN} ; \
+    uci set network.lan.dns=${EDGE_ROUTER_LAN} ; \
     uci commit ; \
     rm -rf /etc/rc.d/*dnsmasq* ; \
     poweroff"
@@ -76,8 +76,8 @@ config interface 'lan'\n
 \toption proto 'static'\n
 \toption ipaddr '${PI_IP}'\n
 \toption netmask '${EDGE_NETMASK}'\n
-\toption gateway '${EDGE_ROUTER}'\n
-\toption dns '${EDGE_ROUTER}'\n
+\toption gateway '${EDGE_ROUTER_LAN}'\n
+\toption dns '${EDGE_ROUTER_LAN}'\n
 EOF
 
 echo -e ${FILE} > ${PI_WORK_DIR}/config/network
@@ -112,13 +112,13 @@ EOF
   SD_DEV=mmcblk1
   SD_PART=mmcblk1p
 
-  checkRouterModel ${EDGE_ROUTER}
+  checkRouterModel ${EDGE_ROUTER_LAN}
   echo "Detected Router Model: ${GL_MODEL}"
   if [[ ${GL_MODEL} == "GL-AR750S"  ]]
   then
     SD_DEV=sda
     SD_PART=sda
-    ${SSH} root@${EDGE_ROUTER} "mount | grep /dev/sdb | while read line ; \
+    ${SSH} root@${EDGE_ROUTER_LAN} "mount | grep /dev/sdb | while read line ; \
     do echo \${line} | cut -d' ' -f1 ; \
     done | while read fs ; \
     do umount \${fs} ;  \
@@ -134,7 +134,7 @@ EOF
     mount -t ext4 /dev/sdb1 /data/openwrt"
   fi
 
-  ${SSH} root@${EDGE_ROUTER} "echo \"unmounting ${SD_PART} - Safe to ignore errors for non-existent mounts\" ; \
+  ${SSH} root@${EDGE_ROUTER_LAN} "echo \"unmounting ${SD_PART} - Safe to ignore errors for non-existent mounts\" ; \
     umount /dev/${SD_PART}1 ; \
     umount /dev/${SD_PART}2 ; \
     umount /dev/${SD_PART}3 ; \
@@ -164,17 +164,17 @@ EOF
     mkdir -p /tmp/pi ; \
     mount -t ext4 /dev/${SD_PART}2 /tmp/pi/"
 
-  ${SCP} -r ${PI_WORK_DIR}/config/* root@${EDGE_ROUTER}:/tmp/pi/etc/config
-  ${SSH} root@${EDGE_ROUTER} "cat /etc/dropbear/authorized_keys >> /tmp/pi/etc/dropbear/authorized_keys ; \
+  ${SCP} -r ${PI_WORK_DIR}/config/* root@${EDGE_ROUTER_LAN}:/tmp/pi/etc/config
+  ${SSH} root@${EDGE_ROUTER_LAN} "cat /etc/dropbear/authorized_keys >> /tmp/pi/etc/dropbear/authorized_keys ; \
     dropbearkey -y -f /root/.ssh/id_dropbear | grep \"^ssh-\" >> /tmp/pi/etc/dropbear/authorized_keys ; \
     rm -f /tmp/pi/etc/rc.d/*dnsmasq* ; \
     umount /dev/${SD_PART}1 ; \
     umount /dev/${SD_PART}2 ; \
     umount /dev/${SD_PART}3 ; \
     rm -rf /tmp/pi"
-  echo "raspberry-pi.${LAB_DOMAIN}.         IN      A      ${PI_IP}" | ${SSH} root@${EDGE_ROUTER} "cat >> /data/bind/db.${LAB_DOMAIN}"
-  echo "10    IN      PTR     raspberry-pi.${LAB_DOMAIN}."  | ${SSH} root@${EDGE_ROUTER} "cat >> /data/bind/db.${EDGE_ARPA}"
-  ${SSH} root@${EDGE_ROUTER} "/etc/init.d/named stop && /etc/init.d/named start"
+  echo "raspberry-pi.${LAB_DOMAIN}.         IN      A      ${PI_IP}" | ${SSH} root@${EDGE_ROUTER_LAN} "cat >> /data/bind/db.${LAB_DOMAIN}"
+  echo "10    IN      PTR     raspberry-pi.${LAB_DOMAIN}."  | ${SSH} root@${EDGE_ROUTER_LAN} "cat >> /data/bind/db.${EDGE_ARPA}"
+  ${SSH} root@${EDGE_ROUTER_LAN} "/etc/init.d/named stop && /etc/init.d/named start"
 
 }
 

@@ -777,7 +777,7 @@ function initCephVars() {
 
 function postInstall() {
 
-  ${OC} patch imagepruners.imageregistry.operator.openshift.io/cluster --type merge -p '{"spec":{"schedule":"0 0 * * *","suspend":false,"keepTagRevisions":3,"keepYoungerThan":60,"resources":{},"affinity":{},"nodeSelector":{},"tolerations":[],"successfulJobsHistoryLimit":3,"failedJobsHistoryLimit":3}}'
+  # ${OC} patch imagepruners.imageregistry.operator.openshift.io/cluster --type merge -p '{"spec":{"schedule":"0 0 * * *","suspend":false,"keepTagRevisions":3,"keepYoungerThan":60,"resources":{},"affinity":{},"nodeSelector":{},"tolerations":[],"successfulJobsHistoryLimit":3,"failedJobsHistoryLimit":3}}'
   ${OC} delete pod --field-selector=status.phase==Succeeded --all-namespaces
   ${OC} delete pod --field-selector=status.phase==Failed --all-namespaces
   if [[ $(yq e ".cluster.release-type" ${CLUSTER_CONFIG}) != "ocp" ]]
@@ -799,6 +799,8 @@ function postInstall() {
       ;;
     esac
   done
+  # Install GitOps Operator
+  deployGitOps
 }
 
 function getNodes() {
@@ -1089,6 +1091,12 @@ EOF
 }
 
 function qnap() {
+  
+  export QNAP_VERSION=$(yq e ".cluster.qnap.version" ${CLUSTER_CONFIG})
+  export QNAP_BACKEND=$(yq e ".cluster.qnap.backend" ${CLUSTER_CONFIG})
+  export ISCSI_IP=$(yq e ".cluster.qnap.ip-addr" ${CLUSTER_CONFIG})
+  export ISCSI_USER=$(yq e ".cluster.qnap.user" ${CLUSTER_CONFIG})
+
   for j in "$@"
   do
     case $j in
@@ -1122,8 +1130,6 @@ ${OC} wait --for=condition=Available -n trident --timeout=300s --all deployments
 
   ISCSI_PWD="red"
   ISCSI_PWD_CHK="green"
-  echo "Enter the user id for your QNAP Backend:"
-  read ISCSI_USER
   while [[ ${ISCSI_PWD} != ${ISCSI_PWD_CHK} ]]
   do
     echo "Enter the Password for the QNAP user:"
@@ -1136,7 +1142,7 @@ ${OC} wait --for=condition=Available -n trident --timeout=300s --all deployments
     fi
   done
 
-cat << EOF | oc apply -f -
+cat << EOF | ${OC} apply -f -
 apiVersion: v1
 kind: Secret
 metadata:
@@ -1233,32 +1239,32 @@ function keyCloak() {
 
 }
 
-# function deployGitOps() {
-#   ${OC} create ns openshift-gitops-operator
-#   ${OC} label namespace openshift-gitops-operator openshift.io/cluster-monitoring=true
+function deployGitOps() {
+  ${OC} create ns openshift-gitops-operator
+  ${OC} label namespace openshift-gitops-operator openshift.io/cluster-monitoring=true
 
-# cat << EOF | ${OC} apply -f -
-# apiVersion: operators.coreos.com/v1
-# kind: OperatorGroup
-# metadata:
-#   name: openshift-gitops-operator
-#   namespace: openshift-gitops-operator
-# spec:
-#   upgradeStrategy: Default
-# EOF
+cat << EOF | ${OC} apply -f -
+apiVersion: operators.coreos.com/v1
+kind: OperatorGroup
+metadata:
+  name: openshift-gitops-operator
+  namespace: openshift-gitops-operator
+spec:
+  upgradeStrategy: Default
+---
+apiVersion: operators.coreos.com/v1alpha1
+kind: Subscription
+metadata:
+  name: openshift-gitops-operator
+  namespace: openshift-gitops-operator
+spec:
+  channel: latest 
+  installPlanApproval: Manual
+  name: openshift-gitops-operator 
+  source: redhat-operators 
+  sourceNamespace: openshift-marketplace 
+EOF
 
-# cat << EOF | ${OC} apply -f -
-# apiVersion: operators.coreos.com/v1alpha1
-# kind: Subscription
-# metadata:
-#   name: openshift-gitops-operator
-#   namespace: openshift-gitops-operator
-# spec:
-#   channel: latest 
-#   installPlanApproval: Manual
-#   name: openshift-gitops-operator 
-#   source: redhat-operators 
-#   sourceNamespace: openshift-marketplace 
-# EOF
+}
 
-# }
+

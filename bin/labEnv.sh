@@ -35,6 +35,13 @@ function labenv() {
         then
           labctx
         fi
+        export KUBECONFIG=${CLUSTER_KUBE_CONFIG}
+      ;;
+      -a)
+        if [[ -z ${CLUSTER} ]]
+        then
+          labctx
+        fi
         export KUBECONFIG=${KUBE_INIT_CONFIG}
       ;;
       -c)
@@ -197,7 +204,7 @@ function setDomainEnv() {
 
   export SUB_DOMAIN=$(yq e ".sub-domain-configs.[${DOMAIN_INDEX}].name" ${LAB_CONFIG_FILE})
   export DOMAIN="${SUB_DOMAIN}.${LAB_DOMAIN}"
-  export DOMAIN_ROUTER=$(yq e ".sub-domain-configs.[${DOMAIN_INDEX}].router-ip" ${LAB_CONFIG_FILE})
+  export DOMAIN_ROUTER=$(yq e ".sub-domain-configs.[${DOMAIN_INDEX}].router-lan-ip" ${LAB_CONFIG_FILE})
   export DOMAIN_ROUTER_EDGE=$(yq e ".sub-domain-configs.[${DOMAIN_INDEX}].router-edge-ip" ${LAB_CONFIG_FILE})
   export DOMAIN_NETWORK=$(yq e ".sub-domain-configs.[${DOMAIN_INDEX}].network" ${LAB_CONFIG_FILE})
   export DOMAIN_NETMASK=$(yq e ".sub-domain-configs.[${DOMAIN_INDEX}].netmask" ${LAB_CONFIG_FILE})
@@ -210,7 +217,7 @@ function setEdgeCluster() {
   export DOMAIN=${LAB_DOMAIN}
   export SUB_DOMAIN="edge-cluster"
   export DOMAIN_ARPA=${EDGE_ARPA}
-  export DOMAIN_ROUTER=${EDGE_ROUTER}
+  export DOMAIN_ROUTER=${EDGE_ROUTER_LAN}
   export DOMAIN_NETMASK=${EDGE_NETMASK}
   export DOMAIN_NETWORK=${EDGE_NETWORK}
 }
@@ -227,7 +234,9 @@ function setClusterEnv() {
   export CLUSTER_CONFIG=${OPENSHIFT_LAB_PATH}/lab-config/cluster-configs/$(yq e ".cluster-configs.[${CLUSTER_INDEX}].cluster-config-file" ${LAB_CONFIG_FILE})
   export CLUSTER=$(yq e ".cluster-configs.[${CLUSTER_INDEX}].name" ${LAB_CONFIG_FILE})
   export CLUSTER_NAME=$(yq e ".cluster.name" ${CLUSTER_CONFIG})
-  export KUBE_INIT_CONFIG=${OPENSHIFT_LAB_PATH}/lab-config/kubeconfigs/${CLUSTER_NAME}-${DOMAIN}-kubeconfig
+  export KUBE_INIT_CONFIG=${OPENSHIFT_LAB_PATH}/lab-config/kubeconfigs/${CLUSTER_NAME}-${DOMAIN}-init-kubeconfig
+  export CLUSTER_KUBE_CONFIG=${OPENSHIFT_LAB_PATH}/lab-config/kubeconfigs/${CLUSTER_NAME}-${DOMAIN}-kubeconfig
+  export KUBECONFIG=${CLUSTER_KUBE_CONFIG}
   export CLUSTER_CIDR=$(yq e ".cluster.cluster-cidr" ${CLUSTER_CONFIG})
   export SERVICE_CIDR=$(yq e ".cluster.service-cidr" ${CLUSTER_CONFIG})
   export BUTANE_VARIANT=$(yq e ".cluster.butane-variant" ${CLUSTER_CONFIG})
@@ -247,12 +256,6 @@ function setClusterEnv() {
       export BOOTSTRAP_KVM_DOMAIN=${DOMAIN}
     fi
   fi
-  if [[ $(yq ".cluster | has(\"qnap\")" ${CLUSTER_CONFIG}) == "true" ]]
-  then
-    export QNAP_VERSION=$(yq e ".cluster.qnap.version" ${CLUSTER_CONFIG})
-    export QNAP_BACKEND=$(yq e ".cluster.qnap.backend" ${CLUSTER_CONFIG})
-    export ISCSI_IP=$(yq e ".cluster.qnap.ip-addr" ${CLUSTER_CONFIG})
-  fi
 }
 
 function setEdgeEnv() {
@@ -262,13 +265,19 @@ function setEdgeEnv() {
     export LAB_CTX_ERROR="true"
   else
     export LAB_DOMAIN=$(yq e ".domain" ${LAB_CONFIG_FILE})
-    export EDGE_ROUTER=$(yq e ".router-ip" ${LAB_CONFIG_FILE})
-    export INSTALL_HOST_IP=${EDGE_ROUTER}
+    export EDGE_ROUTER_LAN=$(yq e ".router-lan-ip" ${LAB_CONFIG_FILE})
+    export INSTALL_HOST_IP=${EDGE_ROUTER_LAN}
     export INSTALL_HOST=router
     export EDGE_NETMASK=$(yq e ".netmask" ${LAB_CONFIG_FILE})
     export EDGE_NETWORK=$(yq e ".network" ${LAB_CONFIG_FILE})
     export EDGE_CIDR=$(mask2cidr ${EDGE_NETMASK})
     export GIT_SERVER=$(yq e ".git-url" ${LAB_CONFIG_FILE})
+    if [[ $(yq ". | has(\"bridge\")" ${LAB_CONFIG_FILE}) == "true" ]]
+    then
+      export EDGE_ROUTER_WAN=$(yq e ".bridge.router-wan-ip" ${LAB_CONFIG_FILE})
+      export BRIDGE_NETMASK=$(yq e ".bridge.bridge-netmask" ${LAB_CONFIG_FILE})
+      export BRIDGE_LAN=$(yq e ".bridge.bridge-lan" ${LAB_CONFIG_FILE})
+    fi
     IFS="." read -r i1 i2 i3 i4 <<< "${EDGE_NETWORK}"
     export EDGE_ARPA=${i3}.${i2}.${i1}
     if [[ $(yq ". | has(\"pi-ip\")" ${LAB_CONFIG_FILE}) == "true" ]]
@@ -477,10 +486,13 @@ function clearLabEnv() {
   unset PULL_SECRET
   unset DOMAIN_ARPA
   unset LAB_DOMAIN
-  unset EDGE_ROUTER
+  unset EDGE_ROUTER_LAN
   unset EDGE_NETMASK
   unset EDGE_NETWORK
   unset EDGE_CIDR
+  unset EDGE_ROUTER_WAN
+  unset BRIDGE_NETMASK
+  unset BRIDGE_LAN
   unset PI_IP
   unset GIT_SERVER
   unset EDGE_ARPA

@@ -34,16 +34,8 @@ function deleteControlPlane() {
   if [[ ${RESET_LB} == "true" ]]
   then
     INTERFACE=$(echo "${CLUSTER_NAME//-/_}" | tr "[:upper:]" "[:lower:]")
-    if [[ ${GL_MODEL} == "GL-AXT1800" ]]
-    then
-      ${SSH} root@${DOMAIN_ROUTER} "rm /usr/local/nginx/nginx-${CLUSTER_NAME}.conf ; \
-      /etc/init.d/nginx restart"
-    else
-    ${SSH} root@${DOMAIN_ROUTER} "/etc/init.d/haproxy-${CLUSTER_NAME} stop ; \
-      /etc/init.d/haproxy-${CLUSTER_NAME} disable ; \
-      rm -f /etc/init.d/haproxy-${CLUSTER_NAME} ; \
-      rm -f /etc/haproxy-${CLUSTER_NAME}.cfg"
-    fi
+    ${SSH} root@${DOMAIN_ROUTER} "rm /usr/local/nginx/nginx-${CLUSTER_NAME}.conf ; \
+    /etc/init.d/nginx restart"
     ${SSH} root@${DOMAIN_ROUTER} "uci delete network.${INTERFACE}_lb ; \
       uci delete network.${INTERFACE}_api_lb ; \
       uci delete network.${INTERFACE}_ingress_lb ; \
@@ -56,7 +48,6 @@ function deleteControlPlane() {
 
 function destroy() {
   P_CMD="poweroff"
-  checkRouterModel ${DOMAIN_ROUTER}
 
   for i in "$@"
   do
@@ -178,6 +169,6 @@ function destroy() {
   fi
 
   ${SSH} root@${DOMAIN_ROUTER} "/etc/init.d/named stop && sleep 2 && /etc/init.d/named start && sleep 2"
-  ${SSH} root@${EDGE_ROUTER} "/etc/init.d/named stop && sleep 2 && /etc/init.d/named start"
+  ${SSH} root@${EDGE_ROUTER_LAN} "/etc/init.d/named stop && sleep 2 && /etc/init.d/named start"
   rm -f ${KUBE_INIT_CONFIG}
 }
