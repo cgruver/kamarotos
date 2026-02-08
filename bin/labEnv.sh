@@ -247,15 +247,6 @@ function setClusterEnv() {
   export INSTALL_METHOD=$(yq e ".cluster.install-method" ${CLUSTER_CONFIG})
   setOpenShiftRelease
   setToolsRelease
-  if [[ $(yq e ".bootstrap.metal" ${CLUSTER_CONFIG}) != "true" ]]
-  then
-    if [[ $(yq ".bootstrap | has(\"kvm-domain\")" ${CLUSTER_CONFIG}) == "true" ]]
-    then
-      export BOOTSTRAP_KVM_DOMAIN=$(yq e ".bootstrap.kvm-domain" ${CLUSTER_CONFIG})
-    else
-      export BOOTSTRAP_KVM_DOMAIN=${DOMAIN}
-    fi
-  fi
 }
 
 function setEdgeEnv() {
@@ -280,15 +271,6 @@ function setEdgeEnv() {
     fi
     IFS="." read -r i1 i2 i3 i4 <<< "${EDGE_NETWORK}"
     export EDGE_ARPA=${i3}.${i2}.${i1}
-    if [[ $(yq ". | has(\"pi-ip\")" ${LAB_CONFIG_FILE}) == "true" ]]
-    then
-      export PI_IP=$(yq e ".pi-ip" ${LAB_CONFIG_FILE})
-      if [[ $(yq e ".install-host" ${LAB_CONFIG_FILE}) == "raspberry-pi" ]]
-      then
-        export INSTALL_HOST_IP=${PI_IP}
-        export INSTALL_HOST=raspberry-pi
-      fi
-    fi
     if [[ $(yq ". | has(\"local-registry\")" ${LAB_CONFIG_FILE}) == "true" ]]
     then
       export LOCAL_REGISTRY=$(yq e ".local-registry" ${LAB_CONFIG_FILE})

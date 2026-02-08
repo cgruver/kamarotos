@@ -195,7 +195,7 @@ version: ${mc_version}
 metadata:
   labels:
     machineconfiguration.openshift.io/role: master
-  name: 98-cluster-ceph-config
+  name: 98-cluster-hostpath-config
 storage:
   disks:
   - device: ${hostpath_dev}

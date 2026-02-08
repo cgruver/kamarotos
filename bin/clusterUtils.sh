@@ -16,14 +16,8 @@ function startWorker() {
   while [[ node_index -lt ${node_count} ]]
   do
     host_name=$(yq e ".compute-nodes.[${node_index}].name" ${CLUSTER_CONFIG})
-    if [[ $(yq e ".compute-nodes.[${node_index}].metal" ${CLUSTER_CONFIG}) == "true" ]]
-    then
-      local mac=$(yq e ".compute-nodes.[${node_index}].mac-addr" ${CLUSTER_CONFIG})
-      startMetal ${mac}
-    else
-      kvm_host=$(yq e ".compute-nodes.[${node_index}].kvm-host" ${CLUSTER_CONFIG})  
-      startNode ${kvm_host}.${DOMAIN} ${host_name}
-    fi
+    local mac=$(yq e ".compute-nodes.[${node_index}].mac-addr" ${CLUSTER_CONFIG})
+    startMetal ${mac}
     if [[ ${node_index} -gt 0 ]] && [[ ${STAGGER} == "true" ]]
     then
       pause 30 "Pause to stagger node start up"
@@ -73,15 +67,9 @@ function deleteWorker() {
 
   host_name=$(yq e ".compute-nodes.[${index}].name" ${CLUSTER_CONFIG})
   mac_addr=$(yq e ".control-plane.nodes.[${index}].mac-addr" ${CLUSTER_CONFIG})
-  if [[ $(yq e ".compute-nodes.[${index}].metal" ${CLUSTER_CONFIG})  == "true" ]]
-  then
-    boot_dev=$(yq e ".compute-nodes.[${index}].boot-dev" ${CLUSTER_CONFIG})
-    ceph_dev=$(yq e ".compute-nodes.[${index}].ceph.ceph-dev" ${CLUSTER_CONFIG})
-    destroyMetal core ${host_name} ${boot_dev} "${ceph_dev}" ${p_cmd}
-  else
-    kvm_host=$(yq e ".compute-nodes.[${index}].kvm-host" ${CLUSTER_CONFIG})
-    deleteNodeVm ${host_name} ${kvm_host}.${DOMAIN}
-  fi
+  boot_dev=$(yq e ".compute-nodes.[${index}].boot-dev" ${CLUSTER_CONFIG})
+  ceph_dev=$(yq e ".compute-nodes.[${index}].ceph.ceph-dev" ${CLUSTER_CONFIG})
+  destroyMetal core ${host_name} ${boot_dev} "${ceph_dev}" ${p_cmd}
   deleteDns ${host_name}-${DOMAIN}
   deletePxeConfig ${mac_addr}
 }
@@ -372,7 +360,7 @@ metadata:
   namespace: openshift-monitoring
 data:
   config.yaml: |
-    prometheusOperator:
+    alertmanagerMain:
       nodeSelector:
         node-role.kubernetes.io/infra: ""
       tolerations:
@@ -388,7 +376,15 @@ data:
         operator: "Equal"
         value: ""
         effect: "NoSchedule"
-    alertmanagerMain:
+    prometheusOperator:
+      nodeSelector:
+        node-role.kubernetes.io/infra: ""
+      tolerations:
+      - key: "node-role.kubernetes.io/master"
+        operator: "Equal"
+        value: ""
+        effect: "NoSchedule"
+    metricsServer:
       nodeSelector:
         node-role.kubernetes.io/infra: ""
       tolerations:
@@ -404,23 +400,7 @@ data:
         operator: "Equal"
         value: ""
         effect: "NoSchedule"
-    grafana:
-      nodeSelector:
-        node-role.kubernetes.io/infra: ""
-      tolerations:
-      - key: "node-role.kubernetes.io/master"
-        operator: "Equal"
-        value: ""
-        effect: "NoSchedule"
     telemeterClient:
-      nodeSelector:
-        node-role.kubernetes.io/infra: ""
-      tolerations:
-      - key: "node-role.kubernetes.io/master"
-        operator: "Equal"
-        value: ""
-        effect: "NoSchedule"
-    k8sPrometheusAdapter:
       nodeSelector:
         node-role.kubernetes.io/infra: ""
       tolerations:
@@ -444,6 +424,14 @@ data:
         operator: "Equal"
         value: ""
         effect: "NoSchedule"
+    monitoringPlugin:
+      nodeSelector:
+        node-role.kubernetes.io/infra: ""
+      tolerations:
+      - key: "node-role.kubernetes.io/master"
+        operator: "Equal"
+        value: ""
+        effect: "NoSchedule"
 EOF
 }
 
@@ -458,34 +446,9 @@ function mirrorOcpRelease() {
   rm -rf ${OPENSHIFT_LAB_PATH}/lab-config/work-dir
 }
 
-function startNode() {
-  local kvm_host=${1}
-  local host_name=${2}
-  ${SSH} root@${kvm_host} "virsh start ${host_name}"
-}
-
 function startMetal() {
   local mac=${1}
   ${SSH} root@${DOMAIN_ROUTER} "etherwake -i br-lan ${mac}"
-}
-
-function startBootstrap() {
-  host_name="$(yq e ".cluster.name" ${CLUSTER_CONFIG})-bootstrap"
-
-  if [[ $(yq e ".bootstrap.metal" ${CLUSTER_CONFIG}) == "true" ]]
-  then
-    memory=$(yq e ".bootstrap.node-spec.memory" ${CLUSTER_CONFIG})
-    cpu=$(yq e ".bootstrap.node-spec.cpu" ${CLUSTER_CONFIG})
-    root_vol=$(yq e ".bootstrap.node-spec.root-vol" ${CLUSTER_CONFIG})
-    bridge_dev=$(yq e ".bootstrap.bridge-dev" ${CLUSTER_CONFIG})
-    WORK_DIR=${OPENSHIFT_LAB_PATH}/${CLUSTER_NAME}.${DOMAIN}
-    mkdir -p ${WORK_DIR}/bootstrap
-    qemu-img create -f qcow2 ${WORK_DIR}/bootstrap/bootstrap-node.qcow2 ${root_vol}G
-    qemu-system-x86_64 -accel accel=hvf -m ${memory}M -smp ${cpu} -display none -nographic -drive file=${WORK_DIR}/bootstrap/bootstrap-node.qcow2,if=none,id=disk1  -device ide-hd,bus=ide.0,drive=disk1,id=sata0-0-0,bootindex=1 -boot n -netdev vde,id=nic0,sock=/var/run/vde.bridged.${bridge_dev}.ctl -device virtio-net-pci,netdev=nic0,mac=52:54:00:a1:b2:c3
-  else
-    kvm_host=$(yq e ".bootstrap.kvm-host" ${CLUSTER_CONFIG})
-    startNode ${kvm_host}.${BOOTSTRAP_KVM_DOMAIN} ${host_name}
-  fi
 }
 
 function startControlPlane() {
@@ -501,38 +464,19 @@ function startControlPlane() {
     esac
   done
 
-  if [[ $(yq e ".control-plane.metal" ${CLUSTER_CONFIG}) == "true" ]]
+  if [[ $(yq e ".control-plane.nodes" ${CLUSTER_CONFIG} | yq e 'length' -) == "1" ]]
   then
-    if [[ $(yq e ".control-plane.nodes" ${CLUSTER_CONFIG} | yq e 'length' -) == "1" ]]
-    then
-      local mac=$(yq e ".control-plane.nodes.[0].mac-addr" ${CLUSTER_CONFIG})
-      startMetal ${mac}
-    else
-      for node_index in 0 1 2
-      do
-        if [[ ${node_index} -gt 0 ]] && [[ ${STAGGER} == "true" ]]
-        then
-          pause 30 "Pause to stagger node start up"
-        fi
-        local mac=$(yq e ".control-plane.nodes.[${node_index}].mac-addr" ${CLUSTER_CONFIG})
-        startMetal ${mac}
-      done
-    fi
-  elif [[ $(yq e ".control-plane.nodes" ${CLUSTER_CONFIG} | yq e 'length' -) == "1" ]]
-  then
-    kvm_host=$(yq e ".control-plane.nodes.[0].kvm-host" ${CLUSTER_CONFIG})
-    host_name=$(yq e ".control-plane.nodes.[0].name" ${CLUSTER_CONFIG})
-    startNode ${kvm_host}.${DOMAIN} ${host_name}
+    local mac=$(yq e ".control-plane.nodes.[0].mac-addr" ${CLUSTER_CONFIG})
+    startMetal ${mac}
   else
     for node_index in 0 1 2
     do
-      if [[ ${node_index} -gt 0 ]]
+      if [[ ${node_index} -gt 0 ]] && [[ ${STAGGER} == "true" ]]
       then
         pause 30 "Pause to stagger node start up"
       fi
-      kvm_host=$(yq e ".control-plane.nodes.[${node_index}].kvm-host" ${CLUSTER_CONFIG})
-      host_name=$(yq e ".control-plane.nodes.[${node_index}].name" ${CLUSTER_CONFIG})
-      startNode ${kvm_host}.${DOMAIN} ${host_name}
+      local mac=$(yq e ".control-plane.nodes.[${node_index}].mac-addr" ${CLUSTER_CONFIG})
+      startMetal ${mac}
     done
   fi
 }
@@ -554,9 +498,6 @@ function start() {
   for i in "$@"
   do
     case $i in
-      -b)
-        startBootstrap
-      ;;
       -c)
         startControlPlane "$@"
         startWorker "$@"
@@ -622,152 +563,6 @@ function stop() {
       -w|--worker)
         stopWorkers
       ;;
-      -k|--kvm)
-        stopKvmHosts
-      ;;
-      *)
-        # catch all
-      ;;
-    esac
-  done
-}
-
-function mirrorCeph() {
-
-  echo "Enter the credentials for the openshift mirrir service account in Nexus:"
-  podman login ${LOCAL_REGISTRY}
-
-  echo "Pulling Rook/Ceph Images..."
-  podman pull --arch=amd64 quay.io/cephcsi/cephcsi:${CEPH_CSI_VER}
-  podman pull --arch=amd64 registry.k8s.io/sig-storage/csi-node-driver-registrar:${CSI_NODE_DRIVER_REG_VER}
-  podman pull --arch=amd64 registry.k8s.io/sig-storage/csi-resizer:${CSI_RESIZER_VER}
-  podman pull --arch=amd64 registry.k8s.io/sig-storage/csi-provisioner:${CSI_PROVISIONER_VER}
-  podman pull --arch=amd64 registry.k8s.io/sig-storage/csi-snapshotter:${CSI_SNAPSHOTTER_VER}
-  podman pull --arch=amd64 registry.k8s.io/sig-storage/csi-attacher:${CSI_ATTACHER_VER}
-  podman pull --arch=amd64 docker.io/rook/ceph:${ROOK_CEPH_VER}
-  podman pull --arch=amd64 quay.io/ceph/ceph:${CEPH_VER}
-
-  echo "Tagging Rook/Ceph Images..."
-  podman tag quay.io/cephcsi/cephcsi:${CEPH_CSI_VER} ${LOCAL_REGISTRY}/cephcsi/cephcsi:${CEPH_CSI_VER}
-  podman tag registry.k8s.io/sig-storage/csi-node-driver-registrar:${CSI_NODE_DRIVER_REG_VER} ${LOCAL_REGISTRY}/sig-storage/csi-node-driver-registrar:${CSI_NODE_DRIVER_REG_VER}
-  podman tag registry.k8s.io/sig-storage/csi-resizer:${CSI_RESIZER_VER} ${LOCAL_REGISTRY}/sig-storage/csi-resizer:${CSI_RESIZER_VER}
-  podman tag registry.k8s.io/sig-storage/csi-provisioner:${CSI_PROVISIONER_VER} ${LOCAL_REGISTRY}/sig-storage/csi-provisioner:${CSI_PROVISIONER_VER}
-  podman tag registry.k8s.io/sig-storage/csi-snapshotter:${CSI_SNAPSHOTTER_VER} ${LOCAL_REGISTRY}/sig-storage/csi-snapshotter:${CSI_SNAPSHOTTER_VER}
-  podman tag registry.k8s.io/sig-storage/csi-attacher:${CSI_ATTACHER_VER} ${LOCAL_REGISTRY}/sig-storage/csi-attacher:${CSI_ATTACHER_VER}
-  podman tag docker.io/rook/ceph:${ROOK_CEPH_VER} ${LOCAL_REGISTRY}/rook/ceph:${ROOK_CEPH_VER}
-  podman tag quay.io/ceph/ceph:${CEPH_VER} ${LOCAL_REGISTRY}/ceph/ceph:${CEPH_VER}
-
-  echo "Pushing Rook/Ceph Images..."
-  podman push ${LOCAL_REGISTRY}/cephcsi/cephcsi:${CEPH_CSI_VER} --tls-verify=false
-  podman push ${LOCAL_REGISTRY}/sig-storage/csi-node-driver-registrar:${CSI_NODE_DRIVER_REG_VER} --tls-verify=false
-  podman push ${LOCAL_REGISTRY}/sig-storage/csi-resizer:${CSI_RESIZER_VER} --tls-verify=false
-  podman push ${LOCAL_REGISTRY}/sig-storage/csi-provisioner:${CSI_PROVISIONER_VER} --tls-verify=false
-  podman push ${LOCAL_REGISTRY}/sig-storage/csi-snapshotter:${CSI_SNAPSHOTTER_VER} --tls-verify=false
-  podman push ${LOCAL_REGISTRY}/sig-storage/csi-attacher:${CSI_ATTACHER_VER} --tls-verify=false
-  podman push ${LOCAL_REGISTRY}/rook/ceph:${ROOK_CEPH_VER} --tls-verify=false
-  podman push ${LOCAL_REGISTRY}/ceph/ceph:${CEPH_VER} --tls-verify=false
-
-  echo "Cleaning up local Rook/Ceph Images..."
-  podman image rm -a
-}
-
-function installCeph() {
-
-  ${OC} apply -f ${CEPH_WORK_DIR}/install/crds.yaml
-  ${OC} apply -f ${CEPH_WORK_DIR}/install/common.yaml
-  ${OC} apply -f ${CEPH_WORK_DIR}/install/rbac.yaml
-  envsubst < ${CEPH_OPERATOR_FILE} | ${OC} apply -f -
-}
-
-function createCephCluster() {
-
-  if [[ $(yq ". | has(\"compute-nodes\")" ${CLUSTER_CONFIG}) == "true" ]]
-  then
-    createWorkerCephCluster
-  else
-    createControlPlaneCephCluster
-  fi
-  envsubst < ${CEPH_CLUSTER_FILE} | ${OC} apply -f -
-  ${OC} patch configmap rook-ceph-operator-config -n rook-ceph --type merge --patch '"data": {"CSI_PLUGIN_TOLERATIONS": "- key: \"node-role.kubernetes.io/master\"\n  operator: \"Exists\"\n  effect: \"NoSchedule\"\n"}'
-  ${OC} apply -f ${CEPH_WORK_DIR}/configure/ceph-storage-class.yaml
-}
-
-function createControlPlaneCephCluster() {
-  for node_index in 0 1 2
-  do
-    node_name=$(yq e ".control-plane.nodes.[${node_index}].name" ${CLUSTER_CONFIG})
-    ceph_dev=$(yq e ".control-plane.ceph.ceph-dev" ${CLUSTER_CONFIG})
-    yq e ".spec.storage.nodes.[${node_index}].name = \"${node_name}\"" -i ${CEPH_CLUSTER_FILE}
-    yq e ".spec.storage.nodes.[${node_index}].devices.[0].name = \"${ceph_dev}\"" -i ${CEPH_CLUSTER_FILE}
-    yq e ".spec.storage.nodes.[${node_index}].devices.[0].config.osdsPerDevice = \"1\"" -i ${CEPH_CLUSTER_FILE}
-    ${SSH} -o ConnectTimeout=5 core@${node_name}.${DOMAIN} "sudo wipefs -a -f ${ceph_dev} && sudo dd if=/dev/zero of=${ceph_dev} bs=4096 count=100"
-    ${OC} label nodes ${node_name} role=storage-node
-  done
-}
-
-function createWorkerCephCluster() {
-  let NODE_COUNT=$(yq e ".compute-nodes" ${CLUSTER_CONFIG} | yq e 'length' -)
-  let node_index=0
-  while [[ node_index -lt ${NODE_COUNT} ]]
-  do
-    node_name=$(yq e ".compute-nodes.[${node_index}].name" ${CLUSTER_CONFIG})
-    ceph_node=$(yq ".compute-nodes.[${node_index}] | has(\"ceph\")" ${CLUSTER_CONFIG})
-    if [[ ${ceph_node} == "true" ]]
-    then
-      ceph_dev=$(yq e ".compute-nodes.[${node_index}].ceph.ceph-dev" ${CLUSTER_CONFIG})
-      yq e ".spec.storage.nodes.[${node_index}].name = \"${node_name}\"" -i ${CEPH_CLUSTER_FILE}
-      yq e ".spec.storage.nodes.[${node_index}].devices.[0].name = \"${ceph_dev}\"" -i ${CEPH_CLUSTER_FILE}
-      yq e ".spec.storage.nodes.[${node_index}].devices.[0].config.osdsPerDevice = \"1\"" -i ${CEPH_CLUSTER_FILE}
-      ${SSH} -o ConnectTimeout=5 core@${node_name}.${DOMAIN} "sudo wipefs -a -f ${ceph_dev} && sudo dd if=/dev/zero of=${ceph_dev} bs=4096 count=100"
-    fi
-    node_index=$(( ${node_index} + 1 ))
-    ${OC} label nodes ${node_name} role=storage-node
-  done
-}
-
-function regPvc() {
-  ${OC} apply -f ${CEPH_WORK_DIR}/configure/registry-pvc.yaml
-  ${OC} patch configs.imageregistry.operator.openshift.io cluster --type merge --patch '{"spec":{"rolloutStrategy":"Recreate","managementState":"Managed","storage":{"pvc":{"claim":"registry-pvc"}}}}'
-}
-
-function initCephVars() {
-  export CEPH_WORK_DIR=${OPENSHIFT_LAB_PATH}/${CLUSTER_NAME}.${DOMAIN}/ceph-work-dir
-  rm -rf ${CEPH_WORK_DIR}
-  git clone https://github.com/cgruver/lab-ceph.git ${CEPH_WORK_DIR}
-
-  export CEPH_CSI_VER=$(yq e ".cephcsi" ${CEPH_WORK_DIR}/install/versions.yaml)
-  export CSI_NODE_DRIVER_REG_VER=$(yq e ".csi-node-driver-registrar" ${CEPH_WORK_DIR}/install/versions.yaml)
-  export CSI_RESIZER_VER=$(yq e ".csi-resizer" ${CEPH_WORK_DIR}/install/versions.yaml)
-  export CSI_PROVISIONER_VER=$(yq e ".csi-provisioner" ${CEPH_WORK_DIR}/install/versions.yaml)
-  export CSI_SNAPSHOTTER_VER=$(yq e ".csi-snapshotter" ${CEPH_WORK_DIR}/install/versions.yaml)
-  export CSI_ATTACHER_VER=$(yq e ".csi-attacher" ${CEPH_WORK_DIR}/install/versions.yaml)
-  export ROOK_CEPH_VER=$(yq e ".rook-ceph" ${CEPH_WORK_DIR}/install/versions.yaml)
-  export CEPH_VER=$(yq e ".ceph" ${CEPH_WORK_DIR}/install/versions.yaml)
-
-  if [[ ${DISCONNECTED_CLUSTER} == "true" ]]
-  then
-    CEPH_OPERATOR_FILE=${CEPH_WORK_DIR}/install/operator-openshift.yaml
-    CEPH_CLUSTER_FILE=${CEPH_WORK_DIR}/install/cluster.yaml
-  else
-    CEPH_OPERATOR_FILE=${CEPH_WORK_DIR}/install/operator-openshift-no-pi.yaml
-    CEPH_CLUSTER_FILE=${CEPH_WORK_DIR}/install/cluster-no-pi.yaml
-  fi
-
-  for j in "$@"
-  do
-    case $j in
-      -m)
-        mirrorCeph
-      ;;
-      -i)     
-        installCeph
-      ;;
-      -c)
-        createCephCluster
-      ;;
-      -r)
-        regPvc
-      ;;
       *)
         # catch all
       ;;
@@ -780,6 +575,8 @@ function postInstall() {
   # ${OC} patch imagepruners.imageregistry.operator.openshift.io/cluster --type merge -p '{"spec":{"schedule":"0 0 * * *","suspend":false,"keepTagRevisions":3,"keepYoungerThan":60,"resources":{},"affinity":{},"nodeSelector":{},"tolerations":[],"successfulJobsHistoryLimit":3,"failedJobsHistoryLimit":3}}'
   ${OC} delete pod --field-selector=status.phase==Succeeded --all-namespaces
   ${OC} delete pod --field-selector=status.phase==Failed --all-namespaces
+  ${OC} patch olmconfig cluster --type=merge -p '{"spec": {"features": {"disableCopiedCSVs": true}}}'
+  ${OC} patch etcd/cluster --type=merge -p '{"spec": {"controlPlaneHardwareSpeed": "Slower"}}'  
   if [[ $(yq e ".cluster.release-type" ${CLUSTER_CONFIG}) != "ocp" ]]
   then
     ${OC} patch OperatorHub cluster --type json -p '[{"op": "replace", "path": "/spec/sources", "value": [{"disabled":true,"name":"certified-operators"},{"disabled":true,"name":"redhat-marketplace"},{"disabled":true,"name":"redhat-operators"}]}]'
@@ -799,8 +596,8 @@ function postInstall() {
       ;;
     esac
   done
-  # Install GitOps Operator
-  deployGitOps
+  #Install GitOps Operator
+  #deployGitOps
 }
 
 function getNodes() {
@@ -918,296 +715,6 @@ EOF
 
 ${OC} patch configs.imageregistry.operator.openshift.io cluster --type merge --patch '{"spec":{"rolloutStrategy":"Recreate","managementState":"Managed","storage":{"pvc":{"claim":"registry-pvc"}}}}'
 
-}
-
-function devSpaces() {
-  for j in "$@"
-  do
-    case $j in
-      -i)
-        deployDevSpacesOperator
-      ;;
-      -c)
-        deployDevSpacesCluster
-      ;;
-      -o)
-        createGitHubOauth
-      ;;
-      -g)
-        createUserGitConfig
-      ;;
-    esac
-  done
-}
-
-function deployDevSpacesOperator() {
-
-cat << EOF | ${OC} apply -f -
-apiVersion: operators.coreos.com/v1alpha1
-kind: Subscription
-metadata:
-  name: devspaces
-  namespace: openshift-operators
-spec:
-  channel: stable 
-  installPlanApproval: Manual
-  name: devspaces 
-  source: redhat-operators 
-  sourceNamespace: openshift-marketplace 
-EOF
-
-}
-
-function deployDevSpacesCluster() {
-
-${OC} wait --for=condition=Available -n openshift-operators --timeout=300s --all deployments
-
-echo "Enter the name of the StorageClass to use for PVCs:"
-read STORAGE_CLASS
-
-cat << EOF | ${OC} apply -f -
-apiVersion: v1                      
-kind: Namespace                 
-metadata:
-  name: devspaces
----           
-apiVersion: org.eclipse.che/v2 
-kind: CheCluster   
-metadata:              
-  name: devspaces  
-  namespace: devspaces
-spec:                         
-  components:                  
-    cheServer:      
-      debug: false
-      logLevel: INFO
-    metrics:                
-      enable: true
-    pluginRegistry:
-      openVSXURL: https://open-vsx.org
-    devfileRegistry:
-      disableInternalRegistry: true   
-  containerRegistry: {}   
-  devEnvironments:       
-    startTimeoutSeconds: 300
-    secondsOfRunBeforeIdling: -1
-    maxNumberOfWorkspacesPerUser: -1
-    maxNumberOfRunningWorkspacesPerUser: 5
-    containerBuildConfiguration:
-      openShiftSecurityContextConstraint: container-build
-    disableContainerBuildCapabilities: false
-    defaultComponents:
-    - name: dev-tools
-      container:
-        image: quay.io/cgruver0/che/dev-tools:latest
-        memoryLimit: 6Gi
-        mountSources: true
-    defaultEditor: che-incubator/che-code/latest
-    defaultNamespace:
-      autoProvision: true
-      template: <username>-devspaces
-    secondsOfInactivityBeforeIdling: 1800
-    storage:
-      pvcStrategy: per-workspace
-      perUserStrategyPvcConfig:
-        storageClass: ${STORAGE_CLASS}
-      perWorkspaceStrategyPvcConfig:
-        storageClass: ${STORAGE_CLASS}
-  gitServices: {}
-  networking: {}
-EOF
-}
-
-function createGitHubOauth() {
-
-  GitHub_OAuth_Client_ID=""
-  GitHub_OAuth_Client_Secret="red"
-  GitHub_OAuth_Client_Secret_CHK="green"
-  echo "Enter the GitHub OAuth Client ID user for the pull secret:"
-  read GitHub_OAuth_Client_ID
-  while [[ ${GitHub_OAuth_Client_Secret} != ${GitHub_OAuth_Client_Secret_CHK} ]]
-  do
-    echo "Enter the GitHub Client Secret:"
-    read -s GitHub_OAuth_Client_Secret
-    echo "Re-Enter the GitHub Client Secret:"
-    read -s GitHub_OAuth_Client_Secret_CHK
-    if [[ ${GitHub_OAuth_Client_Secret} != ${GitHub_OAuth_Client_Secret_CHK} ]]
-    then
-      echo "Passwords do not match. Try Again."
-    fi
-  done
-
-cat << EOF | ${OC} apply -f -
-kind: Secret
-apiVersion: v1
-metadata:
-  name: github-oauth-config
-  namespace: devspaces 
-  labels:
-    app.kubernetes.io/part-of: che.eclipse.org
-    app.kubernetes.io/component: oauth-scm-configuration
-  annotations:
-    che.eclipse.org/oauth-scm-server: github
-    che.eclipse.org/scm-server-endpoint: https://github.com 
-    che.eclipse.org/scm-github-disable-subdomain-isolation: 'false' 
-type: Opaque
-stringData:
-  id: ${GitHub_OAuth_Client_ID} 
-  secret: ${GitHub_OAuth_Client_Secret}
-EOF
-}
-
-function createUserGitConfig() {
-
-USER_NAMESPACE=""
-USER_NAME=""
-USER_EMAIL=""
-
-echo "Enter your Dev Spaces Namespace:"
-read USER_NAMESPACE
-echo "Enter your Git userid:"
-read USER_NAME
-echo "Enter your email:"
-read USER_EMAIL
-
-cat << EOF | ${OC} apply -f -
-kind: ConfigMap
-apiVersion: v1
-metadata:
-  name: workspace-userdata-gitconfig-configmap
-  namespace: ${USER_NAMESPACE} 
-  labels:
-    controller.devfile.io/mount-to-devworkspace: 'true'
-    controller.devfile.io/watch-configmap: 'true'
-  annotations:
-    controller.devfile.io/mount-as: subpath
-    controller.devfile.io/mount-path: /etc/
-data:
-  gitconfig: |-
-    [user]
-      name = ${USER_NAME}
-      email = ${USER_EMAIL}
-EOF
-}
-
-function qnap() {
-  
-  export QNAP_VERSION=$(yq e ".cluster.qnap.version" ${CLUSTER_CONFIG})
-  export QNAP_BACKEND=$(yq e ".cluster.qnap.backend" ${CLUSTER_CONFIG})
-  export ISCSI_IP=$(yq e ".cluster.qnap.ip-addr" ${CLUSTER_CONFIG})
-  export ISCSI_USER=$(yq e ".cluster.qnap.user" ${CLUSTER_CONFIG})
-
-  for j in "$@"
-  do
-    case $j in
-      -i)
-        deployIscsiOperator
-      ;;
-      -s)
-        createIscsiStorageClass
-      ;;
-      -r)
-        createRegistryPvc ${QNAP_BACKEND}
-      ;;
-    esac
-  done
-}
-
-function deployIscsiOperator() {
-
-  export QNAP_WORK_DIR=${OPENSHIFT_LAB_PATH}/${CLUSTER_NAME}.${DOMAIN}/qnap-work-dir
-  rm -rf ${QNAP_WORK_DIR}
-  git clone -b ${QNAP_VERSION} https://github.com/qnap-dev/QNAP-CSI-PlugIn.git ${QNAP_WORK_DIR}
-  ${OC} apply -f ${QNAP_WORK_DIR}/Deploy/Trident/namespace.yaml 
-  ${OC} apply -f ${QNAP_WORK_DIR}/Deploy/crds/tridentorchestrator_crd.yaml 
-  ${OC} apply -f ${QNAP_WORK_DIR}/Deploy/Trident/bundle.yaml 
-  ${OC} apply -f ${QNAP_WORK_DIR}/Deploy/Trident/tridentorchestrator.yaml
-}
-
-function createIscsiStorageClass() {
-
-${OC} wait --for=condition=Available -n trident --timeout=300s --all deployments
-
-  ISCSI_PWD="red"
-  ISCSI_PWD_CHK="green"
-  while [[ ${ISCSI_PWD} != ${ISCSI_PWD_CHK} ]]
-  do
-    echo "Enter the Password for the QNAP user:"
-    read -s ISCSI_PWD
-    echo "Re-Enter the Password for the QNAP user:"
-    read -s ISCSI_PWD_CHK
-    if [[ ${ISCSI_PWD} != ${ISCSI_PWD_CHK} ]]
-    then
-      echo "Passwords do not match. Try Again."
-    fi
-  done
-
-cat << EOF | ${OC} apply -f -
-apiVersion: v1
-kind: Secret
-metadata:
-  name: ${QNAP_BACKEND}-secret
-  namespace: trident
-type: Opaque
-stringData:
-  username: ${ISCSI_USER}
-  password: ${ISCSI_PWD}
-  storageAddress: ${ISCSI_IP}
----
-apiVersion: trident.qnap.io/v1
-kind: TridentBackendConfig
-metadata:
-  name: ${QNAP_BACKEND}
-  namespace: trident
-spec:
-  version: 1
-  storageDriverName: qnap-iscsi
-  backendName: ${QNAP_BACKEND}
-  networkInterfaces: []
-  credentials:
-    name: ${QNAP_BACKEND}-secret
-  debugTraceFlags:
-    method: false
-  storage:
-    - labels:
-        storage: ${QNAP_BACKEND}
-        serviceLevel: Any
----
-apiVersion: storage.k8s.io/v1 
-kind: StorageClass 
-metadata: 
-  name: ${QNAP_BACKEND} 
-  annotations:
-    storageclass.kubernetes.io/is-default-class: 'true'
-provisioner: csi.trident.qnap.io
-parameters: 
-  selector: "storage=${QNAP_BACKEND}"
-  csi.storage.k8s.io/fstype: ext4
-allowVolumeExpansion: true
-volumeBindingMode: WaitForFirstConsumer
-EOF
-}
-
-function createRegistryPvc() {
-
-local STORAGE_CLASS=${1}
-
-cat << EOF | ${OC} apply -f -
-apiVersion: v1
-kind: PersistentVolumeClaim
-metadata:
-  name: registry-pvc
-  namespace: openshift-image-registry
-spec:
-  accessModes:
-  - ReadWriteOnce
-  resources:
-    requests:
-      storage: 100Gi
-  storageClassName: ${STORAGE_CLASS}
-EOF
-
-  ${OC} patch configs.imageregistry.operator.openshift.io cluster --type merge --patch '{"spec":{"rolloutStrategy":"Recreate","managementState":"Managed","storage":{"pvc":{"claim":"registry-pvc"}}}}'
 }
 
 function keyCloak() {

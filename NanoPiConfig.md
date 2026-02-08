@@ -1,3 +1,7 @@
+Disk Image for NanoPi r76s
+https://downloads.openwrt.org/snapshots/targets/rockchip/armv8/openwrt-rockchip-armv8-friendlyarm_nanopi-r76s-squashfs-sysupgrade.img.gz
+
+
 ```bash
 cat ${OPENSHIFT_LAB_PATH}/ssh_key.pub | ssh root@192.168.1.1 "cat >> /etc/dropbear/authorized_keys"
 ```

@@ -335,3 +335,106 @@ oc patch etcd/cluster --type=merge -p '{"spec": {"controlPlaneHardwareSpeed": "S
 ```bash
 oc patch olmconfig cluster --type=merge -p '{"spec": {"features": {"disableCopiedCSVs": true}}}'
 ```
+
+## Force Rotation of the initial certs
+
+1. Check for cert expiration:
+
+   ```bash
+   ssh core@${CLUSTER_NAME}-cp-0.${DOMAIN} "sudo openssl x509 -checkend 2160000 -noout -in /var/lib/kubelet/pki/kubelet-client-current.pem"
+   ```
+
+   Output will look like:
+
+   ```bash
+   Certificate will expire
+   ```
+
+1. Delete the current cert, forcing a new Certificate Signing Request
+
+   ```bash
+   oc delete secrets/csr-signer-signer secrets/csr-signer -n openshift-kube-controller-manager-operator
+   for i in 0 1 2
+   do
+     ssh core@${CLUSTER_NAME}-cp-${i}.${DOMAIN} "sudo rm -fr /var/lib/kubelet/pki && sudo rm -fr /var/lib/kubelet/kubeconfig && sudo systemctl restart kubelet"
+   done
+   oc get csr
+   oc get csr -ojson | jq -r '.items[] | select(.status == {} ) | .metadata.name' | xargs oc adm certificate approve
+
+   ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -i id_ecdsa_crc core@api.crc.testing -- sudo openssl x509 -checkend 2160000 -noout -in /var/lib/kubelet/pki/kubelet-client-current.pem
+   ```
+
+## Add editor for Dev Spaces
+
+Download the current editor definition from upstream -
+
+```
+wget https://raw.githubusercontent.com/eclipse-che/che-operator/refs/heads/main/editors-definitions/che-code-server-latest.yaml
+```
+
+Login to your OpenShift cluster where Dev Spaces is installed.
+
+oc login <cluster uri>
+
+Switch to the project/namespace where you deployed the CheCluster custom resource. This is the namespace where the che-gateway, devspaces, and devspaces-dashboard Deployments are running. 
+
+oc project <namespace where you deployed the CheCluster>
+
+Create a config map with the yaml file that you downloaded in step 1.
+
+```
+oc create configmap che-code-server --from-file=che-code-server-latest.yaml
+```
+
+Label the config map so that Dev Spaces recognizes it as an editor definition.
+
+```
+oc label configmap che-code-server app.kubernetes.io/part-of=che.eclipse.org app.kubernetes.io/component=editor-definition
+```
+
+## Enable Nested Containers in Dev Spaces
+
+```yaml
+apiVersion: controller.devfile.io/v1alpha1
+kind: DevWorkspaceOperatorConfig
+metadata:
+  name: devworkspace-operator-config
+  namespace: openshift-operators
+config:
+  workspace:
+    cleanupCronJob:
+      dryRun: false
+      enable: true
+      retainTime: 2592000
+      schedule: 0 0 1 * *
+    containerSecurityContext:
+      allowPrivilegeEscalation: true
+      capabilities:
+        add:
+          - SETGID
+          - SETUID
+      procMount: Unmasked
+    defaultContainerResources:
+      limits:
+        cpu: 4000m
+        memory: 6Gi
+      requests:
+        cpu: 200m
+        memory: 2Gi
+    podAnnotations:
+      io.kubernetes.cri-o.Devices: '/dev/fuse,/dev/net/tun,/dev/dri/renderD128'
+```
+
+## Add static route to edge router
+
+```bash
+uci set system.ntp.enable_server="1"
+uci commit system
+ROUTE=$(uci add network route)
+uci set network.${ROUTE}.interface=lan
+uci set network.${ROUTE}.target=10.11.12.0
+uci set network.${ROUTE}.netmask=255.255.255.0
+uci set network.${ROUTE}.gateway=10.11.11.10
+uci commit network
+/etc/init.d/network restart
+```

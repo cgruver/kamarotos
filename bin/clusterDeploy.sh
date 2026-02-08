@@ -136,7 +136,6 @@ function createLbConfig() {
 
 function configControlPlane() {
 
-  metal=$(yq e ".control-plane.metal" ${CLUSTER_CONFIG})
   if [[ ${SNO} == "true" ]]
   then
     ingress_ip=$(yq e ".control-plane.nodes.[0].ip-addr" ${CLUSTER_CONFIG})
@@ -147,10 +146,7 @@ function configControlPlane() {
   echo "*.apps.${CLUSTER_NAME}.${DOMAIN}.     IN      A      ${ingress_ip} ; ${CLUSTER_NAME}-${DOMAIN}-cp" >> ${WORK_DIR}/dns-work-dir/forward.zone
   echo "api.${CLUSTER_NAME}.${DOMAIN}.        IN      A      ${ingress_ip} ; ${CLUSTER_NAME}-${DOMAIN}-cp" >> ${WORK_DIR}/dns-work-dir/forward.zone
   echo "api-int.${CLUSTER_NAME}.${DOMAIN}.    IN      A      ${ingress_ip} ; ${CLUSTER_NAME}-${DOMAIN}-cp" >> ${WORK_DIR}/dns-work-dir/forward.zone
-  if [[ ${metal} == "true" ]]
-  then
-    boot_dev=$(yq e ".control-plane.boot-dev" ${CLUSTER_CONFIG})
-  fi
+  boot_dev=$(yq e ".control-plane.boot-dev" ${CLUSTER_CONFIG})  
   let node_count=$(yq e ".control-plane.nodes" ${CLUSTER_CONFIG} | yq e 'length' -)
   let node_index=0
   while [[ node_index -lt ${node_count} ]]
@@ -158,31 +154,8 @@ function configControlPlane() {
     ip_addr=$(yq e ".control-plane.nodes.[${node_index}].ip-addr" ${CLUSTER_CONFIG})
     host_name=${CLUSTER_NAME}-cp-${node_index}
     yq e ".control-plane.nodes.[${node_index}].name = \"${host_name}\"" -i ${CLUSTER_CONFIG}
-    if [[ ${metal} == "false" ]]
-    then
-      memory=$(yq e ".control-plane.node-spec.memory" ${CLUSTER_CONFIG})
-      cpu=$(yq e ".control-plane.node-spec.cpu" ${CLUSTER_CONFIG})
-      root_vol=$(yq e ".control-plane.node-spec.root-vol" ${CLUSTER_CONFIG})
-      kvm_host=$(yq e ".control-plane.nodes.[${node_index}].kvm-host" ${CLUSTER_CONFIG})
-      boot_dev="/dev/sda"
-      ceph_node=$(yq ".control-plane | has(\"ceph\")" ${CLUSTER_CONFIG})
-      if [[ ${ceph_node} == "true" ]]
-      then
-        ceph_vol=$(yq e ".control-plane.ceph.ceph-vol" ${CLUSTER_CONFIG})
-      else
-        ceph_vol=0
-      fi
-      # Create the VM
-      createOkdVmNode ${ip_addr} ${host_name} ${kvm_host}.${DOMAIN} master ${memory} ${cpu} ${root_vol} ${ceph_vol} ".control-plane.nodes.[${node_index}].mac-addr"
-    fi
-    # Create the ignition and iPXE boot files
-    platform=qemu
-    if [[ ${metal} == "true" ]]
-    then
-      platform=metal
-    fi
     mac_addr=$(yq e ".control-plane.nodes.[${node_index}].mac-addr" ${CLUSTER_CONFIG})
-    createPxeFile ${mac_addr} ${platform} ${boot_dev} ${host_name} ${ip_addr}
+    createPxeFile ${mac_addr} ${boot_dev} ${host_name} ${ip_addr}
     # Create control plane node DNS Records:
     echo "${host_name}.${DOMAIN}.   IN      A      ${ip_addr} ; ${CLUSTER_NAME}-${DOMAIN}-cp" >> ${WORK_DIR}/dns-work-dir/forward.zone
     o4=$(echo ${ip_addr} | cut -d"." -f4)
@@ -265,26 +238,7 @@ function deployWorkers() {
     yq e ".compute-nodes.[${node_index}].name = \"${host_name}\"" -i ${CLUSTER_CONFIG}
     ip_addr=$(yq e ".compute-nodes.[${node_index}].ip-addr" ${CLUSTER_CONFIG})
     ceph_node=$(yq ".compute-nodes.[${node_index}] | has(\"ceph\")" ${CLUSTER_CONFIG})
-    if [[ $(yq e ".compute-nodes.[${node_index}].metal" ${CLUSTER_CONFIG}) == "true" ]]
-    then
-      platform=metal
-      boot_dev=$(yq e ".compute-nodes.[${node_index}].boot-dev" ${CLUSTER_CONFIG})
-    else
-      platform=qemu
-      boot_dev="/dev/sda"
-      memory=$(yq e ".compute-nodes.[${node_index}].node-spec.memory" ${CLUSTER_CONFIG})
-      cpu=$(yq e ".compute-nodes.[${node_index}].node-spec.cpu" ${CLUSTER_CONFIG})
-      root_vol=$(yq e ".compute-nodes.[${node_index}].node-spec.root-vol" ${CLUSTER_CONFIG})
-      kvm_host=$(yq e ".compute-nodes.[${node_index}].kvm-host" ${CLUSTER_CONFIG})
-      # Create the VM
-      if [[ ${ceph_node} == "true" ]]
-      then
-        ceph_vol=$(yq e ".compute-nodes.[${node_index}].ceph.ceph-vol" ${CLUSTER_CONFIG})
-      else
-        ceph_vol=0
-      fi
-      createOkdVmNode ${ip_addr} ${host_name} ${kvm_host}.${DOMAIN} worker ${memory} ${cpu} ${root_vol} ${ceph_vol} ".compute-nodes.[${node_index}].mac-addr"
-    fi
+    boot_dev=$(yq e ".compute-nodes.[${node_index}].boot-dev" ${CLUSTER_CONFIG})
     # Create the ignition and iPXE boot files
     mac_addr=$(yq e ".compute-nodes.[${node_index}].mac-addr" ${CLUSTER_CONFIG}) 
     config_ceph=false
@@ -296,8 +250,8 @@ function deployWorkers() {
         config_ceph=true
       fi
     fi
-    createButaneConfig ${ip_addr} ${host_name} ${mac_addr} worker ${platform} ${config_ceph} ${boot_dev}
-    createPxeFile ${mac_addr} ${platform} ${boot_dev} ${host_name} ${ip_addr}
+    createButaneConfig ${ip_addr} ${host_name} ${mac_addr} worker ${config_ceph} ${boot_dev}
+    createPxeFile ${mac_addr}  ${boot_dev} ${host_name} ${ip_addr}
     # Create DNS entries
     echo "${host_name}.${DOMAIN}.   IN      A      ${ip_addr} ; ${host_name}-${DOMAIN}-wk" >> ${WORK_DIR}/dns-work-dir/forward.zone
     o4=$(echo ${ip_addr} | cut -d"." -f4)
@@ -339,9 +293,6 @@ function deploy() {
       ;;
       -w|--worker)
         deployWorkers
-      ;;
-      -k|--kvm-hosts)
-        deployKvmHosts "$@"
       ;;
       *)
         # catch all
