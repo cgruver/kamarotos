@@ -26,12 +26,13 @@ function deleteDns() {
 }
 
 function createPxeFile() {
-  local mac=${1}
+  local control_plane=${1}
+  local mac=${2}
   local boot_dev=${3}
   local hostname=${4}
   local ip_addr=${5}
 
-if [[ ${AGENT} == "true" ]]
+if [[ ${control_plane} == "true" ]]
 then
 
 cat << EOF > ${WORK_DIR}/ipxe-work-dir/${mac//:/-}.ipxe
@@ -59,8 +60,10 @@ fi
 }
 
 function prepNodeFiles() {
+  local control_plane=${1}
+  
   ${SSH} root@${INSTALL_HOST_IP} "mkdir -p /usr/local/www/install/fcos/ignition/${CLUSTER_NAME}.${DOMAIN}"
-  if [[ ${AGENT} == "true" ]]
+  if [[ ${control_plane} == "true" ]]
   then
     ${SCP} ${WORK_DIR}/openshift-install-dir/boot-artifacts/agent.x86_64-initrd.img root@${INSTALL_HOST_IP}:/usr/local/www/install/fcos/ignition/${CLUSTER_NAME}.${DOMAIN}/initrd
     ${SCP} ${WORK_DIR}/openshift-install-dir/boot-artifacts/agent.x86_64-vmlinuz root@${INSTALL_HOST_IP}:/usr/local/www/install/fcos/ignition/${CLUSTER_NAME}.${DOMAIN}/vmlinuz

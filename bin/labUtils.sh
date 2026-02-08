@@ -97,25 +97,6 @@ function resetDns() {
   fi
 }
 
-function resetNic() {
-  SYS_ARCH=$(uname)
-  if [[ ${SYS_ARCH} == "Darwin" ]]
-  then
-    bridge_dev=$(yq e ".bootstrap.bridge-dev" ${CLUSTER_CONFIG})
-    sudo launchctl unload -w "/Library/LaunchDaemons/io.github.lima-vm.vde_vmnet.bridged.${bridge_dev}.plist"
-    sudo launchctl unload -w "/Library/LaunchDaemons/io.github.virtualsquare.vde-2.vde_switch.bridged.${bridge_dev}.plist"
-    sudo launchctl unload -w "/Library/LaunchDaemons/io.github.lima-vm.vde_vmnet.plist"
-    sudo launchctl unload -w "/Library/LaunchDaemons/io.github.virtualsquare.vde-2.vde_switch.plist"
-    sudo launchctl load -w "/Library/LaunchDaemons/io.github.virtualsquare.vde-2.vde_switch.plist"
-    sudo launchctl load -w "/Library/LaunchDaemons/io.github.lima-vm.vde_vmnet.plist"
-    sudo launchctl load -w "/Library/LaunchDaemons/io.github.virtualsquare.vde-2.vde_switch.bridged.${bridge_dev}.plist"
-    sudo launchctl load -w "/Library/LaunchDaemons/io.github.lima-vm.vde_vmnet.bridged.${bridge_dev}.plist"
-  else
-    echo "Unsupported OS: Cannot reset DNS"
-    exit 1
-  fi
-}
-
 function pause() {
   let pause=${1}
   MSG=${2}
@@ -125,25 +106,4 @@ function pause() {
     sleep 1
     : $((pause--))
   done
-}
-
-function createHostPwd() {
-
-  ROOT_PWD="hello"
-  ROOT_PWD_CHK="goodbye"
-  echo "Creating default root password for KVM hosts:"
-  while [[ ${ROOT_PWD} != ${ROOT_PWD_CHK} ]]
-  do
-    echo "Enter a password for the KVM host root user:"
-    read -s ROOT_PWD
-    echo "Re-Enter the password for the KVM host root user:"
-    read -s ROOT_PWD_CHK
-    if [[ ${ROOT_PWD} != ${ROOT_PWD_CHK} ]]
-    then
-      echo "Passwords do not match. Try Again."
-    fi
-  done
-  openssl passwd -1 "${ROOT_PWD}" > ${OPENSHIFT_LAB_PATH}/lab_host_pw
-  ROOT_PWD=""
-  ROOT_PWD_CHK=""
 }

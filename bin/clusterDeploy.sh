@@ -155,7 +155,7 @@ function configControlPlane() {
     host_name=${CLUSTER_NAME}-cp-${node_index}
     yq e ".control-plane.nodes.[${node_index}].name = \"${host_name}\"" -i ${CLUSTER_CONFIG}
     mac_addr=$(yq e ".control-plane.nodes.[${node_index}].mac-addr" ${CLUSTER_CONFIG})
-    createPxeFile ${mac_addr} ${boot_dev} ${host_name} ${ip_addr}
+    createPxeFile true ${mac_addr} ${boot_dev} ${host_name} ${ip_addr}
     # Create control plane node DNS Records:
     echo "${host_name}.${DOMAIN}.   IN      A      ${ip_addr} ; ${CLUSTER_NAME}-${DOMAIN}-cp" >> ${WORK_DIR}/dns-work-dir/forward.zone
     o4=$(echo ${ip_addr} | cut -d"." -f4)
@@ -190,7 +190,7 @@ function deployCluster() {
   mkdir -p ${OPENSHIFT_LAB_PATH}/lab-config/${CLUSTER_NAME}.${DOMAIN}
   SSH_KEY=$(cat ${OPENSHIFT_LAB_PATH}/ssh_key.pub)
   SNO="false"
-  AGENT="true"
+  AGENT_INSTALL="true"
   CP_REPLICAS=$(yq e ".control-plane.nodes" ${CLUSTER_CONFIG} | yq e 'length' -)
   if [[ ${CP_REPLICAS} == "1" ]]
   then
@@ -218,7 +218,7 @@ function deployCluster() {
   chmod 400 ${KUBE_INIT_CONFIG}
   if [[ ${CREATE_ISO} != "true" ]]
   then
-      prepNodeFiles
+      prepNodeFiles true
   fi
   prepDnsFiles
 }
@@ -251,14 +251,14 @@ function deployWorkers() {
       fi
     fi
     createButaneConfig ${ip_addr} ${host_name} ${mac_addr} worker ${config_ceph} ${boot_dev}
-    createPxeFile ${mac_addr}  ${boot_dev} ${host_name} ${ip_addr}
+    createPxeFile false ${mac_addr} ${boot_dev} ${host_name} ${ip_addr}
     # Create DNS entries
     echo "${host_name}.${DOMAIN}.   IN      A      ${ip_addr} ; ${host_name}-${DOMAIN}-wk" >> ${WORK_DIR}/dns-work-dir/forward.zone
     o4=$(echo ${ip_addr} | cut -d"." -f4)
     echo "${o4}    IN      PTR     ${host_name}.${DOMAIN}. ; ${host_name}-${DOMAIN}-wk" >> ${WORK_DIR}/dns-work-dir/reverse.zone
     node_index=$(( ${node_index} + 1 ))
   done
-  prepNodeFiles
+  prepNodeFiles false
   prepDnsFiles
 }
 

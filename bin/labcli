@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
 
+. ${OPENSHIFT_LAB_PATH}/bin/*.sh
 . ${OPENSHIFT_LAB_PATH}/bin/labEnv.sh
 . ${OPENSHIFT_LAB_PATH}/bin/labUtils.sh
 . ${OPENSHIFT_LAB_PATH}/bin/piUtils.sh
@@ -101,9 +102,6 @@ do
     --login)
       ocLogin "$@"
     ;;
-    --cli)
-      getOkdCmds
-    ;;
     --dns)
       resetDns
     ;;
@@ -123,17 +121,11 @@ do
     --post)
       postInstall "$@"
     ;;
-    --reset-nic)
-      resetNic "$@"
-    ;;
     --nodes)
       getNodes "$@"
     ;;
     --dev-tools)
       devTools "$@"
-    ;;
-    --kvm-pwd)
-      createHostPwd
     ;;
     --certmgr)
       deployCertManagerOperator
