@@ -34,6 +34,11 @@ platform:
 pullSecret: '${PULL_SECRET_TXT}'
 sshKey: ${SSH_KEY}
 EOF
+
+if [[ ${TPNU} == "true" ]]
+then
+  yq -i '.featureSet = "TechPreviewNoUpgrade" | .osImageStream = "rhel-10"' ${WORK_DIR}/install-config-upi.yaml
+fi
 }
 
 function createClusterConfig() {
@@ -262,26 +267,342 @@ function deployWorkers() {
   prepDnsFiles
 }
 
-deployHcpControlPlane() {
+function createPxeFile() {
+  local control_plane=${1}
+  local mac=${2}
+  local boot_dev=${3}
+  local hostname=${4}
+  local ip_addr=${5}
 
-  createLbConfig
-  ingress_ip=$(yq e ".cluster.ingress-ip-addr" ${CLUSTER_CONFIG})
-  echo "*.apps.${CLUSTER_NAME}.${DOMAIN}.     IN      A      ${ingress_ip} ; ${CLUSTER_NAME}-${DOMAIN}-cp" >> ${WORK_DIR}/dns-work-dir/forward.zone
-  echo "api.${CLUSTER_NAME}.${DOMAIN}.        IN      A      ${ingress_ip} ; ${CLUSTER_NAME}-${DOMAIN}-cp" >> ${WORK_DIR}/dns-work-dir/forward.zone
-  echo "api-int.${CLUSTER_NAME}.${DOMAIN}.    IN      A      ${ingress_ip} ; ${CLUSTER_NAME}-${DOMAIN}-cp" >> ${WORK_DIR}/dns-work-dir/forward.zone
+if [[ ${control_plane} == "true" ]]
+then
 
-  let node_count=$(yq e ".control-plane.nodes" ${CLUSTER_CONFIG} | yq e 'length' -)
-  let node_index=0
-  while [[ node_index -lt ${node_count} ]]
+cat << EOF > ${WORK_DIR}/ipxe-work-dir/${mac//:/-}.ipxe
+#!ipxe
+
+initrd --name initrd http://${INSTALL_HOST_IP}/install/fcos/ignition/${CLUSTER_NAME}.${DOMAIN}/initrd
+kernel http://${INSTALL_HOST_IP}/install/fcos/ignition/${CLUSTER_NAME}.${DOMAIN}/vmlinuz logo.nologo ignition.firstboot ignition.platform.id=metal initrd=initrd coreos.live.rootfs_url=http://${INSTALL_HOST_IP}/install/fcos/ignition/${CLUSTER_NAME}.${DOMAIN}/rootfs.img console=tty0
+
+boot
+EOF
+
+else
+
+cat << EOF > ${WORK_DIR}/ipxe-work-dir/${mac//:/-}.ipxe
+#!ipxe
+
+kernel http://${INSTALL_HOST_IP}/install/fcos/ignition/${CLUSTER_NAME}.${DOMAIN}/vmlinuz logo.nologo edd=off net.ifnames=1 ifname=nic0:${mac} ip=${ip_addr}::${DOMAIN_ROUTER}:${DOMAIN_NETMASK}:${hostname}.${DOMAIN}:nic0:none nameserver=${DOMAIN_ROUTER} rd.neednet=1 coreos.inst.install_dev=${boot_dev} coreos.inst.ignition_url=http://${INSTALL_HOST_IP}/install/fcos/ignition/${CLUSTER_NAME}.${DOMAIN}/${mac//:/-}.ign coreos.inst.platform_id=metal initrd=initrd initrd=rootfs.img console=tty0
+initrd http://${INSTALL_HOST_IP}/install/fcos/ignition/${CLUSTER_NAME}.${DOMAIN}/initrd
+initrd http://${INSTALL_HOST_IP}/install/fcos/ignition/${CLUSTER_NAME}.${DOMAIN}/rootfs.img
+
+boot
+EOF
+
+fi
+}
+
+function prepNodeFiles() {
+  local control_plane=${1}
+  
+  ${SSH} root@${INSTALL_HOST_IP} "mkdir -p /usr/local/www/install/fcos/ignition/${CLUSTER_NAME}.${DOMAIN}"
+  if [[ ${control_plane} == "true" ]]
+  then
+    ${SCP} ${WORK_DIR}/openshift-install-dir/boot-artifacts/agent.*-initrd.img root@${INSTALL_HOST_IP}:/usr/local/www/install/fcos/ignition/${CLUSTER_NAME}.${DOMAIN}/initrd
+    ${SCP} ${WORK_DIR}/openshift-install-dir/boot-artifacts/agent.*-vmlinuz root@${INSTALL_HOST_IP}:/usr/local/www/install/fcos/ignition/${CLUSTER_NAME}.${DOMAIN}/vmlinuz
+    ${SCP} ${WORK_DIR}/openshift-install-dir/boot-artifacts/agent.*-rootfs.img root@${INSTALL_HOST_IP}:/usr/local/www/install/fcos/ignition/${CLUSTER_NAME}.${DOMAIN}/rootfs.img
+  else
+    ${SCP} -r ${WORK_DIR}/ipxe-work-dir/ignition/*.ign root@${INSTALL_HOST_IP}:/usr/local/www/install/fcos/ignition/${CLUSTER_NAME}.${DOMAIN}/
+  fi
+  ${SSH} root@${INSTALL_HOST_IP} "chmod 644 /usr/local/www/install/fcos/ignition/${CLUSTER_NAME}.${DOMAIN}/*"
+  ${SCP} -r ${WORK_DIR}/ipxe-work-dir/*.ipxe root@${DOMAIN_ROUTER}:/usr/local/tftpboot/ipxe/
+}
+
+function prepDnsFiles() {
+  cat ${WORK_DIR}/dns-work-dir/forward.zone | ${SSH} root@${DOMAIN_ROUTER} "cat >> /usr/local/bind/db.${DOMAIN}"
+  cat ${WORK_DIR}/dns-work-dir/reverse.zone | ${SSH} root@${DOMAIN_ROUTER} "cat >> /usr/local/bind/db.${DOMAIN_ARPA}"
+  ${SSH} root@${DOMAIN_ROUTER} "/etc/init.d/named stop && sleep 2 && /etc/init.d/named start && sleep 2"
+  ${SSH} root@${EDGE_ROUTER_LAN} "/etc/init.d/named stop && sleep 2 && /etc/init.d/named start && sleep 2"
+}
+
+function deploySnoHostPath() {
+
+# deployCertManagerOperator
+
+# pause 5 "Wait for Cert Manager"
+
+local HPP_VER=$(basename $(curl -Ls -o /dev/null -w %{url_effective} https://github.com/kubevirt/hostpath-provisioner-operator/releases/latest))
+
+${OC} wait --for=condition=Available -n cert-manager-operator --timeout=300s --all deployments
+${OC} wait --for=condition=Available -n cert-manager --timeout=300s --all deployments
+${OC} create -f https://github.com/kubevirt/hostpath-provisioner-operator/releases/download/${HPP_VER}/namespace.yaml
+${OC} create -f https://github.com/kubevirt/hostpath-provisioner-operator/releases/download/${HPP_VER}/webhook.yaml -n hostpath-provisioner
+${OC} create -f https://github.com/kubevirt/hostpath-provisioner-operator/releases/download/${HPP_VER}/operator.yaml -n hostpath-provisioner
+${OC} wait --for=condition=Available -n hostpath-provisioner --timeout=300s --all deployments
+
+cat << EOF | ${OC} apply -f -
+apiVersion: hostpathprovisioner.kubevirt.io/v1beta1
+kind: HostPathProvisioner
+metadata:
+  name: hostpath-provisioner
+spec:
+  imagePullPolicy: Always
+  storagePools:
+    - name: "local"
+      path: "/var/hostpath"
+  workload:
+    nodeSelector:
+      kubernetes.io/os: linux
+---
+apiVersion: storage.k8s.io/v1
+kind: StorageClass
+metadata:
+  name: hostpath-csi
+  annotations:
+    storageclass.kubernetes.io/is-default-class: "true"
+provisioner: kubevirt.io.hostpath-provisioner
+reclaimPolicy: Delete
+volumeBindingMode: WaitForFirstConsumer
+parameters:
+  storagePool: local
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: registry-pvc
+  namespace: openshift-image-registry
+spec:
+  accessModes:
+  - ReadWriteOnce
+  resources:
+    requests:
+      storage: 100Gi
+  storageClassName: hostpath-csi
+EOF
+
+${OC} patch configs.imageregistry.operator.openshift.io cluster --type merge --patch '{"spec":{"rolloutStrategy":"Recreate","managementState":"Managed","storage":{"pvc":{"claim":"registry-pvc"}}}}'
+
+}
+
+function deployCertManagerOperator() {
+
+cat << EOF | ${OC} apply -f -
+apiVersion: v1                      
+kind: Namespace                 
+metadata:
+  name: cert-manager-operator
+---
+apiVersion: operators.coreos.com/v1
+kind: OperatorGroup
+metadata:
+  name: openshift-cert-manager-operator
+  namespace: cert-manager-operator
+spec:
+  targetNamespaces:
+  - cert-manager-operator
+---
+apiVersion: operators.coreos.com/v1alpha1
+kind: Subscription
+metadata:
+  name: openshift-cert-manager-operator
+  namespace: cert-manager-operator
+spec:
+  channel: stable-v1
+  name: openshift-cert-manager-operator
+  source: redhat-operators
+  sourceNamespace: openshift-marketplace
+  installPlanApproval: Automatic
+EOF
+
+}
+
+function postInstall() {
+
+  # ${OC} patch imagepruners.imageregistry.operator.openshift.io/cluster --type merge -p '{"spec":{"schedule":"0 0 * * *","suspend":false,"keepTagRevisions":3,"keepYoungerThan":60,"resources":{},"affinity":{},"nodeSelector":{},"tolerations":[],"successfulJobsHistoryLimit":3,"failedJobsHistoryLimit":3}}'
+  ${OC} delete pod --field-selector=status.phase==Succeeded --all-namespaces
+  ${OC} delete pod --field-selector=status.phase==Failed --all-namespaces
+  ${OC} patch olmconfig cluster --type=merge -p '{"spec": {"features": {"disableCopiedCSVs": true}}}'
+  ${OC} patch etcd/cluster --type=merge -p '{"spec": {"controlPlaneHardwareSpeed": "Slower"}}'  
+  if [[ $(yq e ".cluster.release-type" ${CLUSTER_CONFIG}) != "ocp" ]]
+  then
+    ${OC} patch OperatorHub cluster --type json -p '[{"op": "replace", "path": "/spec/sources", "value": [{"disabled":true,"name":"certified-operators"},{"disabled":true,"name":"redhat-marketplace"},{"disabled":true,"name":"redhat-operators"}]}]'
+    ${OC} patch OperatorHub cluster --type json -p '[{"op": "add", "path": "/spec/disableAllDefaultSources", "value": false}]'
+  fi
+  for j in "$@"
   do
-    ip_addr=$(yq e ".control-plane.nodes.[${node_index}].ip-addr" ${CLUSTER_CONFIG})
-    host_name=${CLUSTER_NAME}-cp-${node_index}
-    yq e ".control-plane.nodes.[${node_index}].name = \"${host_name}\"" -i ${CLUSTER_CONFIG}
-    echo "${host_name}.${DOMAIN}.   IN      A      ${ip_addr} ; ${CLUSTER_NAME}-${DOMAIN}-cp" >> ${WORK_DIR}/dns-work-dir/forward.zone
-    o4=$(echo ${ip_addr} | cut -d"." -f4)
-    echo "${o4}    IN      PTR     ${host_name}.${DOMAIN}.  ; ${CLUSTER_NAME}-${DOMAIN}-cp" >> ${WORK_DIR}/dns-work-dir/reverse.zone
-    node_index=$(( ${node_index} + 1 ))
-  done 
+    case $j in
+      -d)
+        ${OC} patch ClusterVersion version --type merge -p '{"spec":{"channel":""}}'
+        ${OC} patch configs.samples.operator.openshift.io cluster --type merge --patch '{"spec":{"managementState":"Removed"}}'
+        # ${OC} patch OperatorHub cluster --type json -p '[{"op": "replace", "path": "/spec/sources", "value": []}]'
+        ${OC} patch OperatorHub cluster --type json -p '[{"op": "add", "path": "/spec/disableAllDefaultSources", "value": true}]'
+      ;;
+      *)
+        # catch all
+      ;;
+    esac
+  done
+  #Install GitOps Operator
+  #deployGitOps
+}
+
+function configInfraNodes() {
+  
+  for node_index in 0 1 2
+  do
+    ${OC} label nodes ${CLUSTER_NAME}-cp-${node_index} node-role.kubernetes.io/infra=""
+  done
+  ${OC} patch scheduler cluster --patch '{"spec":{"mastersSchedulable":false}}' --type=merge
+  ${OC} patch -n openshift-ingress-operator ingresscontroller default --patch '{"spec":{"nodePlacement":{"nodeSelector":{"matchLabels":{"node-role.kubernetes.io/infra":""}},"tolerations":[{"key":"node.kubernetes.io/unschedulable","effect":"NoSchedule"},{"key":"node-role.kubernetes.io/master","effect":"NoSchedule"}]}}}' --type=merge
+  for node_index in $(${OC} get pods -n openshift-ingress-canary | grep -v NAME | cut -d" " -f1)
+  do
+    ${OC} delete pod ${node_index} -n openshift-ingress-canary
+  done
+
+  ${OC} patch configs.imageregistry.operator.openshift.io cluster --patch '{"spec":{"nodeSelector":{"node-role.kubernetes.io/infra":""},"tolerations":[{"key":"node.kubernetes.io/unschedulable","effect":"NoSchedule"},{"key":"node-role.kubernetes.io/master","effect":"NoSchedule"}]}}' --type=merge
+
+cat << EOF | ${OC} apply -f -
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: cluster-monitoring-config
+  namespace: openshift-monitoring
+data:
+  config.yaml: |
+    alertmanagerMain:
+      nodeSelector:
+        node-role.kubernetes.io/infra: ""
+      tolerations:
+      - key: "node-role.kubernetes.io/master"
+        operator: "Equal"
+        value: ""
+        effect: "NoSchedule"
+    prometheusK8s:
+      nodeSelector:
+        node-role.kubernetes.io/infra: ""
+      tolerations:
+      - key: "node-role.kubernetes.io/master"
+        operator: "Equal"
+        value: ""
+        effect: "NoSchedule"
+    prometheusOperator:
+      nodeSelector:
+        node-role.kubernetes.io/infra: ""
+      tolerations:
+      - key: "node-role.kubernetes.io/master"
+        operator: "Equal"
+        value: ""
+        effect: "NoSchedule"
+    metricsServer:
+      nodeSelector:
+        node-role.kubernetes.io/infra: ""
+      tolerations:
+      - key: "node-role.kubernetes.io/master"
+        operator: "Equal"
+        value: ""
+        effect: "NoSchedule"
+    kubeStateMetrics:
+      nodeSelector:
+        node-role.kubernetes.io/infra: ""
+      tolerations:
+      - key: "node-role.kubernetes.io/master"
+        operator: "Equal"
+        value: ""
+        effect: "NoSchedule"
+    telemeterClient:
+      nodeSelector:
+        node-role.kubernetes.io/infra: ""
+      tolerations:
+      - key: "node-role.kubernetes.io/master"
+        operator: "Equal"
+        value: ""
+        effect: "NoSchedule"
+    openshiftStateMetrics:
+      nodeSelector:
+        node-role.kubernetes.io/infra: ""
+      tolerations:
+      - key: "node-role.kubernetes.io/master"
+        operator: "Equal"
+        value: ""
+        effect: "NoSchedule"
+    thanosQuerier:
+      nodeSelector:
+        node-role.kubernetes.io/infra: ""
+      tolerations:
+      - key: "node-role.kubernetes.io/master"
+        operator: "Equal"
+        value: ""
+        effect: "NoSchedule"
+    monitoringPlugin:
+      nodeSelector:
+        node-role.kubernetes.io/infra: ""
+      tolerations:
+      - key: "node-role.kubernetes.io/master"
+        operator: "Equal"
+        value: ""
+        effect: "NoSchedule"
+EOF
+}
+
+function mirrorOcpRelease() {
+  rm -rf ${OPENSHIFT_LAB_PATH}/lab-config/work-dir
+  mkdir -p ${OPENSHIFT_LAB_PATH}/lab-config/work-dir
+  mkdir -p ${OPENSHIFT_LAB_PATH}/lab-config/release-sigs
+  oc adm -a ${PULL_SECRET} release mirror --from=${OPENSHIFT_REGISTRY}:${OPENSHIFT_RELEASE} --to=${LOCAL_REGISTRY}/openshift --to-release-image=${LOCAL_REGISTRY}/openshift:${OPENSHIFT_RELEASE} --release-image-signature-to-dir=${OPENSHIFT_LAB_PATH}/lab-config/work-dir
+
+  SIG_FILE=$(ls ${OPENSHIFT_LAB_PATH}/lab-config/work-dir)
+  mv ${OPENSHIFT_LAB_PATH}/lab-config/work-dir/${SIG_FILE} ${OPENSHIFT_LAB_PATH}/lab-config/release-sigs/${OPENSHIFT_RELEASE}-sig.yaml
+  rm -rf ${OPENSHIFT_LAB_PATH}/lab-config/work-dir
+}
+
+function pullSecret() {
+
+  if [[ ! -d ${OPENSHIFT_LAB_PATH}/pull-secrets ]]
+  then
+    mkdir -p ${OPENSHIFT_LAB_PATH}/pull-secrets
+  fi
+  if [[ ${DISCONNECTED_CLUSTER} == "true" ]]
+  then
+    createPullSecret
+  else
+    release_type=$(yq e ".cluster.release-type" ${CLUSTER_CONFIG})
+    if [[ ${release_type} == "ocp" ]]
+    then
+      cp ${OPENSHIFT_LAB_PATH}/lab-config/ocp-pull-secret ${PULL_SECRET}
+    else
+      echo -n "{\"auths\": {\"fake\": {\"auth\": \"Zm9vOmJhcgo=\"}}}" > ${PULL_SECRET}
+    fi
+  fi
+}
+
+function createPullSecret() {
+  NEXUS_PWD="hello"
+  NEXUS_PWD_CHK="goodbye"
+  echo "Enter the Nexus user for the pull secret:"
+  read NEXUS_USER
+  while [[ ${NEXUS_PWD} != ${NEXUS_PWD_CHK} ]]
+  do
+    echo "Enter the password for the pull secret:"
+    read -s NEXUS_PWD
+    echo "Re-Enter the password for the pull secret:"
+    read -s NEXUS_PWD_CHK
+    if [[ ${NEXUS_PWD} != ${NEXUS_PWD_CHK} ]]
+    then
+      echo "Passwords do not match. Try Again."
+    fi
+  done
+  NEXUS_SECRET=$(echo -n "${NEXUS_USER}:${NEXUS_PWD}" | base64)
+  release_type=$(yq e ".cluster.release-type" ${CLUSTER_CONFIG})
+  if [[ ${release_type} == "ocp" ]]
+  then
+    cat ${OPENSHIFT_LAB_PATH}/lab-config/ocp-pull-secret | jq -c .auths | yq -p=json > ${PULL_SECRET}.yaml
+  else
+    echo "{\"fake\": {\"auth\": \"Zm9vOmJhcgo=\"}" | yq -p=json > ${PULL_SECRET}.yaml
+  fi
+  echo -n "{\"${LOCAL_REGISTRY}\": {\"auth\": \"${NEXUS_SECRET}\"}}" | yq -p=json >> ${PULL_SECRET}.yaml
+  echo -n "{\"auths\": $(cat ${PULL_SECRET}.yaml | yq -o=json | jq -c)}" > ${PULL_SECRET}
+  # cat ${PULL_SECRET}.yaml | yq -o=json > ${PULL_SECRET}
+  NEXUS_PWD=""
+  NEXUS_PWD_CHK=""
 }
 
 function deploy() {

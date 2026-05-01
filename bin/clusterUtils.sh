@@ -17,7 +17,7 @@ function startWorker() {
   do
     host_name=$(yq e ".compute-nodes.[${node_index}].name" ${CLUSTER_CONFIG})
     local mac=$(yq e ".compute-nodes.[${node_index}].mac-addr" ${CLUSTER_CONFIG})
-    startMetal ${mac}
+    startNode ${mac}
     if [[ ${node_index} -gt 0 ]] && [[ ${STAGGER} == "true" ]]
     then
       pause 30 "Pause to stagger node start up"
@@ -69,7 +69,7 @@ function deleteWorker() {
   mac_addr=$(yq e ".control-plane.nodes.[${index}].mac-addr" ${CLUSTER_CONFIG})
   boot_dev=$(yq e ".compute-nodes.[${index}].boot-dev" ${CLUSTER_CONFIG})
   ceph_dev=$(yq e ".compute-nodes.[${index}].ceph.ceph-dev" ${CLUSTER_CONFIG})
-  destroyMetal core ${host_name} ${boot_dev} "${ceph_dev}" ${p_cmd}
+  destroyNode core ${host_name} ${boot_dev} "${ceph_dev}" ${p_cmd}
   deleteDns ${host_name}-${DOMAIN}
   deletePxeConfig ${mac_addr}
 }
@@ -446,7 +446,7 @@ function mirrorOcpRelease() {
   rm -rf ${OPENSHIFT_LAB_PATH}/lab-config/work-dir
 }
 
-function startMetal() {
+function startNode() {
   local mac=${1}
   ${SSH} root@${DOMAIN_ROUTER} "etherwake -i br-lan ${mac}"
 }
@@ -467,7 +467,7 @@ function startControlPlane() {
   if [[ $(yq e ".control-plane.nodes" ${CLUSTER_CONFIG} | yq e 'length' -) == "1" ]]
   then
     local mac=$(yq e ".control-plane.nodes.[0].mac-addr" ${CLUSTER_CONFIG})
-    startMetal ${mac}
+    startNode ${mac}
   else
     for node_index in 0 1 2
     do
@@ -476,7 +476,7 @@ function startControlPlane() {
         pause 30 "Pause to stagger node start up"
       fi
       local mac=$(yq e ".control-plane.nodes.[${node_index}].mac-addr" ${CLUSTER_CONFIG})
-      startMetal ${mac}
+      startNode ${mac}
     done
   fi
 }
@@ -568,36 +568,6 @@ function stop() {
       ;;
     esac
   done
-}
-
-function postInstall() {
-
-  # ${OC} patch imagepruners.imageregistry.operator.openshift.io/cluster --type merge -p '{"spec":{"schedule":"0 0 * * *","suspend":false,"keepTagRevisions":3,"keepYoungerThan":60,"resources":{},"affinity":{},"nodeSelector":{},"tolerations":[],"successfulJobsHistoryLimit":3,"failedJobsHistoryLimit":3}}'
-  ${OC} delete pod --field-selector=status.phase==Succeeded --all-namespaces
-  ${OC} delete pod --field-selector=status.phase==Failed --all-namespaces
-  ${OC} patch olmconfig cluster --type=merge -p '{"spec": {"features": {"disableCopiedCSVs": true}}}'
-  ${OC} patch etcd/cluster --type=merge -p '{"spec": {"controlPlaneHardwareSpeed": "Slower"}}'  
-  if [[ $(yq e ".cluster.release-type" ${CLUSTER_CONFIG}) != "ocp" ]]
-  then
-    ${OC} patch OperatorHub cluster --type json -p '[{"op": "replace", "path": "/spec/sources", "value": [{"disabled":true,"name":"certified-operators"},{"disabled":true,"name":"redhat-marketplace"},{"disabled":true,"name":"redhat-operators"}]}]'
-    ${OC} patch OperatorHub cluster --type json -p '[{"op": "add", "path": "/spec/disableAllDefaultSources", "value": false}]'
-  fi
-  for j in "$@"
-  do
-    case $j in
-      -d)
-        ${OC} patch ClusterVersion version --type merge -p '{"spec":{"channel":""}}'
-        ${OC} patch configs.samples.operator.openshift.io cluster --type merge --patch '{"spec":{"managementState":"Removed"}}'
-        # ${OC} patch OperatorHub cluster --type json -p '[{"op": "replace", "path": "/spec/sources", "value": []}]'
-        ${OC} patch OperatorHub cluster --type json -p '[{"op": "add", "path": "/spec/disableAllDefaultSources", "value": true}]'
-      ;;
-      *)
-        # catch all
-      ;;
-    esac
-  done
-  #Install GitOps Operator
-  #deployGitOps
 }
 
 function getNodes() {

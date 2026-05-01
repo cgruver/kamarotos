@@ -1,7 +1,5 @@
 function configRouter() {
   EDGE="false"
-  WLAN="false"
-  WWAN="false"
   FORMAT_SD="false"
   NANO_PI="false"
   GL_MODEL=""
@@ -16,12 +14,6 @@ function configRouter() {
     case ${i} in
       -e|--edge)
         EDGE=true
-      ;;
-      -wl|--wireless-lan)
-        WLAN="true"
-      ;;
-      -ww|--wireless-wan)
-        WWAN="true"
       ;;
       -i|--init)
         INIT="true"
@@ -265,66 +257,7 @@ set network.lan.ipaddr="${EDGE_ROUTER_LAN}"
 set network.lan.netmask=${EDGE_NETMASK}
 set network.lan.hostname=router.${LAB_DOMAIN}
 delete network.wan6
-
 EOF
-
-  if [[ ${WWAN} == "true" ]]
-  then
-    echo "Listing available Wireless Networks:"
-    ${SSH} root@${INIT_IP} "iwinfo wlan0 scan | grep -E 'ESSID|Mode'"
-    echo ""
-    echo "Enter the ESSID of the Wireless Lan that you are connecting to:"
-    read wan_wifi_ssid
-    echo "Enter the Channel of the Wireless Lan that you are connecting to:"
-    read wwan_channel
-    echo "Enter the passphrase of the wireless lan that you are connecting to:"
-    read wan_wifi_key
-
-    unset zone
-    let i=0
-    let j=1
-    while [[ ${j} -eq 1 ]]
-    do
-      zone=$(${SSH} root@${INIT_IP} "uci get firewall.@zone[${i}].name")
-      let rc=${?}
-      if [[ ${rc} -ne 0 ]]
-      then
-        let j=2
-      elif [[ ${zone} == "wan" ]]
-      then
-        let j=0
-      else
-        let i=${i}+1
-      fi
-    done
-    if [[ ${j} -eq 0 ]]
-    then
-      echo "add_list firewall.@zone[${i}].network=wwan" >> ${WORK_DIR}/uci.batch
-    else
-      echo "FIREWALL ZONE NOT FOUND, CCONFIGURE MANUALLY WITH LUCI"
-    fi
-    if [[ ${GL_MODEL} == "GL-AR750S" ]] || [[ ${GL_MODEL} == "GL-AXT1800" ]]
-    then
-      configWwanAR750S "${wan_wifi_ssid}" "${wan_wifi_key}" ${wwan_channel}
-    else
-      configWwanMV1000W "${wan_wifi_ssid}" "${wan_wifi_key}" ${wwan_channel}
-    fi
-  fi
-
-  if [[ ${WLAN} == "true" ]]
-  then
-    echo "Enter an SSID for your Lab Wireless LAN:"
-    read lab_wifi_ssid
-    echo "Enter a WPA/PSK 2 Passphrase for your Lab Wireless LAN:"
-    read lab_wifi_key
-    if [[ ${GL_MODEL} == "GL-AR750S"  ]] || [[ ${GL_MODEL} == "GL-AXT1800" ]]
-    then
-      configWlanAR750S "${lab_wifi_ssid}" "${lab_wifi_key}" ${wwan_channel} ${wifi_channel}
-    else
-      configWlanMV1000W "${lab_wifi_ssid}" "${lab_wifi_key}" ${wwan_channel}
-    fi
-  fi
-
   echo "commit" >> ${WORK_DIR}/uci.batch
 }
 

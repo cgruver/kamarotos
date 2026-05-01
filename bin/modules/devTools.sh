@@ -198,6 +198,49 @@ EOF
   ${SSH} root@${EDGE_ROUTER_LAN} "/etc/init.d/named stop && /etc/init.d/named start"
 }
 
+function gitSecret() {
+
+  for i in "$@"
+  do
+    case $i in
+      -n=*)
+        NAMESPACE="${i#*=}"
+      ;;
+      *)
+        # catch all
+      ;;
+    esac
+  done
+
+  GIT_PWD="true"
+  GIT_PWD_CHK="false"
+
+  echo "Enter the Git Server user ID:"
+  read GIT_USER
+  while [[ ${GIT_PWD} != ${GIT_PWD_CHK} ]]
+  do
+    echo "Enter the password for the git secret:"
+    read -s GIT_PWD
+    echo "Re-Enter the password for the git secret:"
+    read -s GIT_PWD_CHK
+  done
+
+cat << EOF | ${OC} apply -n ${NAMESPACE} -f -
+apiVersion: v1
+kind: Secret
+metadata:
+    name: git-secret
+    annotations:
+      tekton.dev/git-0: ${GIT_SERVER}
+type: kubernetes.io/basic-auth
+data:
+  username: $(echo -n ${GIT_USER} | base64)
+  password: $(echo -n ${GIT_PWD} | base64)
+EOF
+
+  ${OC} patch sa pipeline --type json --patch '[{"op": "add", "path": "/secrets/-", "value": {"name":"git-secret"}}]' -n ${NAMESPACE}
+}
+
 function installKeyCloak() {
 
   if [[ ${LATEST} == "true" ]]

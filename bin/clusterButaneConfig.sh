@@ -15,10 +15,6 @@ function createButaneConfig() {
   then
     writeButaneCeph ${mac} ${boot_dev}
   fi
-  if [[ ${platform} == "metal" ]]
-  then
-    writeButaneMetal ${mac}
-  fi
   cat ${WORK_DIR}/ipxe-work-dir/${mac//:/-}-config.yml | butane -d ${WORK_DIR}/ipxe-work-dir/ -o ${WORK_DIR}/ipxe-work-dir/ignition/${mac//:/-}.ign
 }
 
@@ -117,20 +113,6 @@ cat << EOF >> ${WORK_DIR}/ipxe-work-dir/${mac//:/-}-config.yml
           resize: true
         - number: 5
           size_mib: 0
-EOF
-}
-
-function writeButaneMetal() {
-
-local mac=${1}
-
-cat << EOF >> ${WORK_DIR}/ipxe-work-dir/${mac//:/-}-config.yml
-kernel_arguments:
-  should_exist:
-    - mitigations=auto
-  should_not_exist:
-    - mitigations=auto,nosmt
-    - mitigations=off
 EOF
 }
 

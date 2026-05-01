@@ -8,26 +8,19 @@ function deleteControlPlane() {
   then
     RESET_LB="false"
   fi
-  metal=$(yq e ".control-plane.metal" ${CLUSTER_CONFIG})
   let node_count=$(yq e ".control-plane.nodes" ${CLUSTER_CONFIG} | yq e 'length' -)
   let node_index=0
   while [[ node_index -lt ${node_count} ]]
   do
     mac_addr=$(yq e ".control-plane.nodes.[${node_index}].mac-addr" ${CLUSTER_CONFIG})
     host_name=$(yq e ".control-plane.nodes.[${node_index}].name" ${CLUSTER_CONFIG})
-    if [[ ${metal} == "true" ]]
+    boot_dev=$(yq e ".control-plane.boot-dev" ${CLUSTER_CONFIG})
+    storage_dev=na
+    if [[ $(yq ".control-plane | has(\"hostpath-dev\")" ${CLUSTER_CONFIG}) == "true" ]]
     then
-      boot_dev=$(yq e ".control-plane.boot-dev" ${CLUSTER_CONFIG})
-      storage_dev=na
-      if [[ $(yq ".control-plane | has(\"hostpath-dev\")" ${CLUSTER_CONFIG}) == "true" ]]
-      then
-        storage_dev=$(yq e ".control-plane.hostpath-dev" ${CLUSTER_CONFIG})
-      fi
-      destroyMetal core ${host_name} ${boot_dev} ${storage_dev} ${p_cmd}
-    else
-      kvm_host=$(yq e ".control-plane.nodes.[${node_index}].kvm-host" ${CLUSTER_CONFIG})
-      deleteNodeVm ${host_name} ${kvm_host}.${DOMAIN}
+      storage_dev=$(yq e ".control-plane.hostpath-dev" ${CLUSTER_CONFIG})
     fi
+    destroyNode core ${host_name} ${boot_dev} ${storage_dev} ${p_cmd}
     deletePxeConfig ${mac_addr}
     node_index=$(( ${node_index} + 1 ))
   done
@@ -44,6 +37,33 @@ function deleteControlPlane() {
       sleep 10"
   fi
   deleteDns ${CLUSTER_NAME}-${DOMAIN}-cp
+}
+
+function destroyNode() {
+  local user=${1}
+  local hostname=${2}
+  local boot_dev=${3}
+  local ceph_dev=${4}
+  local p_cmd=${5}
+
+  if [[ ${ceph_dev} != "na" ]] && [[ ${ceph_dev} != "" ]]
+  then
+    ${SSH} -o ConnectTimeout=5 ${user}@${hostname}.${DOMAIN} "sudo wipefs -a -f ${ceph_dev} && sudo dd if=/dev/zero of=${ceph_dev} bs=4096 count=1"
+  fi
+  ${SSH} -o ConnectTimeout=5 ${user}@${hostname}.${DOMAIN} "sudo wipefs -a -f ${boot_dev} && sudo dd if=/dev/zero of=${boot_dev} bs=4096 count=1 && sudo ${p_cmd}"
+}
+
+function deletePxeConfig() {
+  local mac_addr=${1}
+  
+  ${SSH} root@${DOMAIN_ROUTER} "rm -f /usr/local/tftpboot/ipxe/${mac_addr//:/-}.ipxe"
+  ${SSH} root@${INSTALL_HOST_IP} "rm -f /usr/local/www/install/fcos/ignition/${CLUSTER_NAME}/${mac_addr//:/-}.ign"
+}
+
+function deleteDns() {
+  local key=${1}
+  ${SSH} root@${DOMAIN_ROUTER} "cat /usr/local/bind/db.${DOMAIN} | grep -v ${key} > /usr/local/bind/db.${DOMAIN}.tmp && mv /usr/local/bind/db.${DOMAIN}.tmp /usr/local/bind/db.${DOMAIN}"
+  ${SSH} root@${DOMAIN_ROUTER} "cat /usr/local/bind/db.${DOMAIN_ARPA} | grep -v ${key} > /usr/local/bind/db.${DOMAIN_ARPA}.tmp &&  mv /usr/local/bind/db.${DOMAIN_ARPA}.tmp /usr/local/bind/db.${DOMAIN_ARPA}"
 }
 
 function destroy() {

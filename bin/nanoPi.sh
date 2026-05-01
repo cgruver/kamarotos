@@ -19,8 +19,6 @@ function initNanoPi() {
   ${SCP} ${WORK_DIR}/boot.ipxe root@${INIT_IP}:/usr/local/tftpboot/boot.ipxe
   ${SCP} -r ${WORK_DIR}/dns/conf/* root@${INIT_IP}:/usr/local/bind/
   ${SSH} root@${INIT_IP} "reboot"
-  
-
 }
 
 function createNanoPiConfig() {

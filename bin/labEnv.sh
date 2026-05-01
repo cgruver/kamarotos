@@ -234,6 +234,7 @@ function setClusterEnv() {
   export CLUSTER_CONFIG=${OPENSHIFT_LAB_PATH}/lab-config/cluster-configs/$(yq e ".cluster-configs.[${CLUSTER_INDEX}].cluster-config-file" ${LAB_CONFIG_FILE})
   export CLUSTER=$(yq e ".cluster-configs.[${CLUSTER_INDEX}].name" ${LAB_CONFIG_FILE})
   export CLUSTER_NAME=$(yq e ".cluster.name" ${CLUSTER_CONFIG})
+  export CLUSTER_ARCH=$(yq e ".cluster.arch" ${CLUSTER_CONFIG})
   export KUBE_INIT_CONFIG=${OPENSHIFT_LAB_PATH}/lab-config/kubeconfigs/${CLUSTER_NAME}-${DOMAIN}-init-kubeconfig
   export CLUSTER_KUBE_CONFIG=${OPENSHIFT_LAB_PATH}/lab-config/kubeconfigs/${CLUSTER_NAME}-${DOMAIN}-kubeconfig
   export KUBECONFIG=${CLUSTER_KUBE_CONFIG}
@@ -245,6 +246,7 @@ function setClusterEnv() {
   export PULL_SECRET=${OPENSHIFT_LAB_PATH}/pull-secrets/${CLUSTER_NAME}-pull-secret.json
   export DISCONNECTED_CLUSTER=$(yq e ".cluster.disconnected" ${CLUSTER_CONFIG})
   export INSTALL_METHOD=$(yq e ".cluster.install-method" ${CLUSTER_CONFIG})
+  export TPNU=$(yq e ".cluster.tpnu" ${CLUSTER_CONFIG})
   setOpenShiftRelease
   setToolsRelease
 }
@@ -479,4 +481,5 @@ function clearLabEnv() {
   unset GIT_SERVER
   unset EDGE_ARPA
   unset KUBECONFIG
+  unset CLUSTER_ARCH
 }
