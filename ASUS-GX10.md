@@ -7,8 +7,10 @@ oc patch mcp worker --type merge -p '{"spec":{"osImageStream":{"name":"rhel-10"}
 oc patch mcp master --type merge -p '{"spec":{"osImageStream":{"name":"rhel-10"}}}'
 ```
 
-
-Enable Feature Gates - ImageModeStatusReporting, OSStreams, 
+Put the DGX in headless mode
+```bash
+systemctl set-default multi-user.target
+```
 
 ```bash
 mac="30:c5:99:3f:a7:e7"
