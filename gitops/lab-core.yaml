@@ -1,0 +1,42 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: lab-core
+  namespace: openshift-gitops
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io/foreground
+spec:
+  destination:
+    namespace: openshift-gitops
+    server: https://kubernetes.default.svc
+  project: default
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    retry:
+      backoff:
+        duration: 10s
+        factor: 2
+        maxDuration: 10m
+      limit: 15
+    syncOptions:
+      - CreateNamespace=true
+      - RespectIgnoreDifferences=true
+  source:
+    repoURL: ${KAMAROTOS_GIT_URL}
+    targetRevision: ${KAMAROTOS_GIT_REV}
+    path: gitops
+    helm:
+      valuesObject:
+        gitops:
+          repoURL: ${KAMAROTOS_GIT_URL}
+          targetRevision: ${KAMAROTOS_GIT_REV}
+
+        argocd:
+          namespace: openshift-gitops
+
+        cluster:
+          subdomain: apps.${CLUSTER_NAME}.${LAB_DOMAIN}
+          apiServer: api.${CLUSTER_NAME}.${LAB_DOMAIN}:6443
+

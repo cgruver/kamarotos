@@ -1,0 +1,31 @@
+gitops:
+  repoURL: https://github.com/rhpds/ocp-dev-days-rdshw-gitops.git
+  targetRevision: main
+
+argocd:
+  namespace: openshift-gitops
+
+cluster:
+  subdomain: apps.clg-lab.clg.lab
+  apiServer: ""
+
+openshiftPipelines:
+  name: openshift-pipelines
+  namespace: openshift-operators
+
+kubernetesImagepuller:
+  name: kubernetes-imagepuller
+  namespace: openshift-operators
+
+devspaces:
+  enabled: true
+  name: devspaces
+  namespace: openshift-devspaces
+
+openvsx:
+  name: openvsx
+  namespace: che-openvsx
+
+workspaceImages:
+  name: workspace-images
+  namespace: workspace-images

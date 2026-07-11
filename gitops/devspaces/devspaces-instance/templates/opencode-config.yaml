@@ -1,0 +1,37 @@
+kind: ConfigMap
+apiVersion: v1
+metadata:
+  name: opencode-config
+  namespace: {{ include "devspaces-instance.namespace" . }}
+  annotations:
+    controller.devfile.io/mount-as: subpath
+    controller.devfile.io/mount-path: /globalconfig
+    {{- include "devspaces-instance.argocd-syncwave" . | nindent 4 }}
+  labels:
+    app.kubernetes.io/part-of: che.eclipse.org
+    app.kubernetes.io/component: workspaces-config
+data:
+  opencode.json: |
+    {
+      "$schema": "https://opencode.ai/config.json",
+      "model": "lite-maas/{{ .Values.aiAssistantModel }}",
+      "provider": {
+        "lite-maas": {
+          "npm": "@ai-sdk/openai-compatible",
+          "name": "lite-maas",
+          "options": {
+            "baseURL": "_LLM_BASE_URL_",
+            "apiKey": "_LLM_API_KEY_"
+          },
+          "models": {
+            "{{ .Values.aiAssistantModel }}": {
+              "name": "{{ .Values.aiAssistantModel }}",
+              "limit": {
+                "context": 262144,
+                "output": 262144
+              }
+            }
+          }
+        }
+      }
+    }

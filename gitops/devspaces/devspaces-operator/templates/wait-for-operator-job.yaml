@@ -1,0 +1,93 @@
+# The DevSpaces CRD uses a conversion webhook served by the operator pod.
+# OLM can fail to install if it tries to validate CRs against the new CRD
+# before the operator pod is ready to serve the webhook, causing a terminal
+# InstallPlan failure. This Job sits between the Subscription (wave -2) and
+# the CheCluster (wave 0), blocking ArgoCD from advancing until the CSV is
+# installed and the webhook endpoint is live.
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: devspaces-wait-for-operator
+  namespace: {{ include "devspaces-operator.namespace" . }}
+  annotations:
+    argocd.argoproj.io/sync-wave: "-1"
+    argocd.argoproj.io/hook: Sync
+    argocd.argoproj.io/hook-delete-policy: HookSucceeded
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: devspaces-wait-for-operator
+  namespace: {{ include "devspaces-operator.namespace" . }}
+  annotations:
+    argocd.argoproj.io/sync-wave: "-1"
+    argocd.argoproj.io/hook: Sync
+    argocd.argoproj.io/hook-delete-policy: HookSucceeded
+rules:
+  - apiGroups: ["operators.coreos.com"]
+    resources: ["clusterserviceversions"]
+    verbs: ["get", "list"]
+  - apiGroups: [""]
+    resources: ["endpoints"]
+    verbs: ["get"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: devspaces-wait-for-operator
+  namespace: {{ include "devspaces-operator.namespace" . }}
+  annotations:
+    argocd.argoproj.io/sync-wave: "-1"
+    argocd.argoproj.io/hook: Sync
+    argocd.argoproj.io/hook-delete-policy: HookSucceeded
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: devspaces-wait-for-operator
+subjects:
+  - kind: ServiceAccount
+    name: devspaces-wait-for-operator
+    namespace: {{ include "devspaces-operator.namespace" . }}
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: devspaces-wait-for-operator
+  namespace: {{ include "devspaces-operator.namespace" . }}
+  annotations:
+    argocd.argoproj.io/sync-wave: "-1"
+    argocd.argoproj.io/hook: Sync
+    argocd.argoproj.io/hook-delete-policy: HookSucceeded
+spec:
+  backoffLimit: 5
+  activeDeadlineSeconds: 600
+  template:
+    spec:
+      restartPolicy: Never
+      serviceAccountName: devspaces-wait-for-operator
+      containers:
+        - name: wait
+          image: registry.redhat.io/openshift4/ose-cli:latest
+          command:
+            - /bin/bash
+            - -c
+            - |
+              NS="{{ include "devspaces-operator.namespace" . }}"
+
+              echo "Waiting for DevSpaces CSV to succeed in ${NS}..."
+              until CSV=$(oc get csv -n ${NS} --no-headers -o custom-columns=":metadata.name" 2>/dev/null | grep devspacesoperator | head -1) && \
+                    [ -n "${CSV}" ] && \
+                    [ "$(oc get csv ${CSV} -n ${NS} -o jsonpath='{.status.phase}' 2>/dev/null)" = "Succeeded" ]; do
+                echo "  ...CSV not ready yet"
+                sleep 10
+              done
+              echo "CSV ${CSV} succeeded."
+
+              echo "Waiting for devspaces-operator-service endpoint..."
+              until oc get endpoints devspaces-operator-service -n ${NS} \
+                -o jsonpath='{.subsets[0].addresses[0].ip}' 2>/dev/null | grep -q .; do
+                echo "  ...endpoint not ready yet"
+                sleep 5
+              done
+              echo "Operator webhook endpoint is ready."

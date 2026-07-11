@@ -1,0 +1,17 @@
+---
+apiVersion: operators.coreos.com/v1alpha1
+kind: Subscription
+metadata:
+  name: {{ include "devspaces-operator.name" . }}-operator
+  namespace: {{ include "devspaces-operator.namespace" . }}
+  annotations:
+    {{- include "devspaces-operator.argocd-syncwave" . | nindent 4 }}
+spec:
+  channel: {{ .Values.devspaces.subscription.channel }}
+  installPlanApproval: {{ .Values.devspaces.subscription.installPlanApproval }}
+  name: {{ .Values.devspaces.subscription.name }}
+  source: {{ .Values.devspaces.subscription.source }}
+  sourceNamespace: {{ .Values.devspaces.subscription.sourceNamespace }}
+  {{- if .Values.devspaces.subscription.startingCSV }}
+  startingCSV: {{ .Values.devspaces.subscription.startingCSV }}
+  {{- end }}

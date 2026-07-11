@@ -1,0 +1,89 @@
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: open-vsx-server
+  labels:
+    {{- include "openvsx.labels" . | nindent 4 }}
+  annotations:
+    argocd.argoproj.io/sync-wave: "-1"
+spec:
+  replicas: {{ .Values.server.replicas }}
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      name: open-vsx-server
+  template:
+    metadata:
+      labels:
+        name: open-vsx-server
+        {{- include "openvsx.labels" . | nindent 8 }}
+    spec:
+      containers:
+        - name: open-vsx-server
+          image: registry.redhat.io/devspaces/openvsx-rhel9:3.27
+          imagePullPolicy: Always
+          ports:
+            - containerPort: {{ .Values.server.port }}
+              protocol: TCP
+          livenessProbe:
+            httpGet:
+              path: /user
+              port: {{ .Values.server.port }}
+            initialDelaySeconds: 30
+            periodSeconds: 10
+            timeoutSeconds: 3
+          readinessProbe:
+            httpGet:
+              path: /user
+              port: {{ .Values.server.port }}
+            initialDelaySeconds: 3
+            periodSeconds: 10
+            timeoutSeconds: 3
+          env:
+            - name: JVM_ARGS
+              value: "-DSPDXParser.OnlyUseLocalLicenses=true -Xmx2048m -Dspring.mvc.async.request-timeout=-1"
+            - name: OPEN_VSX_PG_SVC
+              value: open-vsx-pg.{{ .Release.Namespace }}.svc.cluster.local
+            - name: OPEN_VSX_PG_USER
+              valueFrom:
+                secretKeyRef:
+                  name: open-vsx-pg
+                  key: database-user
+            - name: OPEN_VSX_PG_PASSWD
+              valueFrom:
+                secretKeyRef:
+                  name: open-vsx-pg
+                  key: database-password
+            - name: OPEN_VSX_PG_DB
+              valueFrom:
+                secretKeyRef:
+                  name: open-vsx-pg
+                  key: database-name
+          resources:
+            {{- toYaml .Values.server.resources | nindent 12 }}
+          volumeMounts:
+            - name: open-vsx-data
+              mountPath: /extensions
+            - name: open-vsx-config
+              mountPath: /home/openvsx/server/config/
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: ["ALL"]
+            runAsNonRoot: true
+      volumes:
+        - name: open-vsx-data
+          persistentVolumeClaim:
+            claimName: open-vsx-data
+        - name: open-vsx-config
+          configMap:
+            name: open-vsx-config
+            defaultMode: 444
+            items:
+              - key: application-yaml
+                path: application.yaml
+      securityContext:
+        seccompProfile:
+          type: RuntimeDefault

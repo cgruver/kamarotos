@@ -1,0 +1,99 @@
+# The Pipelines operator creates a TektonConfig CR with coschedule set to
+# "workspaces" by default. This mode rejects any task that binds more than one
+# PVC, which breaks tasks like sonar-scan that need both a source and a
+# maven-cache workspace. This PostSync Job patches TektonConfig to use
+# "pipelineruns" mode, which still handles node affinity across the pipeline
+# run but allows individual tasks to mount multiple PVCs.
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: tektonconfig-patch
+  annotations:
+    argocd.argoproj.io/sync-wave: "1"
+    argocd.argoproj.io/hook: PostSync
+    argocd.argoproj.io/hook-delete-policy: BeforeHookCreation
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: tektonconfig-patch
+  annotations:
+    argocd.argoproj.io/sync-wave: "1"
+    argocd.argoproj.io/hook: PostSync
+    argocd.argoproj.io/hook-delete-policy: BeforeHookCreation
+rules:
+  - apiGroups: ["operator.tekton.dev"]
+    resources: ["tektonconfigs"]
+    verbs: ["get", "patch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: tektonconfig-patch
+  annotations:
+    argocd.argoproj.io/sync-wave: "1"
+    argocd.argoproj.io/hook: PostSync
+    argocd.argoproj.io/hook-delete-policy: BeforeHookCreation
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: tektonconfig-patch
+subjects:
+  - kind: ServiceAccount
+    name: tektonconfig-patch
+    namespace: {{ .Release.Namespace }}
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: tektonconfig-patch
+  annotations:
+    argocd.argoproj.io/sync-wave: "1"
+    argocd.argoproj.io/hook: PostSync
+    argocd.argoproj.io/hook-delete-policy: BeforeHookCreation
+spec:
+  ttlSecondsAfterFinished: 300
+  backoffLimit: 5
+  template:
+    spec:
+      restartPolicy: OnFailure
+      serviceAccountName: tektonconfig-patch
+      containers:
+        - name: patch
+          image: image-registry.openshift-image-registry.svc:5000/openshift/cli:latest
+          command:
+            - /bin/bash
+            - -c
+            - |
+              set -euo pipefail
+
+              echo "Waiting for TektonConfig to exist..."
+              until oc get tektonconfig config > /dev/null 2>&1; do
+                sleep 5
+              done
+
+              # Allow multiple PVCs per task pod. The default "workspaces" mode
+              # rejects tasks that bind more than one PVC (e.g. sonar-scan with
+              # source + maven-cache).
+              #
+              # Enable transparency log upload to the in-cluster Rekor server
+              # and deep inspection for per-task details in pipeline attestations.
+              oc patch tektonconfig config --type merge \
+                -p '{"spec":{"pipeline":{"coschedule":"pipelineruns"}}}'
+
+              echo "TektonConfig patched"
+          resources:
+            requests:
+              cpu: 50m
+              memory: 64Mi
+            limits:
+              cpu: 100m
+              memory: 128Mi
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: ["ALL"]
+      securityContext:
+        seccompProfile:
+          type: RuntimeDefault

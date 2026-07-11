@@ -1,0 +1,9 @@
+---
+apiVersion: operators.coreos.com/v1
+kind: OperatorGroup
+metadata:
+  name: "{{ include "devspaces-operator.name" . }}-operatorgroup"
+  namespace: {{ include "devspaces-operator.namespace" . }}
+  annotations:
+    {{- include "devspaces-operatorgroup.argocd-syncwave" . | nindent 4 }}
+spec: {}

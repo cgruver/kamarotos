@@ -1,0 +1,42 @@
+nameOverride: ""
+
+postgresql:
+  image: quay.io/sclorg/postgresql-15-c9s:c9s
+  replicas: 1
+  port: 5432
+  resources:
+    requests:
+      cpu: 100m
+      memory: 128Mi
+    limits:
+      cpu: 500m
+      memory: 1Gi
+  persistence:
+    size: 5Gi
+  database: openvsx
+  username: openvsx
+  password: openvsx
+
+server:
+  version: v0.30.0
+  replicas: 1
+  port: 8080
+  resources:
+    requests:
+      cpu: 500m
+      memory: 512Mi
+    limits:
+      cpu: "1500m"
+      memory: 3Gi
+  persistence:
+    size: 10Gi
+
+build:
+  git:
+    # Overridden by app-of-apps to match gitops.repoURL and targetRevision
+    uri: "https://github.com/rhpds/ocp-dev-days-rdshw-gitops.git"
+    ref: "main"
+    contextDir: cluster/openvsx/open-vsx-server
+
+extensionUpload:
+  enabled: true

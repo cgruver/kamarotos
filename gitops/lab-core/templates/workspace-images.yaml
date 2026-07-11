@@ -1,0 +1,35 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+{{ include "lab-core.metadata" (dict "name" .Values.workspaceImages.name "namespace" .Values.argocd.namespace "syncWave" "0") }}
+spec:
+  destination:
+    namespace: {{ .Values.workspaceImages.namespace }}
+    server: https://kubernetes.default.svc
+  project: default
+  ignoreDifferences:
+  - group: image.openshift.io
+    kind: ImageStream
+    jsonPointers:
+      - /metadata/annotations
+      - /metadata/labels
+      - /spec/status
+      - /status
+      - /spec/tags/generation
+  - group: tekton.dev
+    kind: Task
+    jsonPointers:
+      - /metadata/annotations
+      - /metadata/labels
+      - /spec/generation
+      - /status
+  source:
+    path: cluster/workspace-images
+    repoURL: {{ .Values.gitops.repoURL }}
+    targetRevision: {{ .Values.gitops.targetRevision }}
+    helm:
+      parameters:
+        - name: build.git.uri
+          value: {{ .Values.gitops.repoURL }}
+        - name: build.git.ref
+          value: {{ .Values.gitops.targetRevision }}
+{{ include "lab-core.syncPolicy" . | indent 2 }}

@@ -1,0 +1,14 @@
+{{- if .Values.extensionUpload.enabled }}
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: openvsx-extension-list
+  labels:
+    {{- include "openvsx.labels" . | nindent 4 }}
+  annotations:
+    argocd.argoproj.io/sync-wave: "0"
+data:
+  extension-list.json: |
+    {{- .Files.Get "files/extension-list.json" | nindent 4 }}
+{{- end }}

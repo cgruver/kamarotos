@@ -1,0 +1,13 @@
+apiVersion: v2
+name: devspaces
+description: A Helm chart for OpenShift Dev Spaces
+type: application
+version: 0.1.0
+
+dependencies:
+  - name: devspaces-operator
+    version: 0.1.0
+    repository: file://devspaces-operator
+  - name: devspaces-instance
+    version: 0.1.0
+    repository: file://devspaces-instance

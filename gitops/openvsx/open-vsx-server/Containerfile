@@ -1,0 +1,11 @@
+FROM registry.access.redhat.com/ubi9/ubi-minimal
+
+ARG OPEN_VSX_VERSION=v0.23.5
+
+COPY --from=ghcr.io/eclipse/openvsx-server:${OPEN_VSX_VERSION} --chown=0:0 /home/openvsx/server /openvsx-server
+COPY ./entrypoint.sh /
+
+ENV JVM_ARGS="-DSPDXParser.OnlyUseLocalLicenses=true -Xmx2048m"
+
+RUN microdnf install --nodocs -y java-17-openjdk openssl && microdnf clean all
+ENTRYPOINT ["/entrypoint.sh"]

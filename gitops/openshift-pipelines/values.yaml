@@ -1,0 +1,8 @@
+nameOverride: ""
+
+subscription:
+  channel: pipelines-1.21
+  installPlanApproval: Automatic
+  name: openshift-pipelines-operator-rh
+  source: redhat-operators
+  sourceNamespace: openshift-marketplace

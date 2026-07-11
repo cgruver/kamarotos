@@ -1,0 +1,35 @@
+apiVersion: external-secrets.io/v1beta1
+kind: ExternalSecret
+metadata:
+  name: gitlab-oauth-config
+  namespace: {{ include "devspaces-instance.namespace" . }}
+  annotations:
+    {{- include "devspaces-instance.argocd-syncwave" . | nindent 4 }}
+spec:
+  refreshInterval: 5m
+  secretStoreRef:
+    name: vault-secret-store
+    kind: ClusterSecretStore
+  target:
+    name: gitlab-oauth-config
+    creationPolicy: Owner
+    template:
+      metadata:
+        labels:
+          app.kubernetes.io/part-of: che.eclipse.org
+          app.kubernetes.io/component: oauth-scm-configuration
+        annotations:
+          che.eclipse.org/oauth-scm-server: gitlab
+          che.eclipse.org/scm-server-endpoint: https://{{ .Values.gitlab.host }}
+      data:
+        id: {{ printf "{{ .id }}" | quote }}
+        secret: {{ printf "{{ .secret }}" | quote }}
+  data:
+    - secretKey: id
+      remoteRef:
+        key: secrets/gitlab/devspaces-oauth
+        property: id
+    - secretKey: secret
+      remoteRef:
+        key: secrets/gitlab/devspaces-oauth
+        property: secret

@@ -1,0 +1,19 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+{{ include "lab-core.metadata" (dict "name" .Values.openvsx.name "namespace" .Values.argocd.namespace "syncWave" "0") }}
+spec:
+  destination:
+    namespace: {{ .Values.openvsx.namespace }}
+    server: https://kubernetes.default.svc
+  project: default
+  source:
+    path: cluster/openvsx
+    repoURL: {{ .Values.gitops.repoURL }}
+    targetRevision: {{ .Values.gitops.targetRevision }}
+    helm:
+      parameters:
+        - name: build.git.uri
+          value: {{ .Values.gitops.repoURL }}
+        - name: build.git.ref
+          value: {{ .Values.gitops.targetRevision }}
+{{ include "lab-core.syncPolicy" . | indent 2 }}

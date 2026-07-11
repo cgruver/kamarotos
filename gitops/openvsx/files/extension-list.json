@@ -1,0 +1,123 @@
+{
+  "vscode": "1.108.2",
+  "architecture": "linux-x64",
+  "extensions": [
+    {
+      "id": "redhat.vscode-microprofile"
+    },
+    {
+      "id": "redhat.fabric8-analytics"
+    },
+    {
+      "id": "vscode.yaml"
+    },
+    {
+      "id": "redhat.vscode-yaml"
+    },
+    {
+      "id": "redhat.vscode-xml"
+    },
+    {
+      "id": "redhat.java"
+    },
+    {
+      "id": "redhat.vscode-quarkus"
+    },
+    {
+      "id": "vscjava.vscode-java-debug"
+    },
+    {
+      "id": "vscjava.vscode-java-test"
+    },
+    {
+      "id": "redhat.vscode-tekton-pipelines"
+    },
+    {
+      "id": "vscjava.vscode-maven"
+    },
+    {
+      "id": "mhutchie.git-graph"
+    },
+    {
+      "id": "eamodio.gitlens"
+    },
+    {
+      "id": "streetsidesoftware.code-spell-checker"
+    },
+    {
+      "id": "DavidAnson.vscode-markdownlint"
+    },
+    {
+      "id": "johnpapa.winteriscoming"
+    },
+    {
+      "id": "cnshenj.vscode-task-manager"
+    },
+    {
+      "id": "angular.ng-template"
+    },
+    {
+      "id": "johnpapa.angular2"
+    },
+    {
+      "id": "redhat.vscode-openshift-connector"
+    },
+    {
+      "id": "dbaeumer.vscode-eslint"
+    },
+    {
+      "id": "ZooCodeOrganization.zoo-code"
+    },
+    {
+      "id": "sst-dev.opencode"
+    },
+    {
+      "id": "redhat.ansible"
+    },
+    {
+      "id": "ms-python.python"
+    },
+    {
+      "id": "kilocode.kilo-code"
+    },
+    {
+      "id": "ms-kubernetes-tools.vscode-kubernetes-tools"
+    },
+    {
+      "id": "redhat.devspaces-copilot-chat-integration"
+    },
+    {
+      "id": "saoudrizwan.claude-dev"
+    },
+    {
+      "id": "vscode.html-language-features"
+    },
+    {
+      "id": "ms-python.debugpy"
+    },
+    {
+      "id": "ms-toolsai.jupyter"
+    },
+    {
+      "id": "ms-toolsai.vscode-jupyter-cell-tags"
+    },
+    {
+      "id": "ms-toolsai.jupyter-keymap"
+    },
+    {
+      "id": "ms-toolsai.jupyter-renderers"
+    },
+    {
+      "id": "ms-toolsai.vscode-jupyter-slideshow"
+    },
+    {
+      "id": "reditorsupport.r"
+    },
+    {
+      "id": "rdebugger.r-debugger"
+    },
+    {
+      "id": "reditorsupport.r-syntax"
+    }
+  ]
+}

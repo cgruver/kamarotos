@@ -1,0 +1,16 @@
+{{- if .Values.webTerminal.enabled }}
+---
+apiVersion: operators.coreos.com/v1alpha1
+kind: Subscription
+metadata:
+  name: web-terminal
+  namespace: {{ include "devspaces-operator.namespace" . }}
+  annotations:
+    {{- include "devspaces-operator.argocd-syncwave" . | nindent 4 }}
+spec:
+  channel: {{ .Values.webTerminal.subscription.channel }}
+  installPlanApproval: {{ .Values.webTerminal.subscription.installPlanApproval }}
+  name: {{ .Values.webTerminal.subscription.name }}
+  source: {{ .Values.webTerminal.subscription.source }}
+  sourceNamespace: {{ .Values.webTerminal.subscription.sourceNamespace }}
+{{- end }}

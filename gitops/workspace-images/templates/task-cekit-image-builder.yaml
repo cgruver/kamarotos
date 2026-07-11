@@ -1,0 +1,83 @@
+apiVersion: tekton.dev/v1
+kind: Task
+metadata:
+  name: cekit-image-builder
+  labels:
+    {{- include "workspace-images.labels" . | nindent 4 }}
+  annotations:
+    io.kubernetes.cri-o.Devices: '/dev/fuse,/dev/net/tun'
+    argocd.argoproj.io/sync-wave: "1"
+spec:
+  params:
+  - name: registry
+    type: string
+    description: Image registry that built images will be pushed to
+    default: {{ .Values.registry.hostname }}
+  - name: registry-path
+    type: string
+    description: Path to the image within the registry
+    default: {{ .Values.registry.namespace }}
+  - name: image-path
+    type: string
+    description: The relative path of the image.yaml to be built.
+  - name: repository
+    type: string
+    description: The git repository to pull the image and module descriptors from.
+    default: {{ .Values.git.uri }}
+  - name: revision
+    type: string
+    description: The repository branch to clone.
+    default: {{ .Values.git.ref }}
+  stepTemplate:
+    securityContext:
+      capabilities:
+        add:
+          - SETGID
+          - SETUID
+        drop:
+          - ALL
+      runAsNonRoot: true
+      readOnlyRootFilesystem: false
+      allowPrivilegeEscalation: true
+  steps:
+  - name: clone
+    computeResources: {}
+    image: {{ .Values.registry.hostname }}/{{ .Values.registry.namespace }}/{{ .Values.registry.builderImage }}:{{ .Values.registry.builderTag }}
+    script: |
+      git clone -b $(params.revision) --single-branch $(params.repository) /workspace/source
+  - name: build
+    computeResources: {}
+    image: {{ .Values.registry.hostname }}/{{ .Values.registry.namespace }}/{{ .Values.registry.builderImage }}:{{ .Values.registry.builderTag }}
+    workingDir: "/workspace/source"
+    env:
+    - name: NODE_EXTRA_CA_CERTS
+      value: /tekton-custom-certs/ca-bundle.crt
+    script: |
+      if [ ! -d "${HOME}" ]
+      then
+        mkdir -p "${HOME}"
+      fi
+      if [ ! -d "${HOME}/.config/containers" ]
+      then
+        mkdir -p ${HOME}/.config/containers
+        (echo '[storage]';echo 'driver = "overlay"';echo 'graphroot = "/tmp/graphroot"';echo '[storage.options.overlay]';echo 'mount_program = "/usr/bin/fuse-overlayfs"') > ${HOME}/.config/containers/storage.conf
+      fi
+      if ! whoami &> /dev/null
+      then
+        if [ -w /etc/passwd ]
+        then
+          echo "${USER_NAME:-user}:x:$(id -u):0:${USER_NAME:-user} user:${HOME}:/bin/bash" >> /etc/passwd
+          echo "${USER_NAME:-user}:x:$(id -u):" >> /etc/group
+        fi
+      fi
+      USER=$(whoami)
+      START_ID=$(( $(id -u)+1 ))
+      echo "${USER}:${START_ID}:2147483646" > /etc/subuid
+      echo "${USER}:${START_ID}:2147483646" > /etc/subgid
+      image_def="images/$(params.image-path)"
+      IMAGE_NAME=$(yq e ".name" ${image_def})
+      IMAGE_TAG=$(yq e ".version" ${image_def})
+      IMAGE="$(params.registry)/$(params.registry-path)/${IMAGE_NAME}:${IMAGE_TAG}"
+      cekit --descriptor ${image_def} build podman --build-flag --volume --build-flag ${NODE_EXTRA_CA_CERTS}:${NODE_EXTRA_CA_CERTS}:ro,Z --build-arg NODE_EXTRA_CA_CERTS=${NODE_EXTRA_CA_CERTS} --tag ${IMAGE}
+      podman push ${IMAGE}
+      podman image rm ${IMAGE}

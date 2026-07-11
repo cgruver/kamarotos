@@ -1,0 +1,44 @@
+apiVersion: tekton.dev/v1
+kind: Pipeline
+metadata:
+  name: cekit-build-class
+  labels:
+    {{- include "workspace-images.labels" . | nindent 4 }}
+  annotations:
+    argocd.argoproj.io/sync-wave: "1"
+spec:
+  params:
+  - name: registry
+    type: string
+    description: Image registry that built images will be pushed to
+    default: {{ .Values.registry.hostname }}
+  - name: registry-path
+    type: string
+    description: Path to the image within the registry
+    default: {{ .Values.registry.namespace }}
+  - name: repository
+    type: string
+    description: The git repository to pull the image and module descriptors from.
+    default: {{ .Values.git.uri }}
+  - name: revision
+    type: string
+    description: The repository branch to clone.
+    default: {{ .Values.git.ref }}
+  - name: class
+    type: string
+    description: The class of images to build
+  tasks:
+  - name: build-images
+    taskRef:
+      name: cekit-class-builder
+    params:
+    - name: registry
+      value: $(params.registry)
+    - name: registry-path
+      value: $(params.registry-path)
+    - name: image-class
+      value: $(params.class)
+    - name: repository
+      value: $(params.repository)
+    - name: revision
+      value: $(params.revision)

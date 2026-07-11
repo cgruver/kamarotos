@@ -1,0 +1,30 @@
+{{- if .Values.devspaces.enabled }}
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+{{ include "lab-core.metadata" (dict "name" .Values.devspaces.name "namespace" .Values.argocd.namespace "syncWave" "1") }}
+spec:
+  destination:
+    namespace: {{ .Values.devspaces.namespace }}
+    server: https://kubernetes.default.svc
+  project: default
+  source:
+    path: cluster/devspaces
+    repoURL: {{ .Values.gitops.repoURL }}
+    targetRevision: {{ .Values.gitops.targetRevision }}
+    helm:
+      valuesObject:
+        devspaces-operator:
+          devspaces:
+            subscription:
+              source: {{ include "lab-core.operatorSource" . }}
+              {{- if .Values.catalogSource.enabled }}
+              startingCSV: ""
+              {{- end }}
+          webTerminal:
+            enabled: false
+        devspaces-instance:
+          gitlab:
+            host: {{ .Values.gitlab.host }}
+          openVSXURL: https://open-vsx-server-{{ .Values.openvsx.namespace }}.{{ .Values.cluster.subdomain }}
+{{ include "lab-core.syncPolicy" . | indent 2 }}
+{{- end }}

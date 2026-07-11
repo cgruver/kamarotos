@@ -1,0 +1,93 @@
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: open-vsx-config
+  labels:
+    {{- include "openvsx.labels" . | nindent 4 }}
+  annotations:
+    argocd.argoproj.io/sync-wave: "-1"
+data:
+  application-yaml: |
+    server:
+      port: {{ .Values.server.port }}
+    spring:
+      mvc:
+        async:
+          # Tomcat's default async request timeout is 30s, which drops large
+          # VSIX downloads mid-transfer (~75MB at ~700KB/s cross-namespace)
+          request-timeout: -1
+      profiles:
+        include: ovsx
+      autoconfigure:
+        exclude: 
+          - org.jobrunr.spring.autoconfigure.storage.JobRunrElasticSearchStorageAutoConfiguration
+          - org.springframework.boot.actuate.autoconfigure.tracing.zipkin.ZipkinAutoConfiguration
+      cache:
+        jcache:
+          config: classpath:ehcache.xml
+      datasource:
+        url: jdbc:postgresql://${OPEN_VSX_PG_SVC}/${OPEN_VSX_PG_DB}
+        username: ${OPEN_VSX_PG_USER}
+        password: ${OPEN_VSX_PG_PASSWD}
+      flyway:
+        baseline-on-migrate: true
+        baseline-version: 0.1.0
+        baseline-description: JobRunr tables
+      jpa:
+        open-in-view: false
+        properties:
+          hibernate:
+            dialect: org.hibernate.dialect.PostgreSQLDialect
+        hibernate:
+          ddl-auto: none
+      session:
+        store-type: jdbc
+        jdbc:
+          initialize-schema: never
+      security:
+        oauth2:
+          client:
+            registration:
+              github:
+                client-id: foo
+                client-secret: foo
+    management:
+      health:
+        probes:
+          enabled: true
+    ovsx:
+      storage:
+        local:
+          directory: "/extensions"
+      elasticsearch:
+        enabled: false
+        clear-on-start: true
+      databasesearch:
+        enabled: true
+      integrity:
+        key-pair: renew
+      extension-control:
+        enabled: false
+    bucket4j:
+      enabled: false
+    springdoc:
+      swagger-ui:
+        path: /swagger-ui
+        docExpansion: list
+        operationsSorter: alpha
+        supportedSubmitMethods:
+          - get
+    org:
+      jobrunr:
+        job-scheduler:
+          enabled: true
+        background-job-server:
+          enabled: true
+          worker-count: 2
+        dashboard:
+          enabled: false
+        database:
+          type: sql
+        miscellaneous:
+          allow-anonymous-data-usage: false

@@ -1,0 +1,124 @@
+kind: ConfigMap
+apiVersion: v1
+metadata:
+  name: zoo-code-config
+  namespace: {{ include "devspaces-instance.namespace" . }}
+  annotations:
+    controller.devfile.io/mount-as: subpath
+    controller.devfile.io/mount-path: /globalconfig
+    {{- include "devspaces-instance.argocd-syncwave" . | nindent 4 }}
+  labels:
+    app.kubernetes.io/part-of: che.eclipse.org
+    app.kubernetes.io/component: workspaces-config
+data:
+  zoo-code-settings.json: |
+    {
+      "providerProfiles": {
+        "currentApiConfigName": "{{ .Values.aiAssistantModel }}",
+        "apiConfigs": {
+          "{{ .Values.aiAssistantModel }}": {
+            "openAiBaseUrl": "_LLM_BASE_URL_",
+            "openAiApiKey": "_LLM_API_KEY_",
+            "openAiModelId": "{{ .Values.aiAssistantModel }}",
+            "openAiCustomModelInfo": {
+              "maxTokens": -1,
+              "contextWindow": 262144,
+              "supportsImages": false,
+              "supportsPromptCache": true,
+              "inputPrice": 0,
+              "outputPrice": 0
+            },
+            "openAiHeaders": {},
+            "apiProvider": "openai",
+            "id": "{{ .Values.aiAssistantModel }}"
+          }
+        },
+        "modeApiConfigs": {
+          "architect": "{{ .Values.aiAssistantModel }}",
+          "code": "{{ .Values.aiAssistantModel }}",
+          "ask": "{{ .Values.aiAssistantModel }}",
+          "debug": "{{ .Values.aiAssistantModel }}",
+          "orchestrator": "{{ .Values.aiAssistantModel }}"
+        },
+        "migrations": {
+          "rateLimitSecondsMigrated": true,
+          "openAiHeadersMigrated": true,
+          "consecutiveMistakeLimitMigrated": true,
+          "todoListEnabledMigrated": true,
+          "claudeCodeLegacySettingsMigrated": true
+        }
+      },
+      "globalSettings": {
+        "dismissedUpsells": [
+          "longRunningTask"
+        ],
+        "openRouterImageApiKey": "",
+        "openRouterImageGenerationSelectedModel": "",
+        "autoApprovalEnabled": true,
+        "alwaysAllowReadOnly": true,
+        "alwaysAllowReadOnlyOutsideWorkspace": true,
+        "alwaysAllowWrite": false,
+        "alwaysAllowWriteOutsideWorkspace": false,
+        "alwaysAllowWriteProtected": false,
+        "writeDelayMs": 1000,
+        "alwaysAllowMcp": false,
+        "alwaysAllowModeSwitch": false,
+        "alwaysAllowSubtasks": true,
+        "alwaysAllowExecute": false,
+        "alwaysAllowFollowupQuestions": false,
+        "followupAutoApproveTimeoutMs": 60000,
+        "allowedCommands": [
+          "git log",
+          "git diff",
+          "git show"
+        ],
+        "deniedCommands": [],
+        "allowedMaxRequests": null,
+        "allowedMaxCost": null,
+        "autoCondenseContext": true,
+        "autoCondenseContextPercent": 100,
+        "includeCurrentTime": false,
+        "includeCurrentCost": false,
+        "maxGitStatusFiles": 0,
+        "includeDiagnosticMessages": true,
+        "maxDiagnosticMessages": 50,
+        "enableCheckpoints": true,
+        "checkpointTimeout": 15,
+        "ttsEnabled": false,
+        "ttsSpeed": 1,
+        "soundEnabled": false,
+        "soundVolume": 0.5,
+        "maxOpenTabsContext": 20,
+        "maxWorkspaceFiles": 200,
+        "showZooIgnoredFiles": false,
+        "enableSubfolderRules": false,
+        "maxImageFileSize": 5,
+        "maxTotalImageSize": 20,
+        "terminalOutputPreviewSize": "medium",
+        "terminalShellIntegrationTimeout": 5000,
+        "terminalShellIntegrationDisabled": true,
+        "terminalCommandDelay": 0,
+        "terminalPowershellCounter": false,
+        "terminalZshClearEolMark": true,
+        "terminalZshOhMy": false,
+        "terminalZshP10k": false,
+        "terminalZdotdir": false,
+        "experiments": {
+          "preventFocusDisruption": false,
+          "imageGeneration": false,
+          "runSlashCommand": false,
+          "customTools": false
+        },
+        "language": "en",
+        "telemetrySetting": "unset",
+        "mcpEnabled": true,
+        "mode": "code",
+        "customModes": [],
+        "customSupportPrompts": {},
+        "includeTaskHistoryInEnhance": true,
+        "reasoningBlockCollapsed": false,
+        "enterBehavior": "send",
+        "profileThresholds": {},
+        "hasOpenedModeSelector": true
+      }
+    }

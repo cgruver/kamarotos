@@ -1,0 +1,37 @@
+nameOverride: "devspaces"
+fullnameOverride: ""
+
+namespace: ""
+
+devspaces:
+  subscription:
+    channel: stable
+    installPlanApproval: Automatic
+    name: devspaces
+    source: redhat-operators
+    startingCSV: ""
+    sourceNamespace: openshift-marketplace
+
+webTerminal:
+  enabled: true
+  subscription:
+    channel: fast
+    name: web-terminal
+    installPlanApproval: Automatic
+    source: redhat-operators
+    sourceNamespace: openshift-marketplace
+
+imagePuller:
+  subscription:
+    channel: stable
+    installPlanApproval: Automatic
+    name: kubernetes-imagepuller-operator
+    source: community-operators
+    sourceNamespace: openshift-marketplace
+
+argocd:
+  enabled: true
+  operatorgroup:
+    syncwave: "-3"
+  operator:
+    syncwave: "-2"

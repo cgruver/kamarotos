@@ -1,0 +1,11 @@
+FROM registry.access.redhat.com/ubi9:latest
+
+COPY --chown=0:0 importvsx.sh /
+
+RUN dnf module enable -y nodejs:20 && \
+    dnf install -y --nodocs nodejs npm postgresql jq && \
+    dnf clean all && \
+    npm install -g ovsx && \
+    npm cache clean --force && \
+    chmod +x /importvsx.sh
+

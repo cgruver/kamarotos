@@ -1,0 +1,31 @@
+# Default values for workspace-images chart
+nameOverride: ""
+
+# Git repository configuration
+git:
+  uri: "https://github.com/openshift-dev-days/workspace-images.git"
+  ref: "main"
+  contextDir: "cekit-builder-image"
+
+# Image registry configuration
+registry:
+  hostname: "image-registry.openshift-image-registry.svc:5000"
+  namespace: "workspace-images"
+  # The builder image will be built and pushed here
+  builderImage: "cekit-builder"
+  builderTag: "latest"
+
+# Resource limits for builds and tasks
+resources:
+  limits:
+    cpu: "4"
+    memory: "4Gi"
+  requests:
+    cpu: "500m"
+    memory: "512Mi"
+
+# Additional labels to add to all resources
+labels: {}
+
+# Annotations for ArgoCD sync-wave and hooks
+annotations: {}

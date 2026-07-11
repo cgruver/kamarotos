@@ -1,0 +1,13 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+{{ include "lab-core.metadata" (dict "name" .Values.kubernetesImagepuller.name "namespace" .Values.argocd.namespace "syncWave" "-1") }}
+spec:
+  destination:
+    namespace: {{ .Values.kubernetesImagepuller.namespace }}
+    server: https://kubernetes.default.svc
+  project: default
+  source:
+    path: cluster/kubernetes-imagepuller
+    repoURL: {{ .Values.gitops.repoURL }}
+    targetRevision: {{ .Values.gitops.targetRevision }}
+{{ include "lab-core.syncPolicy" . | indent 2 }}

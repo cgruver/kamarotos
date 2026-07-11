@@ -1,0 +1,77 @@
+{{- if .Values.extensionUpload.enabled }}
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: openvsx-extension-upload
+  labels:
+    {{- include "openvsx.labels" . | nindent 4 }}
+  annotations:
+    argocd.argoproj.io/sync-wave: "1"
+    argocd.argoproj.io/hook: PostSync
+    argocd.argoproj.io/hook-delete-policy: BeforeHookCreation
+spec:
+  ttlSecondsAfterFinished: 600
+  backoffLimit: 10
+  template:
+    metadata:
+      labels:
+        {{- include "openvsx.labels" . | nindent 8 }}
+    spec:
+      restartPolicy: OnFailure
+      containers:
+        - name: upload
+          image: image-registry.openshift-image-registry.svc:5000/{{ .Release.Namespace }}/openvsx-extension-uploader:latest
+          command:
+            - /bin/bash
+            - -c
+            - |
+              set -euo pipefail
+              /importvsx.sh --init
+              /importvsx.sh -f=/config/extension-list.json -d
+          env:
+            - name: OVSX_REGISTRY_URL
+              value: "http://open-vsx-server.{{ .Release.Namespace }}.svc:{{ .Values.server.port }}"
+            - name: PG_HOST
+              value: "open-vsx-pg.{{ .Release.Namespace }}.svc"
+            - name: PG_PORT
+              value: {{ .Values.postgresql.port | quote }}
+            - name: OVSX_PAT
+              value: "admin_upload_token"
+            - name: PG_USER
+              valueFrom:
+                secretKeyRef:
+                  name: open-vsx-pg
+                  key: database-user
+            - name: PGPASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: open-vsx-pg
+                  key: database-password
+            - name: PG_DB
+              valueFrom:
+                secretKeyRef:
+                  name: open-vsx-pg
+                  key: database-name
+          volumeMounts:
+            - name: extension-list
+              mountPath: /config
+          resources:
+            requests:
+              cpu: 100m
+              memory: 256Mi
+            limits:
+              cpu: 500m
+              memory: 512Mi
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: ["ALL"]
+      volumes:
+        - name: extension-list
+          configMap:
+            name: openvsx-extension-list
+      securityContext:
+        seccompProfile:
+          type: RuntimeDefault
+{{- end }}

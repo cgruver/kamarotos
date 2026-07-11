@@ -1,0 +1,29 @@
+apiVersion: external-secrets.io/v1beta1
+kind: ExternalSecret
+metadata:
+  name: kafka-credentials
+  namespace: {{ include "devspaces-instance.namespace" . }}
+  annotations:
+    {{- include "devspaces-instance.argocd-syncwave" . | nindent 4 }}
+spec:
+  refreshInterval: 5m
+  secretStoreRef:
+    name: vault-secret-store
+    kind: ClusterSecretStore
+  target:
+    name: kafka-credentials
+    creationPolicy: Owner
+    template:
+      metadata:
+        labels:
+          app.kubernetes.io/part-of: che.eclipse.org
+          app.kubernetes.io/component: workspaces-config
+        annotations:
+          controller.devfile.io/mount-as: env
+      data:
+        DEV_KAFKA_PASSWORD: "{{ printf "{{ .kafka_password }}" }}"
+  data:
+    - secretKey: kafka_password
+      remoteRef:
+        key: secrets/kafka/user-password
+        property: value

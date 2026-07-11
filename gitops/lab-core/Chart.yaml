@@ -1,0 +1,5 @@
+apiVersion: v2
+name: lab-core
+description: Root chart that deploys all lab components as Argo CD Applications
+type: application
+version: 1.0.0

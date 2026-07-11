@@ -1,0 +1,71 @@
+---
+apiVersion: org.eclipse.che/v2
+kind: CheCluster
+metadata:
+  name: {{ include "devspaces-instance.name" . }}
+  namespace: {{ include "devspaces-instance.namespace" . }}
+  annotations:
+    {{- include "devspaces-instance.argocd-syncwave" . | nindent 4 }}
+spec:
+  components:
+    cheServer:
+      extraProperties:
+        CHE_OIDC_USERNAME__CLAIM: email
+        CHE_FORCE_REFRESH_PERSONAL_ACCESS_TOKEN: "true"
+      debug: false
+      logLevel: INFO
+    dashboard: {}
+    devWorkspace: {}
+    devfileRegistry: {}
+    imagePuller:
+      enable: true
+      spec:
+        images: "{{ range $i, $entry := .Values.imagePuller.images }}{{ if $i }};{{ end }}{{ $entry.name }}={{ $entry.image }}{{ end }}"
+    metrics:
+      enable: true
+    pluginRegistry:
+      openVSXURL: {{ .Values.openVSXURL | quote }}
+  containerRegistry: {}
+  devEnvironments:
+    startTimeoutSeconds: {{ .Values.devEnvironments.startTimeoutSeconds }}
+    secondsOfRunBeforeIdling: {{ .Values.devEnvironments.secondsOfRunBeforeIdling }}
+    maxNumberOfWorkspacesPerUser: {{ .Values.devEnvironments.maxNumberOfWorkspacesPerUser }}
+    maxNumberOfRunningWorkspacesPerUser: {{ .Values.devEnvironments.maxNumberOfRunningWorkspacesPerUser }}
+    defaultContainerResources:
+      limits:
+        cpu: {{ .Values.devEnvironments.resources.limits.cpu | quote }}
+        memory: {{ .Values.devEnvironments.resources.limits.memory | quote }}
+      requests:
+        cpu: {{ .Values.devEnvironments.resources.requests.cpu | quote }}
+        memory: {{ .Values.devEnvironments.resources.requests.memory | quote }}
+    containerResourceCaps:
+      limits:
+        cpu: {{ .Values.devEnvironments.resources.limits.cpu | quote }}
+        memory: {{ .Values.devEnvironments.resources.limits.memory | quote }}
+    # containerBuildConfiguration:
+    #   openShiftSecurityContextConstraint: container-build
+    # containerRunConfiguration:
+    #   openShiftSecurityContextConstraint: container-run
+    # disableContainerBuildCapabilities: false
+    disableContainerRunCapabilities: false
+    defaultEditor: {{ .Values.devEnvironments.defaultEditor }}
+    defaultNamespace:
+      autoProvision: true
+      template: <username>-devspaces
+    secondsOfInactivityBeforeIdling: {{ .Values.devEnvironments.secondsOfInactivityBeforeIdling }}
+    storage:
+      pvcStrategy: per-workspace
+  gitServices:
+    gitlab:
+      - secretName: gitlab-oauth-config
+        endpoint: https://{{ .Values.gitlab.host }}
+  # DevSpaces authenticates via OpenShift OAuth — the operator's gateway proxy
+  # hardcodes provider="openshift" and ignores external OIDC overrides. Workshop
+  # users log in through the "developers" OpenID provider added to the cluster
+  # OAuth CR (see openshift-oauth/ chart), which redirects to Keycloak.
+  networking:
+    auth:
+      gateway:
+        configLabels:
+          app: che
+          component: che-gateway-config

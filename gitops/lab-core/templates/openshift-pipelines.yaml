@@ -1,0 +1,27 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+{{ include "lab-core.metadata" (dict "name" .Values.openshiftPipelines.name "namespace" .Values.argocd.namespace "syncWave" "1") }}
+spec:
+  destination:
+    namespace: {{ .Values.openshiftPipelines.namespace }}
+    server: https://kubernetes.default.svc
+  project: default
+  source:
+    path: gitops/openshift-pipelines
+    repoURL: {{ .Values.gitops.repoURL }}
+    targetRevision: {{ .Values.gitops.targetRevision }}
+    helm:
+      valuesObject:
+        subscription:
+          source: {{ include "lab-core.operatorSource" . }}
+  syncPolicy:
+    automated: {}
+    retry:
+      backoff:
+        duration: 5s
+        factor: 2
+        maxDuration: 3m0s
+      limit: 30
+    syncOptions:
+      - CreateNamespace=false
+      - RespectIgnoreDifferences=true
