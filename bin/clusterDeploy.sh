@@ -44,7 +44,7 @@ fi
 function createClusterConfig() {
 
   mkdir ${WORK_DIR}/openshift-install-dir/openshift
-  createClusterCustomMC
+  # createClusterCustomMC
   if [[ $(yq ".control-plane | has(\"ceph\")" ${CLUSTER_CONFIG}) == "true" ]]
   then
     if [[ $(yq e ".control-plane.ceph.type" ${CLUSTER_CONFIG}) == "part"  ]]
@@ -60,6 +60,7 @@ function createClusterConfig() {
   yq e ".kind = \"AgentConfig\"" -i ${WORK_DIR}/agent-config.yaml
   yq e ".metadata.name = \"${CLUSTER_NAME}\"" -i ${WORK_DIR}/agent-config.yaml
   yq e ".rendezvousIP = \"$(yq e ".control-plane.nodes.[0].ip-addr" ${CLUSTER_CONFIG})\"" -i ${WORK_DIR}/agent-config.yaml
+  yq e ".additionalNTPSources.[0] = \"${DOMAIN_ROUTER}\"" -i ${WORK_DIR}/agent-config.yaml
 
   node_boot_dev=$(yq e ".control-plane.boot-dev" ${CLUSTER_CONFIG})
   let node_count=$(yq e ".control-plane.nodes" ${CLUSTER_CONFIG} | yq e 'length' -)
