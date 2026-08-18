@@ -332,6 +332,8 @@ oc patch etcd/cluster --type=merge -p '{"spec": {"controlPlaneHardwareSpeed": "S
 
 1. Extract auth for pull secret from: ~/.config/containers/auth.json
 
+## Disable copied CSV
+
 ```bash
 oc patch olmconfig cluster --type=merge -p '{"spec": {"features": {"disableCopiedCSVs": true}}}'
 ```
