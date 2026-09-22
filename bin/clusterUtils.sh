@@ -635,7 +635,7 @@ deployCertManagerOperator
 pause 15 "Wait for Cert Manager"
 
 echo "Waiting for CertManager CSV to install..."
-until CSV=$(${OC} get csv -n cert-manager-operator --no-headers -o custom-columns=":metadata.name" 2>/dev/null | grep openshift-cert-manager-operator | head -1) && \
+until CSV=$(${OC} get csv -n cert-manager-operator --no-headers -o custom-columns=":metadata.name" 2>/dev/null | grep cert-manager-operator | head -1) && \
       [ -n "${CSV}" ] && \
       [ "$(${OC} get csv ${CSV} -n cert-manager-operator -o jsonpath='{.status.phase}' 2>/dev/null)" = "Succeeded" ]; do
   echo "  ...CSV not ready yet"
