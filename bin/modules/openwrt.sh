@@ -32,6 +32,8 @@ uci del_list nginx._lan.listen='80'
 uci del_list nginx._lan.listen='[::]:80'
 uci del_list nginx._lan.listen='443 ssl'
 uci del_list nginx._lan.listen='[::]:443 ssl'
+uci del_list nginx._lan.listen='443 ssl default_server'
+uci del_list nginx._lan.listen='[::]:443 ssl default_server'
 uci add_list nginx._lan.listen="${EDGE_ROUTER_LAN}:443 ssl default_server"
 uci add_list nginx._lan.listen="${EDGE_ROUTER_LAN}:80"
 uci delete nginx._redirect2ssl
