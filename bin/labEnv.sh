@@ -220,6 +220,7 @@ function setEdgeCluster() {
   export DOMAIN_ROUTER=${EDGE_ROUTER_LAN}
   export DOMAIN_NETMASK=${EDGE_NETMASK}
   export DOMAIN_NETWORK=${EDGE_NETWORK}
+  export DOMAIN_CIDR=${EDGE_CIDR}
 }
 
 function setClusterEnv() {

@@ -20,7 +20,7 @@ networking:
   serviceNetwork: 
   - ${SERVICE_CIDR}
   machineNetwork:
-  - cidr: 10.11.12.0/24
+  - cidr: ${DOMAIN_NETWORK}/${DOMAIN_CIDR}
 compute:
 - name: worker
   replicas: 0
