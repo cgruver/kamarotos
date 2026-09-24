@@ -221,7 +221,7 @@ function deployCluster() {
   fi
   configControlPlane
   cp ${WORK_DIR}/openshift-install-dir/auth/kubeconfig ${KUBE_INIT_CONFIG}
-  chmod 400 ${KUBE_INIT_CONFIG}
+  chmod 600 ${KUBE_INIT_CONFIG}
   if [[ ${CREATE_ISO} != "true" ]]
   then
       prepNodeFiles true

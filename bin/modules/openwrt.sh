@@ -1,4 +1,11 @@
 
+export EDGE_ROUTER_LAN=192.168.12.1
+export EDGE_NETWORK=192.168.12.0
+export EDGE_NETMASK=255.255.255.0
+export EDGE_CIDR=24
+export LAB_DOMAIN=clg.lab
+export DOMAIN_ARPA=12.168.192
+
 # Init the router with lab network setup and install packages
 apk update
 apk add ip-full procps-ng-ps bind-rndc bind-server bind-tools bash wget rsync block-mount wipefs coreutils-nohup etherwake nginx-full sfdisk losetup resize2fs luci-ssl-nginx nginx-mod-stream
@@ -14,7 +21,7 @@ dropbearkey -t ed25519 -f /root/.ssh/id_dropbear
 cat << EOF > /tmp/uci.batch
 set dropbear.@dropbear[0].PasswordAuth="off"
 set dropbear.@dropbear[0].RootPasswordAuth="off"
-set network.lan.ipaddr="${EDGE_ROUTER}/${EDGE_CIDR}"
+set network.lan.ipaddr="${EDGE_ROUTER_LAN}/${EDGE_CIDR}"
 set network.lan.hostname=router.${LAB_DOMAIN}
 set attendedsysupgrade.client.login_check_for_upgrades='1'
 commit
@@ -25,8 +32,8 @@ uci del_list nginx._lan.listen='80'
 uci del_list nginx._lan.listen='[::]:80'
 uci del_list nginx._lan.listen='443 ssl'
 uci del_list nginx._lan.listen='[::]:443 ssl'
-uci add_list nginx._lan.listen="${EDGE_ROUTER}:443 ssl default_server"
-uci add_list nginx._lan.listen="${EDGE_ROUTER}:80"
+uci add_list nginx._lan.listen="${EDGE_ROUTER_LAN}:443 ssl default_server"
+uci add_list nginx._lan.listen="${EDGE_ROUTER_LAN}:80"
 uci delete nginx._redirect2ssl
 uci commit
 echo "stream { include /usr/local/nginx/*.conf; }" >> /etc/nginx/uci.conf.template
@@ -49,9 +56,11 @@ block mount
 mkdir -p /usr/local/tftpboot/ipxe
 mkdir /usr/local/tftpboot/networkboot
 mkdir -p /usr/local/www/install
+mkdir -p /usr/local/nginx
 ln -s /usr/local/www/install /www/install
 # Set up iPXE files
 wget http://boot.ipxe.org/x86_64-efi/ipxe.efi -O /usr/local/tftpboot/ipxe.efi
+
 cat << EOF > /usr/local/tftpboot/boot.ipxe
 #!ipxe
    
@@ -74,6 +83,7 @@ echo ========================================================
    
 chain --replace --autofree ipxe/\${mac:hexhyp}.ipxe
 EOF
+
 # Set up DNS
 mkdir -p /usr/local/bind
 
@@ -84,7 +94,7 @@ acl "trusted" {
 };
 
 options {
- listen-on port 53 { 127.0.0.1; ${EDGE_ROUTER}; };
+ listen-on port 53 { 127.0.0.1; ${EDGE_ROUTER_LAN}; };
  
  directory  "/tmp";
  allow-query     { trusted; };
@@ -104,9 +114,9 @@ zone "${LAB_DOMAIN}" {
     file "/usr/local/bind/db.${LAB_DOMAIN}"; # zone file path
 };
 
-zone "${ARPA}.in-addr.arpa" {
+zone "${DOMAIN_ARPA}.in-addr.arpa" {
     type master;
-    file "/usr/local/bind/db.${ARPA}";
+    file "/usr/local/bind/db.${DOMAIN_ARPA}";
 };
 
 zone "root" {
@@ -127,10 +137,10 @@ cat << EOF > /usr/local/bind/db.${LAB_DOMAIN}
     IN      NS     router.${LAB_DOMAIN}.
 
 ; name servers - A records
-router.${LAB_DOMAIN}.         IN      A      ${EDGE_ROUTER}
+router.${LAB_DOMAIN}.         IN      A      ${EDGE_ROUTER_LAN}
 EOF
 
-cat << EOF > /usr/local/bind/db.${ARPA}
+cat << EOF > /usr/local/bind/db.${DOMAIN_ARPA}
 @       IN      SOA     router.${LAB_DOMAIN}. admin.${LAB_DOMAIN}. (
                             3         ; Serial
                         604800         ; Refresh
@@ -153,7 +163,7 @@ set dhcp.@dnsmasq[0].port=0
 set dhcp.lan.leasetime="5m"
 set dhcp.lan.start="225"
 set dhcp.lan.limit="30"
-add_list dhcp.lan.dhcp_option="6,${EDGE_ROUTER}"
+add_list dhcp.lan.dhcp_option="6,${EDGE_ROUTER_LAN}"
 set dhcp.lan.leasetime="5m"
 set dhcp.@dnsmasq[0].enable_tftp=1
 set dhcp.@dnsmasq[0].tftp_root=/usr/local/tftpboot
@@ -169,13 +179,13 @@ set dhcp.ipxe_boot.userclass='iPXE'
 set dhcp.uefi=boot
 set dhcp.uefi.networkid='set:efi64'
 set dhcp.uefi.filename='ipxe.efi'
-set dhcp.uefi.serveraddress="${EDGE_ROUTER}"
+set dhcp.uefi.serveraddress="${EDGE_ROUTER_LAN}"
 set dhcp.uefi.servername='pxe'
 set dhcp.uefi.force='1'
 set dhcp.ipxe=boot
 set dhcp.ipxe.networkid='set:ipxe'
 set dhcp.ipxe.filename='boot.ipxe'
-set dhcp.ipxe.serveraddress="${EDGE_ROUTER}"
+set dhcp.ipxe.serveraddress="${EDGE_ROUTER_LAN}"
 set dhcp.ipxe.servername='pxe'
 set dhcp.ipxe.force='1'
 set dhcp.lan.leasetime="5m"
@@ -190,11 +200,11 @@ chown -R bind:bind /usr/local/bind
 sed -i "s|START=22|START=99|g" /etc/init.d/named
 sed -i "s|config_dir=/etc/bind|config_dir=/usr/local/bind|g" /etc/init.d/named
 /etc/init.d/named enable
-uci set network.wan.dns=${EDGE_ROUTER}
+uci set network.wan.dns=${EDGE_ROUTER_LAN}
 uci set network.wan.peerdns=0
 uci show network.wwan 
 if [[ $? -eq 0 ]]
-then uci set network.wwan.dns=${EDGE_ROUTER}
+then uci set network.wwan.dns=${EDGE_ROUTER_LAN}
     uci set network.wwan.peerdns=0
 fi
 uci commit

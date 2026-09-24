@@ -436,7 +436,7 @@ function getButane() {
   then
     echo "Installing Butane: ${BUTANE_VERSION}"
     mkdir -p ${OPENSHIFT_LAB_PATH}/butane/${BUTANE_VERSION}
-    wget -O ${OPENSHIFT_LAB_PATH}/butane/${BUTANE_VERSION}/butane https://github.com/coreos/butane/releases/download/${BUTANE_VERSION}/butane-${PROC_ARCH}-${BUTANE_DLD}
+    wget -O ${OPENSHIFT_LAB_PATH}/butane/${BUTANE_VERSION}/butane https://github.com/coreos/ignition/releases/download/${BUTANE_VERSION}/butane-${PROC_ARCH}-${BUTANE_DLD}
     chmod 700 ${OPENSHIFT_LAB_PATH}/butane/${BUTANE_VERSION}/butane
   fi
 }

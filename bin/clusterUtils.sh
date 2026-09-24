@@ -257,14 +257,6 @@ EOF
   ${OC} patch sa pipeline --type json --patch '[{"op": "add", "path": "/secrets/-", "value": {"name":"git-secret"}}]' -n ${NAMESPACE}
 }
 
-function getButaneRelease() {
-
-  BUTANE_VERSION=$(basename $(curl -Ls -o /dev/null -w %{url_effective} https://github.com/coreos/butane/releases/latest))
-  echo "Butane Release: ${BUTANE_VERSION}"
-  yq e ".cluster.butane-version = \"${BUTANE_VERSION}\"" -i ${CLUSTER_CONFIG}
-  setButaneRelease
-}
-
 function ocLogin() {
 
   USER=admin
