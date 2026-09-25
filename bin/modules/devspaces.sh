@@ -21,11 +21,22 @@ function devSpaces() {
 function deployDevSpacesOperator() {
 
 cat << EOF | ${OC} apply -f -
+apiVersion: v1                      
+kind: Namespace                 
+metadata:
+  name: openshift-devspaces
+--- 
+apiVersion: operators.coreos.com/v1
+kind: OperatorGroup
+metadata:
+  name: openshift-devspaces-operator
+  namespace: openshift-devspaces
+---
 apiVersion: operators.coreos.com/v1alpha1
 kind: Subscription
 metadata:
   name: devspaces
-  namespace: openshift-operators
+  namespace: openshift-devspaces
 spec:
   channel: stable 
   installPlanApproval: Manual
@@ -38,22 +49,14 @@ EOF
 
 function deployDevSpacesCluster() {
 
-${OC} wait --for=condition=Available -n openshift-operators --timeout=300s --all deployments
+${OC} wait --for=condition=Available -n openshift-devspaces --timeout=300s --all deployments
 
-echo "Enter the name of the StorageClass to use for PVCs:"
-read STORAGE_CLASS
-
-cat << EOF | ${OC} apply -f -
-apiVersion: v1                      
-kind: Namespace                 
-metadata:
-  name: devspaces
----           
+cat << EOF | ${OC} apply -f -          
 apiVersion: org.eclipse.che/v2 
 kind: CheCluster   
 metadata:              
   name: devspaces  
-  namespace: devspaces
+  namespace: openshift-devspaces
 spec:                         
   components:                  
     cheServer:      
@@ -88,10 +91,8 @@ spec:
     secondsOfInactivityBeforeIdling: 1800
     storage:
       pvcStrategy: per-workspace
-      perUserStrategyPvcConfig:
-        storageClass: ${STORAGE_CLASS}
-      perWorkspaceStrategyPvcConfig:
-        storageClass: ${STORAGE_CLASS}
+    persistUserHome:
+      enabled: false
   gitServices: {}
   networking: {}
 EOF
@@ -121,7 +122,7 @@ kind: Secret
 apiVersion: v1
 metadata:
   name: github-oauth-config
-  namespace: devspaces 
+  namespace: openshift-devspaces 
   labels:
     app.kubernetes.io/part-of: che.eclipse.org
     app.kubernetes.io/component: oauth-scm-configuration
