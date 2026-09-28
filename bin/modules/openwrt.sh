@@ -28,18 +28,34 @@ commit
 EOF
 cat /tmp/uci.batch | uci batch
 # Make Nginx listen only on the main interface
-uci del_list nginx._lan.listen='80'
-uci del_list nginx._lan.listen='[::]:80'
-uci del_list nginx._lan.listen='443 ssl'
-uci del_list nginx._lan.listen='[::]:443 ssl'
-uci del_list nginx._lan.listen='443 ssl default_server'
-uci del_list nginx._lan.listen='[::]:443 ssl default_server'
-uci add_list nginx._lan.listen="${EDGE_ROUTER_LAN}:443 ssl default_server"
-uci add_list nginx._lan.listen="${EDGE_ROUTER_LAN}:80"
-uci delete nginx._redirect2ssl
-uci commit
+cat << EOF > /tmp/uci.batch
+del_list nginx._lan.listen='80'
+del_list nginx._lan.listen='[::]:80'
+del_list nginx._lan.listen='443 ssl'
+del_list nginx._lan.listen='[::]:443 ssl'
+del_list nginx._lan.listen='443 ssl default_server'
+del_list nginx._lan.listen='[::]:443 ssl default_server'
+add_list nginx._lan.listen="${EDGE_ROUTER}:443 ssl default_server"
+add_list nginx._lan.listen="${EDGE_ROUTER}:80"
+delete nginx._redirect2ssl
+commit
+EOF
+cat /tmp/uci.batch | uci batch
 echo "stream { include /usr/local/nginx/*.conf; }" >> /etc/nginx/uci.conf.template
 /etc/init.d/nginx enable
+# Set up Timer Server
+cat << EOF > /tmp/uci.batch
+set system.ntp.enable_server="1"
+del_list system.ntp.server='0.openwrt.pool.ntp.org'
+del_list system.ntp.server='1.openwrt.pool.ntp.org'
+del_list system.ntp.server='2.openwrt.pool.ntp.org'
+del_list system.ntp.server='3.openwrt.pool.ntp.org'
+add_list system.ntp.server='129.6.15.32'
+add_list system.ntp.server='216.239.35.0'
+add_list system.ntp.server='216.239.35.4'
+commit
+EOF
+cat /tmp/uci.batch | uci batch
 # Format the SD Card
 wipefs -af /dev/mmcblk0
 echo "/dev/mmcblk0p1 : start=1, type=83" > /tmp/part.info
@@ -156,7 +172,7 @@ cat << EOF > /usr/local/bind/db.${DOMAIN_ARPA}
 ; PTR Records
 1    IN      PTR     router.${LAB_DOMAIN}.
 EOF
-
+# Configure DHCP for PXE Boot
 cat << EOF > /tmp/uci.batch
 set dhcp.@dnsmasq[0].domain=${LAB_DOMAIN}
 set dhcp.@dnsmasq[0].localuse=0
@@ -193,7 +209,6 @@ set dhcp.ipxe.force='1'
 set dhcp.lan.leasetime="5m"
 set dhcp.lan.start="225"
 set dhcp.lan.limit="30"
-set system.ntp.enable_server="1"
 commit
 EOF
 cat /tmp/uci.batch | uci batch
