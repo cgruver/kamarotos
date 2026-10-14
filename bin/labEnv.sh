@@ -344,7 +344,12 @@ function getInitCli() {
     fi
   elif [[ ${SYS_ARCH} == "Linux" ]]
   then
-    OS_VER=linux
+    if [[ $(uname -m) == "aarch64" ]]
+    then
+      OS_VER=linux-arm64
+    else
+      OS_VER=linux
+    fi
   else
     echo "Unsupported OS: Cannot pull openshift commands"
     CONTINUE="false"
@@ -428,6 +433,10 @@ function getButane() {
     fi
   elif [[ ${SYS_ARCH} == "Linux" ]]
   then
+    if [[ $(uname -m) == "aarch64" ]]
+    then
+      PROC_ARCH=aarch64
+    fi
     BUTANE_DLD=unknown-linux-gnu
   else
     echo "Unsupported OS: Cannot pull openshift commands"
