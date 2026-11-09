@@ -4,9 +4,10 @@
 . ${OPENSHIFT_LAB_PATH}/bin/modules/devspaces.sh
 . ${OPENSHIFT_LAB_PATH}/bin/modules/devTools.sh
 . ${OPENSHIFT_LAB_PATH}/bin/modules/qnap.sh
+. ${OPENSHIFT_LAB_PATH}/bin/modules/certManager.sh
+. ${OPENSHIFT_LAB_PATH}/bin/modules/hostpath.sh
 . ${OPENSHIFT_LAB_PATH}/bin/labEnv.sh
 . ${OPENSHIFT_LAB_PATH}/bin/labUtils.sh
-. ${OPENSHIFT_LAB_PATH}/bin/routerUtils.sh
 . ${OPENSHIFT_LAB_PATH}/bin/clusterUtils.sh
 . ${OPENSHIFT_LAB_PATH}/bin/clusterDeploy.sh
 . ${OPENSHIFT_LAB_PATH}/bin/clusterDestroy.sh
