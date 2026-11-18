@@ -6,8 +6,6 @@ deployCertManagerOperator
 
 local HPP_VER=$(basename $(curl -Ls -o /dev/null -w %{url_effective} https://github.com/kubevirt/hostpath-provisioner-operator/releases/latest))
 
-${OC} wait --for=condition=Available -n cert-manager-operator --timeout=300s --all deployments
-${OC} wait --for=condition=Available -n cert-manager --timeout=300s --all deployments
 ${OC} create -f https://github.com/kubevirt/hostpath-provisioner-operator/releases/download/${HPP_VER}/namespace.yaml
 ${OC} create -f https://github.com/kubevirt/hostpath-provisioner-operator/releases/download/${HPP_VER}/webhook.yaml -n hostpath-provisioner
 ${OC} create -f https://github.com/kubevirt/hostpath-provisioner-operator/releases/download/${HPP_VER}/operator.yaml -n hostpath-provisioner

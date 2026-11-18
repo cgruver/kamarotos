@@ -618,15 +618,15 @@ function keyCloak() {
 }
 
 function deployGitOps() {
-  ${OC} create ns openshift-gitops-operator
-  ${OC} label namespace openshift-gitops-operator openshift.io/cluster-monitoring=true
+  ${OC} create ns openshift-gitops
+  ${OC} label namespace openshift-gitops openshift.io/cluster-monitoring=true
 
 cat << EOF | ${OC} apply -f -
 apiVersion: operators.coreos.com/v1
 kind: OperatorGroup
 metadata:
   name: openshift-gitops-operator
-  namespace: openshift-gitops-operator
+  namespace: openshift-gitops
 spec:
   upgradeStrategy: Default
 ---
@@ -634,7 +634,7 @@ apiVersion: operators.coreos.com/v1alpha1
 kind: Subscription
 metadata:
   name: openshift-gitops-operator
-  namespace: openshift-gitops-operator
+  namespace: openshift-gitops
 spec:
   channel: latest 
   installPlanApproval: Manual

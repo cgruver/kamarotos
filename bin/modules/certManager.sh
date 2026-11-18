@@ -38,6 +38,10 @@ done
 
 echo "CSV ${CSV} succeeded."
 
-pause 15 "Wait for Cert Manager"
+echo "Wait for deployments"
+${OC} wait --for=condition=Available -n cert-manager-operator --timeout=300s --all deployments
+${OC} wait --for=condition=Available -n cert-manager --timeout=300s --all deployments
+
+pause 15 "Wait for Cert Manager to settle" 
 
 }
