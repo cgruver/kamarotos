@@ -410,8 +410,6 @@ function postInstall() {
       ;;
     esac
   done
-  #Install GitOps Operator
-  #deployGitOps
 }
 
 function mirrorOcpRelease() {

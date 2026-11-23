@@ -18,6 +18,88 @@ function devSpaces() {
   done
 }
 
+function deployGitOps() {
+  ${OC} create ns openshift-gitops
+  ${OC} label namespace openshift-gitops openshift.io/cluster-monitoring=true
+
+cat << EOF | ${OC} apply -f -
+apiVersion: v1                      
+kind: Namespace                 
+metadata:
+  name: openshift-gitops
+---
+apiVersion: operators.coreos.com/v1
+kind: OperatorGroup
+metadata:
+  name: openshift-gitops-operator
+  namespace: openshift-gitops
+spec:
+  upgradeStrategy: Default
+---
+apiVersion: operators.coreos.com/v1alpha1
+kind: Subscription
+metadata:
+  name: openshift-gitops-operator
+  namespace: openshift-gitops
+spec:
+  channel: latest 
+  installPlanApproval: Manual
+  name: openshift-gitops-operator 
+  source: redhat-operators 
+  sourceNamespace: openshift-marketplace 
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: gitops-cluster-admin
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: cluster-admin
+subjects:
+- kind: ServiceAccount
+  name: openshift-gitops-argocd-application-controller
+  namespace: openshift-gitops
+EOF
+
+
+
+cat << EOF | oc apply -f -
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: cluster-app-of-apps
+  namespace: openshift-gitops
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io/foreground
+spec:
+  destination:
+    namespace: openshift-gitops
+    server: https://kubernetes.default.svc
+  project: default
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    retry:
+      backoff:
+        duration: 10s
+        factor: 2
+        maxDuration: 10m
+      limit: 15
+    syncOptions:
+      - CreateNamespace=true
+      - RespectIgnoreDifferences=true
+      - SkipDryRunOnMissingResource=true
+  source:
+    repoURL: https://github.com/cgruver/opinionated-dev-spaces.git
+    targetRevision: main
+    path: cluster-gitops/cluster-app-of-apps
+EOF
+
+}
+
+
 function deployDevSpacesOperator() {
 
 cat << EOF | ${OC} apply -f -
